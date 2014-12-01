@@ -10,6 +10,7 @@ setup(
     url="https://github.com/vendasta/appengine-mapreduce.git",
     license="Apache License 2.0",
     description="Enable MapReduce style data processing on App Engine",
+    include_package_data=True,
     install_requires=[
             "GoogleAppEngineCloudStorageClient >= 1.9.5",
             "GoogleAppEnginePipeline >= 1.9.5.1",
