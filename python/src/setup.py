@@ -13,9 +13,9 @@ setup(
     include_package_data=True,
     install_requires=[
             "GoogleAppEngineCloudStorageClient >= 1.9.5",
-            "GoogleAppEnginePipeline >= 1.9.5.1",
+            "pipelines >= 1.0.0",
             "Graphy >= 1.0.0",
-            "simplejson >= 3.6.5",
+            "simplejson >= 2.1.1",
             "mock >= 1.0.1",
             "mox >= 0.5.3",
         ]
