@@ -396,6 +396,7 @@ _DISCRETE_PROPERTY_SPLIT_FUNCTIONS = {
     db.ByteStringProperty: _split_byte_string_property,
     # ndb.
     ndb.DateTimeProperty: _split_datetime_property,
+    ndb.DateProperty: _split_datetime_property,
     ndb.IntegerProperty: _split_integer_property,
     ndb.StringProperty: _split_string_property,
     ndb.BlobProperty: _split_byte_string_property
