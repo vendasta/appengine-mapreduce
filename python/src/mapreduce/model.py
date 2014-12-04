@@ -244,17 +244,16 @@ class CountersMap(json_util.JsonMixin):
     """Compute string representation."""
     return "mapreduce.model.CountersMap(%r)" % self.counters
 
-  def get(self, counter_name, default=0):
+  def get(self, counter_name):
     """Get current counter value.
 
     Args:
       counter_name: counter name as string.
-      default: default value if one doesn't exist.
 
     Returns:
       current counter value as int. 0 if counter was not set.
     """
-    return self.counters.get(counter_name, default)
+    return self.counters.get(counter_name, 0)
 
   def increment(self, counter_name, delta):
     """Increment counter value.
@@ -894,7 +893,6 @@ class ShardState(db.Model):
   # Functional properties.
   mapreduce_id = db.StringProperty(required=True)
   active = db.BooleanProperty(default=True, indexed=False)
-  input_finished = db.BooleanProperty(default=False, indexed=False)
   counters_map = json_util.JsonProperty(
       CountersMap, default=CountersMap(), indexed=False)
   result_status = db.StringProperty(choices=_RESULTS, indexed=False)
@@ -943,7 +941,6 @@ class ShardState(db.Model):
     self.last_work_item = ""
     self.active = True
     self.result_status = None
-    self.input_finished = False
     self.counters_map = CountersMap()
     self.slice_id = 0
     self.slice_start_time = None
@@ -975,12 +972,6 @@ class ShardState(db.Model):
   def set_for_abort(self):
     self.active = False
     self.result_status = self.RESULT_ABORTED
-
-  def set_input_finished(self):
-    self.input_finished = True
-
-  def is_input_finished(self):
-    return self.input_finished
 
   def set_for_success(self):
     self.active = False
@@ -1072,6 +1063,9 @@ class ShardState(db.Model):
   @classmethod
   def find_all_by_mapreduce_state(cls, mapreduce_state):
     """Find all shard states for given mapreduce.
+
+    Never runs within a transaction since it may touch >5 entity groups (one
+    for each shard).
 
     Args:
       mapreduce_state: MapreduceState instance

@@ -20,7 +20,6 @@
 
 __all__ = ['Increment']
 
-# Deprecated. Use map_job_context.SliceContext.count instead.
 
 from mapreduce.operation import base
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env python
-# Copyright 2010 Google Inc. All Rights Reserved.
+#
+# Copyright 2010 Google Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -52,7 +53,6 @@ def _setup_constants(alphabet=NAMESPACE_CHARACTERS,
 
   global NAMESPACE_CHARACTERS
   global MAX_NAMESPACE_LENGTH
-  # pylint: disable=global-variable-undefined
   global MAX_NAMESPACE
   global _LEX_DISTANCE
   global NAMESPACE_BATCH_SIZE
@@ -86,7 +86,6 @@ def _setup_constants(alphabet=NAMESPACE_CHARACTERS,
   for i in range(1, MAX_NAMESPACE_LENGTH):
     _LEX_DISTANCE.append(
         _LEX_DISTANCE[i-1] * len(NAMESPACE_CHARACTERS) + 1)
-  # pylint: disable=undefined-loop-variable
   del i
 _setup_constants()
 
@@ -108,7 +107,7 @@ def _ord_to_namespace(n, _max_length=None):
 
   Args:
     n: A number representing the lexographical ordering of a namespace.
-    _max_length: The maximum namespace length.
+
   Returns:
     A string representing the nth namespace in lexographical order.
   """
@@ -177,7 +176,6 @@ class NamespaceRange(object):
                namespace_start=None,
                namespace_end=None,
                _app=None):
-    # pylint: disable=g-doc-args
     """Initializes a NamespaceRange instance.
 
     Args:
@@ -346,7 +344,6 @@ class NamespaceRange(object):
             can_query=itertools.chain(itertools.repeat(True, 50),
                                       itertools.repeat(False)).next,
             _app=None):
-    # pylint: disable=g-doc-args
     """Splits the complete NamespaceRange into n equally-sized NamespaceRanges.
 
     Args:
@@ -372,32 +369,15 @@ class NamespaceRange(object):
     if n < 1:
       raise ValueError('n must be >= 1')
 
-    ranges = None
+    ns_range = NamespaceRange(_app=_app)
     if can_query():
-      if not contiguous:
-        ns_keys = get_namespace_keys(_app, n + 1)
-        if not ns_keys:
-          return []
-        else:
-          if len(ns_keys) <= n:
-            # If you have less actual namespaces than number of NamespaceRanges
-            # to return, then just return the list of those namespaces.
-            ns_range = []
-            for ns_key in ns_keys:
-              ns_range.append(NamespaceRange(ns_key.name() or '',
-                                             ns_key.name() or '',
-                                             _app=_app))
-            return sorted(ns_range,
-                          key=lambda ns_range: ns_range.namespace_start)
-          # Use the first key and save the initial normalized_start() call.
-          ranges = [NamespaceRange(ns_keys[0].name() or '', _app=_app)]
-      else:
-        ns_range = NamespaceRange(_app=_app).normalized_start()
-        if ns_range is None:
+      ns_range = ns_range.normalized_start()
+      if ns_range is None:
+        if contiguous:
           return [NamespaceRange(_app=_app)]
-        ranges = [ns_range]
-    else:
-      ranges = [NamespaceRange(_app=_app)]
+        else:
+          return []
+    ranges = [ns_range]
 
     singles = []
     while ranges and (len(ranges) + len(singles)) < n:
@@ -457,4 +437,4 @@ class NamespaceRange(object):
 def get_namespace_keys(app, limit):
   """Get namespace keys."""
   ns_query = datastore.Query('__namespace__', keys_only=True, _app=app)
-  return list(ns_query.Run(limit=limit, batch_size=limit))
+  return list(ns_query.Run(limit=limit))
