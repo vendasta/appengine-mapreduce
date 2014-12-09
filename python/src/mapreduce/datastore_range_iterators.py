@@ -28,14 +28,14 @@ __all__ = [
 
 
 class RangeIteratorFactory(object):
-  """Factory to create RangeIterator."""
+  """Factory to create RangeIterators."""
 
   @classmethod
   def create_property_range_iterator(cls,
                                      p_range,
                                      ns_range,
                                      query_spec):
-    """Create a _PropertyRangeModelIterator.
+    """Create a RangeIterator.
 
     Args:
       p_range: a property_range.PropertyRange object that defines the
@@ -57,7 +57,7 @@ class RangeIteratorFactory(object):
                                  k_ranges,
                                  query_spec,
                                  key_range_iter_cls):
-    """Create a _KeyRangesIterator.
+    """Create a RangeIterator.
 
     Args:
       k_ranges: a key_ranges._KeyRanges object.
@@ -77,18 +77,13 @@ class RangeIteratorFactory(object):
 
 
 class RangeIterator(json_util.JsonMixin):
-  """Interface for DatastoreInputReader helpers.
+  """Interface for DatastoreInputReader helper iterators.
 
-  Technically, RangeIterator is a container. It contains all datastore
-  entities that fall under a certain range (key range or proprety range).
-  It implements __iter__, which returns a generator that can iterate
-  through entities. It also implements marshalling logics. Marshalling
-  saves the state of the container so that any new generator created
-  can resume where the old generator left off.
-
-  Caveats:
-    1. Calling next() on the generators may also modify the container.
-    2. Marshlling after StopIteration is raised has undefined behavior.
+  RangeIterator defines Python's generator interface and additional
+  marshaling functionality. Marshaling saves the state of the generator.
+  Unmarshaling guarantees any new generator created can resume where the
+  old generator left off. When the produced generator raises StopIteration,
+  the behavior of marshaling/unmarshaling is NOT defined.
   """
 
   def __iter__(self):
@@ -162,7 +157,6 @@ class _PropertyRangeModelIterator(RangeIterator):
                                        produce_cursors=True)
         for model_instance in self._query:
           yield model_instance
-      self._query = None
       self._cursor = None
       if ns != self._ns_range.namespace_end:
         self._ns_range = self._ns_range.with_start_after(ns)
@@ -174,13 +168,14 @@ class _PropertyRangeModelIterator(RangeIterator):
       if isinstance(self._query, db.Query):
         cursor = self._query.cursor()
       else:
-        cursor = self._query.cursor_after()
+        if self._query._batch:
+          cursor = self._query.cursor_after()
 
-    if cursor is None or isinstance(cursor, basestring):
+    if isinstance(cursor, basestring):
       cursor_object = False
     else:
       cursor_object = True
-      cursor = cursor.to_websafe_string()
+      cursor = cursor.to_websafe_string() if cursor else None
 
     return {"property_range": self._property_range.to_json(),
             "query_spec": self._query_spec.to_json(),
@@ -271,7 +266,6 @@ class _KeyRangesIterator(RangeIterator):
     current_iter = None
     if json["current_iter"]:
       current_iter = key_range_iter_cls.from_json(json["current_iter"])
-    # pylint: disable=protected-access
     obj._current_iter = current_iter
     return obj
 
@@ -284,12 +278,7 @@ _RANGE_ITERATORS = {
 
 
 class AbstractKeyRangeIterator(json_util.JsonMixin):
-  """Iterates over a single key_range.KeyRange and yields value for each key.
-
-  All subclasses do the same thing: iterate over a single KeyRange.
-  They do so using different APIs (db, ndb, datastore) to return entities
-  of different types (db model, ndb model, datastore entity, raw proto).
-  """
+  """Iterates over a single key_range.KeyRange and yields value for each key."""
 
   def __init__(self, k_range, query_spec):
     """Init.
@@ -387,7 +376,7 @@ class KeyRangeEntityIterator(AbstractKeyRangeIterator):
         self._query_spec.entity_kind, filters=self._query_spec.filters)
     for entity in self._query.Run(config=datastore_query.QueryOptions(
         batch_size=self._query_spec.batch_size,
-        keys_only=self._query_spec.keys_only or self._KEYS_ONLY,
+        keys_only=self._KEYS_ONLY,
         start_cursor=self._cursor)):
       yield entity
 

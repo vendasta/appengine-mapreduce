@@ -14,19 +14,3 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
-"""
-mapreduce
-
-A python library to perform MapReduce operations on App Engine.
-
-master is the current release branch of the library.
-base is the version in sync with the forked repo.
-
-Release Notes
-============
-1.0.0
- - Sync with GoogleCloudPlatform/appengine-mapreduce repository.
-
-"""
-__version__ = '1.0.0'

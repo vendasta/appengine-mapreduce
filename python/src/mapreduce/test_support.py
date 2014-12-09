@@ -84,13 +84,9 @@ def execute_task(task, retries=0, handlers_map=None):
   url = task["url"]
   handler = None
 
-  params = []
-
   for (re_str, handler_class) in handlers_map:
     re_str = "^" + re_str + "($|\\?)"
-    m = re.match(re_str, url)
-    if m:
-      params = m.groups()[:-1]  # last groups was added by ($|\\?) above
+    if re.match(re_str, url):
       break
   else:
     raise Exception("Can't determine handler for %s" % task)
@@ -135,12 +131,7 @@ def execute_task(task, retries=0, handlers_map=None):
       request.set(k, v)
 
   response = mock_webapp.MockResponse()
-  saved_os_environ = os.environ
-  copy_os_environ = dict(os.environ)
-  copy_os_environ.update(request.environ)
-
   try:
-    os.environ = copy_os_environ
     # Webapp2 expects request/response in the handler instantiation, and calls
     # initialize automatically.
     handler = handler_class(request, response)
@@ -148,16 +139,15 @@ def execute_task(task, retries=0, handlers_map=None):
     # For webapp, setup request before calling initialize.
     handler = handler_class()
     handler.initialize(request, response)
-  finally:
-    os.environ = saved_os_environ
 
+  saved_os_environ = os.environ
   try:
-    os.environ = copy_os_environ
-
+    os.environ = dict(os.environ)
+    os.environ.update(request.environ)
     if task["method"] == "POST":
-      handler.post(*params)
+      handler.post()
     elif task["method"] == "GET":
-      handler.get(*params)
+      handler.get()
     else:
       raise Exception("Unsupported method: %s" % task.method)
   finally:
