@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="mapreduce",
-    version="1.0.0",
+    version="1.0.1",
     packages=find_packages(),
     author="VendAsta",
     author_email="jcollins@vendasta.com",
@@ -16,7 +16,5 @@ setup(
             "pipeline >= 1.0.0",
             "Graphy >= 1.0.0",
             "simplejson == 2.1.1",
-            "mock >= 1.0.1",
-            "mox >= 0.5.3",
         ]
 )
