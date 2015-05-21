@@ -1,3 +1,13 @@
+#!/usr/bin/env python
+"""Setup specs for packaging, distributing, and installing MR lib."""
+
+import distribute_setup
+# User may not have setuptools installed on their machines.
+# This script will automatically install the right version from PyPI.
+distribute_setup.use_setuptools()
+
+
+# pylint: disable=g-import-not-at-topimport setuptools
 import setuptools
 
 
