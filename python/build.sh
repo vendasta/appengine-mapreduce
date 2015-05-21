@@ -31,6 +31,7 @@ $APPENGINE_LIB/lib/yaml/lib:\
 $dir/src:\
 $dir/test:\
 "
+  fetch_dependencies
   echo "Using PYTHONPATH=$PYTHONPATH"
   exit_status=0
   for t in $(find "$dir/test" -name "*test.py" | grep -Ev "/test/mapreduce/api/|test/mapreduce/module_test.py|test/mapreduce/webapp2_test.py"); do
@@ -84,10 +85,7 @@ case "$1" in
   run_demo)
     run_demo
     ;;
-  fetch_dependencies)
-    fetch_dependencies
-    ;;
   *)
-    echo $"Usage: $0 {test|build_demo|run_demo|fetch_dependencies}"
+    echo $"Usage: $0 {test|build_demo|run_demo}"
     exit 1
 esac
