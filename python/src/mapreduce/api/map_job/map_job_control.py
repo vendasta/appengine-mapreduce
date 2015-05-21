@@ -230,3 +230,4 @@ class Job(object):
       except NotImplementedError:
         pass
     kickoff_task.add(job_config.queue_name, transactional=True)
+
