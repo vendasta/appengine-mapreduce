@@ -27,3 +27,4 @@ if (__name__ == 'google.appengine.ext.mapreduce'
          'source at https://github.com/GoogleCloudPlatform/appengine-mapreduce '
          'instead.')
   logging.warn(msg)
+
