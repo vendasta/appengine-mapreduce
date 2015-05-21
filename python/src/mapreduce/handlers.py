@@ -29,14 +29,17 @@ import random
 import sys
 import time
 import traceback
-import simplejson
+
+try:
+  import json
+except ImportError:
+  import simplejson as json
 
 from google.appengine.ext import ndb
 
 from google.appengine import runtime
 from google.appengine.api import datastore_errors
 from google.appengine.api import logservice
-from google.appengine.api import modules
 from google.appengine.api import taskqueue
 from google.appengine.ext import db
 from mapreduce import base_handler
@@ -281,12 +284,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
     """
     assert shard_state.slice_start_time is not None
     assert shard_state.slice_request_id is not None
-    request_ids = [shard_state.slice_request_id]
-    logs = list(logservice.fetch(
-        request_ids=request_ids,
-        # TODO(user): Remove after b/8173230 is fixed.
-        module_versions=[(os.environ["CURRENT_MODULE_ID"],
-                          modules.get_current_version_name())]))
+    logs = list(logservice.fetch(request_ids=[shard_state.slice_request_id]))
 
     if not logs or not logs[0].finished:
       return False
@@ -453,6 +451,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
 
     task_directive = self._set_state(shard_state, tstate, task_directive)
     self._save_state_and_schedule_next(shard_state, tstate, task_directive)
+    context.Context._set(None)
 
   def _process_inputs(self,
                       input_reader,
@@ -1328,8 +1327,8 @@ class KickOffJobHandler(base_handler.TaskQueueHandler):
       readers = input_reader_class.split_input(
           state.mapreduce_spec.mapper)
     else:
-      readers = [input_reader_class.from_json_str(json) for json in
-                 simplejson.loads(serialized_input_readers.payload)]
+      readers = [input_reader_class.from_json_str(_json) for _json in
+                 json.loads(serialized_input_readers.payload)]
 
     if not readers:
       return None, None
@@ -1344,7 +1343,7 @@ class KickOffJobHandler(base_handler.TaskQueueHandler):
       serialized_input_readers = model._HugeTaskPayload(
           key_name=serialized_input_readers_key, parent=state)
       readers_json_str = [i.to_json_str() for i in readers]
-      serialized_input_readers.payload = simplejson.dumps(readers_json_str)
+      serialized_input_readers.payload = json.dumps(readers_json_str)
     return readers, serialized_input_readers
 
   def _setup_output_writer(self, state):

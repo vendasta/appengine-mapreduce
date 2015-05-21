@@ -15,6 +15,7 @@
 # limitations under the License.
 
 dir=`dirname $0`
+demo_dir=`pwd`
 
 test () {
   if [ -z $APPENGINE_LIB ]; then
@@ -53,7 +54,8 @@ $dir/test:\
 }
 
 build_demo () {
-  [ ! -d "$dir/demo/mapreduce" ] && ln -s "$dir/src/mapreduce" "$dir/demo"
+  fetch_dependencies
+  [ ! -d "$demo_dir/demo/mapreduce" ] && ln -s "$demo_dir/src/mapreduce" "$demo_dir/demo"
 }
 
 run_demo () {
@@ -69,7 +71,7 @@ fetch_dependencies() {
   fi
   # This may fail due to https://github.com/pypa/pip/issues/1356
   pip install --exists-action=s -r $dir/src/requirements.txt -t $dir/src/ || exit 1
-  rm -rf $dir/src/.egg-info/
+  pip install --exists-action=s -r $dir/src/requirements.txt -t $dir/demo/ || exit 1
 }
 
 case "$1" in

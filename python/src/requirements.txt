@@ -2,3 +2,6 @@ GoogleAppEngineCloudStorageClient
 GoogleAppEnginePipeline
 Graphy
 simplejson
+mock
+mox
+pg8000

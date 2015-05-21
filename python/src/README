@@ -14,9 +14,3 @@ Archive contents:
   - demo         : a demo application that uses the map reduce.
 - java           : java version of the library
   - build.xml    : ant build file
-
-Branching:
-- master:
-  - VendAsta mapreduce library.
-- base:
-  - Forked repo from GoogleCloudPlatform/appengine-mapreduce. Keep in sync with upstream.

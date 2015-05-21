@@ -33,13 +33,11 @@ import time
 
 import pipeline
 from pipeline import common as pipeline_common
-from google.appengine.api import files
-from google.appengine.api import modules
-from google.appengine.api.files import file_service_pb
 from google.appengine.ext import db
 from mapreduce import context
 from mapreduce import errors
 from mapreduce import input_readers
+from mapreduce import kv_pb
 from mapreduce import mapper_pipeline
 from mapreduce import operation
 from mapreduce import output_writers
@@ -117,7 +115,7 @@ def _sort_records_map(records):
 
   logging.debug("Parsing")
   for i in range(l):
-    proto = file_service_pb.KeyValue()
+    proto = kv_pb.KeyValue()
     proto.ParseFromString(records[i])
     key_records[i] = (proto.key(), records[i])
 
@@ -319,7 +317,7 @@ class _MergingReader(input_readers.InputReader):
           operation.counters.Increment(
               input_readers.COUNTER_IO_READ_MSEC,
               int((time.time() - start_time) * 1000))(context.get())
-        proto = file_service_pb.KeyValue()
+        proto = kv_pb.KeyValue()
         proto.ParseFromString(binary_record)
         # Put read data back into heap.
         heapq.heapreplace(readers,
@@ -389,42 +387,6 @@ class _HashingBlobstoreOutputWriter(output_writers.BlobstoreOutputWriterBase):
       raise errors.BadWriterParamsError("Output writer class mismatch")
 
   @classmethod
-  def init_job(cls, mapreduce_state):
-    """Initialize job-level writer state.
-
-    Args:
-      mapreduce_state: an instance of model.MapreduceState describing current
-      job. State can be modified during initialization.
-    """
-    shards = mapreduce_state.mapreduce_spec.mapper.shard_count
-
-    filenames = []
-    for i in range(shards):
-      blob_file_name = (mapreduce_state.mapreduce_spec.name +
-                        "-" + mapreduce_state.mapreduce_spec.mapreduce_id +
-                        "-output-" + str(i))
-      filenames.append(
-          files.blobstore.create(
-              _blobinfo_uploaded_filename=blob_file_name))
-    mapreduce_state.writer_state = {"filenames": filenames}
-
-  @classmethod
-  def finalize_job(cls, mapreduce_state):
-    """Finalize job-level writer state.
-
-    Args:
-      mapreduce_state: an instance of model.MapreduceState describing current
-        job. State can be modified during finalization.
-    """
-    finalized_filenames = []
-    for filename in mapreduce_state.writer_state["filenames"]:
-      files.finalize(filename)
-      finalized_filenames.append(
-          files.blobstore.get_file_name(
-              files.blobstore.get_blob_key(filename)))
-    mapreduce_state.writer_state = {"filenames": finalized_filenames}
-
-  @classmethod
   def from_json(cls, json):
     """Creates an instance of the OutputWriter for the given json state.
 
@@ -452,9 +414,16 @@ class _HashingBlobstoreOutputWriter(output_writers.BlobstoreOutputWriterBase):
   @classmethod
   def get_filenames(cls, mapreduce_state):
     """See parent class."""
-    if mapreduce_state.writer_state:
-      return mapreduce_state.writer_state["filenames"]
-    return []
+    shards = mapreduce_state.mapreduce_spec.mapper.shard_count
+    filenames = []
+    for _ in range(shards):
+      filenames.append([None] * shards)
+    shard_states = model.ShardState.find_all_by_mapreduce_state(mapreduce_state)
+    for x, shard_state in enumerate(shard_states):
+      shard_filenames = shard_state.writer_state["shard_filenames"]
+      for y in range(shards):
+        filenames[y][x] = shard_filenames[y]
+    return filenames
 
   def finalize(self, ctx, shard_state):
     pass
@@ -481,10 +450,7 @@ class _HashingBlobstoreOutputWriter(output_writers.BlobstoreOutputWriterBase):
     pool_name = "kv_pool%d" % file_index
     filename = self._filenames[file_index]
 
-    if ctx.get_pool(pool_name) is None:
-      ctx.register_pool(pool_name,
-                        output_writers.RecordsPool(filename=filename, ctx=ctx))
-    proto = file_service_pb.KeyValue()
+    proto = kv_pb.KeyValue()
     proto.set_key(key)
     proto.set_value(value)
     ctx.get_pool(pool_name).append(proto.Encode())
@@ -502,6 +468,7 @@ class _ShardOutputs(pipeline_base.PipelineBase):
     return result
 
 
+# pylint: disable=unused-argument
 def _merge_map(key, values, partial):
   """A map function used in merge phase.
 
@@ -512,10 +479,9 @@ def _merge_map(key, values, partial):
     values: values themselves.
     partial: True if more values for this key will follow. False otherwise.
   """
-  proto = file_service_pb.KeyValues()
+  proto = kv_pb.KeyValues()
   proto.set_key(key)
   proto.value_list().extend(values)
-  proto.set_partial(partial)
   yield proto.Encode()
 
 
@@ -559,7 +525,7 @@ def _hashing_map(binary_record):
 
   Reads KeyValue from binary record and yields (key, value).
   """
-  proto = file_service_pb.KeyValue()
+  proto = kv_pb.KeyValue()
   proto.ParseFromString(binary_record)
   yield (proto.key(), proto.value())
 
@@ -677,14 +643,15 @@ class ShufflePipeline(pipeline_base.PipelineBase):
   Args:
     job_name: The descriptive name of the overall job.
     filenames: list of file names to sort. Files have to be of records format
-      defined by Files API and contain serialized file_service_pb.KeyValue
-      protocol messages.
+      defined by Files API and contain serialized kv_pb.KeyValue
+      protocol messages. The filenames may or may not contain the
+      GCS bucket name in their path.
     shards: Optional. Number of output shards to generate. Defaults
       to the number of input files.
 
   Returns:
     default: a list of filenames as string. Resulting files contain
-      serialized file_service_pb.KeyValues protocol messages with
+      serialized kv_pb.KeyValues protocol messages with
       all values collated to a single key. When there is no output,
       an empty list from shuffle service or a list of empty files from
       in memory shuffler.
