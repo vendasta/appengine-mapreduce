@@ -107,3 +107,4 @@ class SampleInputReader(map_job.InputReader):
                                         (cls.STRING_LENGTH,
                                          params[cls.STRING_LENGTH]))
 
+

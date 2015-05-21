@@ -1,6 +1,5 @@
 #!/usr/bin/env python
-#
-# Copyright 2010 Google Inc.
+# Copyright 2010 Google Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,6 +23,7 @@
 
 import httplib
 import logging
+
 try:
   import json
 except ImportError:
@@ -68,6 +68,8 @@ class TaskQueueHandler(webapp.RequestHandler):
   In Python27 runtime, webapp2 will automatically replace webapp.
   """
 
+  _DEFAULT_USER_AGENT = "App Engine Python MR"
+
   def __init__(self, *args, **kwargs):
     # webapp framework invokes initialize after __init__.
     # webapp2 framework invokes initialize within __init__.
@@ -78,7 +80,12 @@ class TaskQueueHandler(webapp.RequestHandler):
     super(TaskQueueHandler, self).__init__(*args, **kwargs)
     if cloudstorage:
       cloudstorage.set_default_retry_params(
-          cloudstorage.RetryParams(save_access_token=True))
+          cloudstorage.RetryParams(
+              min_retries=5,
+              max_retries=10,
+              urlfetch_timeout=parameters._GCS_URLFETCH_TIMEOUT_SEC,
+              save_access_token=True,
+              _user_agent=self._DEFAULT_USER_AGENT))
 
   def initialize(self, request, response):
     """Initialize.
@@ -181,6 +188,12 @@ class JsonHandler(webapp.RequestHandler):
 
     JSON handlers are mapped to /base_path/command/command_name thus they
     require special treatment.
+
+    Raises:
+      BadRequestPathError: if the path does not end with "/command".
+
+    Returns:
+      The base path.
     """
     path = self.request.path
     base_path = path[:path.rfind("/")]
@@ -190,6 +203,7 @@ class JsonHandler(webapp.RequestHandler):
     return base_path[:base_path.rfind("/")]
 
   def _handle_wrapper(self):
+    """The helper method for handling JSON Post and Get requests."""
     if self.request.headers.get("X-Requested-With") != "XMLHttpRequest":
       logging.error("Got JSON request with no X-Requested-With header")
       self.response.set_status(
@@ -245,6 +259,8 @@ class HugeTaskHandler(TaskQueueHandler):
   """Base handler for processing HugeTasks."""
 
   class _RequestWrapper(object):
+    """Container of a request and associated parameters."""
+
     def __init__(self, request):
       self._request = request
       self._params = model.HugeTask.decode_payload(request)
