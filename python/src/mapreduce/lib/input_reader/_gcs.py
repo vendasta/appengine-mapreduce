@@ -390,3 +390,4 @@ class GCSRecordInputReader(GCSInputReader):
       except EOFError:
         self._cur_handle = None
         self._record_reader = None
+
