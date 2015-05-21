@@ -29,7 +29,6 @@ setuptools.setup(
     install_requires=[
         "GoogleAppEngineCloudStorageClient >= 1.9.15",
         "pipeline >= 1.1.0",
-        "Graphy >= 1.0.0",
-        "simplejson >= 3.6.5",
-        ]
+        "Graphy >= 1.0.0"
+    ]
 )
