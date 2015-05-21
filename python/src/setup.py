@@ -7,7 +7,7 @@ import distribute_setup
 distribute_setup.use_setuptools()
 
 
-# pylint: disable=g-import-not-at-topimport setuptools
+# pylint: disable=g-import-not-at-top
 import setuptools
 
 
