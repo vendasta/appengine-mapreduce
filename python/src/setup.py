@@ -14,7 +14,7 @@ import setuptools
 # To debug, set DISTUTILS_DEBUG env var to anything.
 setuptools.setup(
     name="mapreduce",
-    version="1.1.0",
+    version="1.2.0",
     packages=setuptools.find_packages(),
     author="Kevin Sookocheff",
     author_email="ksookocheff@vendasta.com",
@@ -27,8 +27,8 @@ setuptools.setup(
     include_package_data=True,
     exclude_package_data={"": ["README"]},
     install_requires=[
-        "GoogleAppEngineCloudStorageClient >= 1.9.15",
-        "pipeline >= 1.1.0",
+        "GoogleAppEngineCloudStorageClient >= 1.9.21",
+        "pipeline >= 1.2.0",
         "Graphy >= 1.0.0"
     ]
 )

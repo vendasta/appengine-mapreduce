@@ -253,6 +253,9 @@ class AbstractDatastoreInputReader(InputReader):
   # Maximum number of shards we'll create.
   _MAX_SHARD_COUNT = 256
 
+  # Factor for additional ranges to split when using inequality filters.
+  _OVERSPLIT_FACTOR = 1
+
   # The maximum number of namespaces that will be sharded by datastore key
   # before switching to a strategy where sharding is done lexographically by
   # namespace.
@@ -264,6 +267,7 @@ class AbstractDatastoreInputReader(InputReader):
   BATCH_SIZE_PARAM = "batch_size"
   KEY_RANGE_PARAM = "key_range"
   FILTERS_PARAM = "filters"
+  OVERSPLIT_FACTOR_PARAM = "oversplit_factor"
 
   _KEY_RANGE_ITER_CLS = db_iters.AbstractKeyRangeIterator
 
@@ -320,6 +324,8 @@ class AbstractDatastoreInputReader(InputReader):
         keys_only=bool(params.get(cls.KEYS_ONLY_PARAM, False)),
         filters=filters,
         batch_size=int(params.get(cls.BATCH_SIZE_PARAM, cls._BATCH_SIZE)),
+        oversplit_factor=int(params.get(cls.OVERSPLIT_FACTOR_PARAM,
+                                        cls._OVERSPLIT_FACTOR)),
         model_class_path=entity_kind,
         app=app,
         ns=ns)
@@ -385,6 +391,7 @@ class AbstractDatastoreInputReader(InputReader):
           shard_count,
           namespace,
           query_spec.entity_kind,
+          query_spec.filters,
           app)
       # The nth split of each ns will be assigned to the nth shard.
       # Shuffle so that None are not all by the end.
@@ -412,6 +419,7 @@ class AbstractDatastoreInputReader(InputReader):
                            shard_count,
                            namespace,
                            raw_entity_kind,
+                           filters,
                            app):
     """Split a namespace by scatter index into key_range.KeyRange.
 
@@ -438,7 +446,22 @@ class AbstractDatastoreInputReader(InputReader):
                                keys_only=True)
     ds_query.Order("__scatter__")
     oversampling_factor = 32
-    random_keys = ds_query.Get(shard_count * oversampling_factor)
+    random_keys = None
+    if filters:
+      ds_query_with_filters = copy.copy(ds_query)
+      for (key, op, value) in filters:
+        ds_query_with_filters.update({'%s %s' % (key, op): value})
+        try:
+          random_keys = ds_query_with_filters.Get(shard_count *
+                                                  oversampling_factor)
+        except db.NeedIndexError, why:
+          logging.warning('Need to add an index for optimal mapreduce-input'
+                          ' splitting:\n%s' % why)
+          # We'll try again without the filter.  We hope the filter
+          # will filter keys uniformly across the key-name space!
+
+    if not random_keys:
+      random_keys = ds_query.Get(shard_count * oversampling_factor)
 
     if not random_keys:
       # There are no entities with scatter property. We have no idea
@@ -508,6 +531,14 @@ class AbstractDatastoreInputReader(InputReader):
           raise BadReaderParamsError("Bad batch size: %s" % batch_size)
       except ValueError, e:
         raise BadReaderParamsError("Bad batch size: %s" % e)
+    if cls.OVERSPLIT_FACTOR_PARAM in params:
+      try:
+        oversplit_factor = int(params[cls.OVERSPLIT_FACTOR_PARAM])
+        if oversplit_factor < 1:
+          raise BadReaderParamsError("Bad oversplit factor:"
+                                     " %s" % oversplit_factor)
+      except ValueError, e:
+        raise BadReaderParamsError("Bad oversplit factor: %s" % e)
     try:
       bool(params.get(cls.KEYS_ONLY_PARAM, False))
     except:
@@ -661,7 +692,7 @@ class DatastoreInputReader(AbstractDatastoreInputReader):
       if prop not in properties:
         raise errors.BadReaderParamsError(
             "Property %s is not defined for entity type %s",
-            prop, model_class.kind())
+            prop, model_class._get_kind())
 
       # Attempt to cast the value to a KeyProperty if appropriate.
       # This enables filtering against keys.
@@ -690,12 +721,22 @@ class DatastoreInputReader(AbstractDatastoreInputReader):
     if not property_range.should_shard_by_property_range(query_spec.filters):
       return super(DatastoreInputReader, cls).split_input(mapper_spec)
 
+    # Artificially increase the number of shards to get a more even split.
+    # For example, if we are creating 7 shards for one week of data based on a
+    # Day property and the data points tend to be clumped on certain days (say,
+    # Monday and Wednesday), instead of assigning each shard a single day of
+    # the week, we will split each day into "oversplit_factor" pieces, and
+    # assign each shard "oversplit_factor" pieces with "1 / oversplit_factor"
+    # the work, so that the data from Monday and Wednesday is more evenly
+    # spread across all shards.
+    oversplit_factor = query_spec.oversplit_factor
+    oversplit_shard_count = oversplit_factor * shard_count
     p_range = property_range.PropertyRange(query_spec.filters,
                                            query_spec.model_class_path)
-    p_ranges = p_range.split(shard_count)
+    p_ranges = p_range.split(oversplit_shard_count)
 
     # User specified a namespace.
-    if query_spec.ns:
+    if query_spec.ns is not None:
       ns_range = namespace_range.NamespaceRange(
           namespace_start=query_spec.ns,
           namespace_end=query_spec.ns,
@@ -713,7 +754,7 @@ class DatastoreInputReader(AbstractDatastoreInputReader):
                      for _ in p_ranges]
       # Lots of namespaces. Split by ns.
       else:
-        ns_ranges = namespace_range.NamespaceRange.split(n=shard_count,
+        ns_ranges = namespace_range.NamespaceRange.split(n=oversplit_shard_count,
                                                          contiguous=False,
                                                          can_query=lambda: True,
                                                          _app=query_spec.app)
@@ -724,6 +765,23 @@ class DatastoreInputReader(AbstractDatastoreInputReader):
     iters = [
         db_iters.RangeIteratorFactory.create_property_range_iterator(
             p, ns, query_spec) for p, ns in zip(p_ranges, ns_ranges)]
+
+    # Reduce the number of ranges back down to the shard count.
+    # It's possible that we didn't split into enough shards even
+    # after oversplitting, in which case we don't need to do anything.
+    if len(iters) > shard_count:
+      # We cycle through the iterators and chain them together, e.g.
+      # if we look at the indices chained together, we get:
+      # Shard #0 gets 0, num_shards, 2 * num_shards, ...
+      # Shard #1 gets 1, num_shards + 1, 2 * num_shards + 1, ...
+      # Shard #2 gets 2, num_shards + 2, 2 * num_shards + 2, ...
+      # and so on. This should split fairly evenly.
+      iters = [
+        db_iters.RangeIteratorFactory.create_multi_property_range_iterator(
+          [iters[i] for i in xrange(start_index, len(iters), shard_count)]
+        ) for start_index in xrange(shard_count)
+      ]
+
     return [cls(i) for i in iters]
 
 

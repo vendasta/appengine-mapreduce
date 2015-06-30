@@ -40,7 +40,7 @@ import cgi
 import datetime
 import urllib
 import zlib
-
+from graphy import bar_chart
 from graphy.backends import google_chart_api
 
 try:
@@ -634,17 +634,46 @@ class MapreduceState(db.Model):
     """
     return db.get(cls.get_key_by_job_id(mapreduce_id))
 
-  def set_processed_counts(self, shards_processed):
+  def set_processed_counts(self, shards_processed, shards_status):
     """Updates a chart url to display processed count for each shard.
 
     Args:
       shards_processed: list of integers with number of processed entities in
         each shard
     """
-    chart = google_chart_api.BarChart(shards_processed)
+    chart = google_chart_api.BarChart()
+
+    def filter_status(status_to_filter):
+      return [count if status == status_to_filter else 0
+              for count, status in zip(shards_processed, shards_status)]
+
+    if shards_status:
+      # Each index will have only one non-zero count, so stack them to color-
+      # code the bars by status
+      # These status values are computed in _update_state_from_shard_states,
+      # in mapreduce/handlers.py.
+      chart.stacked = True
+      chart.AddBars(filter_status("unknown"), color="404040")
+      chart.AddBars(filter_status("success"), color="00ac42")
+      chart.AddBars(filter_status("running"), color="3636a9")
+      chart.AddBars(filter_status("aborted"), color="e29e24")
+      chart.AddBars(filter_status("failed"), color="f6350f")
+    else:
+      chart.AddBars(shards_processed)
+
     shard_count = len(shards_processed)
 
-    if shards_processed:
+    if shard_count > 95:
+      # Auto-spacing does not work for large numbers of shards.
+      pixels_per_shard = 700.0 / shard_count
+      bar_thickness = int(pixels_per_shard * .9)
+
+      chart.style = bar_chart.BarChartStyle(bar_thickness=bar_thickness,
+        bar_gap=0.1, use_fractional_gap_spacing=True)
+
+    if shards_processed and shard_count <= 95:
+      # Adding labels puts us in danger of exceeding the URL length, only
+      # do it when we have a small amount of data to plot.
       # Only 16 labels on the whole chart.
       stride_length = max(1, shard_count / 16)
       chart.bottom.labels = []
@@ -683,7 +712,7 @@ class MapreduceState(db.Model):
       mapreduce_id = MapreduceState.new_mapreduce_id()
     state = MapreduceState(key_name=mapreduce_id,
                            last_poll_time=gettime())
-    state.set_processed_counts([])
+    state.set_processed_counts([], [])
     return state
 
   @staticmethod
@@ -1182,12 +1211,14 @@ class QuerySpec(object):
   """Encapsulates everything about a query needed by DatastoreInputReader."""
 
   DEFAULT_BATCH_SIZE = 50
+  DEFAULT_OVERSPLIT_FACTOR = 1
 
   def __init__(self,
                entity_kind,
                keys_only=None,
                filters=None,
                batch_size=None,
+               oversplit_factor=None,
                model_class_path=None,
                app=None,
                ns=None):
@@ -1195,6 +1226,8 @@ class QuerySpec(object):
     self.keys_only = keys_only or False
     self.filters = filters or None
     self.batch_size = batch_size or self.DEFAULT_BATCH_SIZE
+    self.oversplit_factor = (oversplit_factor or
+                             self.DEFAULT_OVERSPLIT_FACTOR)
     self.model_class_path = model_class_path
     self.app = app
     self.ns = ns
@@ -1204,6 +1237,7 @@ class QuerySpec(object):
             "keys_only": self.keys_only,
             "filters": self.filters,
             "batch_size": self.batch_size,
+            "oversplit_factor": self.oversplit_factor,
             "model_class_path": self.model_class_path,
             "app": self.app,
             "ns": self.ns}
@@ -1214,6 +1248,7 @@ class QuerySpec(object):
                json["keys_only"],
                json["filters"],
                json["batch_size"],
+               json["oversplit_factor"],
                json["model_class_path"],
                json["app"],
                json["ns"])

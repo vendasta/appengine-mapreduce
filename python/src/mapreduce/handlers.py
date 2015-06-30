@@ -29,6 +29,7 @@ import random
 import sys
 import time
 import traceback
+import zlib
 
 try:
   import json
@@ -298,7 +299,15 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
     """
     assert shard_state.slice_start_time is not None
     assert shard_state.slice_request_id is not None
-    logs = list(logservice.fetch(request_ids=[shard_state.slice_request_id]))
+    request_ids = [shard_state.slice_request_id]
+    logs = None
+    try:
+      logs = list(logservice.fetch(request_ids=request_ids))
+    except (apiproxy_errors.FeatureNotEnabledError,
+        apiproxy_errors.CapabilityDisabledError) as e:
+      # Managed VMs do not have access to the logservice API
+      # See https://groups.google.com/forum/#!topic/app-engine-managed-vms/r8i65uiFW0w
+      logging.warning("Ignoring exception: %s", e)
 
     if not logs or not logs[0].finished:
       return False
@@ -1127,23 +1136,31 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
     state.active_shards, state.aborted_shards, state.failed_shards = 0, 0, 0
     total_shards = 0
     processed_counts = []
+    processed_status = []
     state.counters_map.clear()
 
     # Tally across shard states once.
     for s in shard_states:
       total_shards += 1
+      status = 'unknown'
       if s.active:
         state.active_shards += 1
-      if s.result_status == model.ShardState.RESULT_ABORTED:
+        status = 'running'
+      if s.result_status == model.ShardState.RESULT_SUCCESS:
+        status = 'success'
+      elif s.result_status == model.ShardState.RESULT_ABORTED:
         state.aborted_shards += 1
+        status = 'aborted'
       elif s.result_status == model.ShardState.RESULT_FAILED:
         state.failed_shards += 1
+        status = 'failed'
 
       # Update stats in mapreduce state by aggregating stats from shard states.
       state.counters_map.add_map(s.counters_map)
       processed_counts.append(s.counters_map.get(context.COUNTER_MAPPER_CALLS))
+      processed_status.append(status)
 
-    state.set_processed_counts(processed_counts)
+    state.set_processed_counts(processed_counts, processed_status)
     state.last_poll_time = datetime.datetime.utcfromtimestamp(self._time())
 
     spec = state.mapreduce_spec
@@ -1442,7 +1459,8 @@ class KickOffJobHandler(base_handler.TaskQueueHandler):
       readers = input_reader_class.split_input(split_param)
     else:
       readers = [input_reader_class.from_json_str(_json) for _json in
-                 json.loads(serialized_input_readers.payload)]
+                 json.loads(zlib.decompress(
+                 serialized_input_readers.payload))]
 
     if not readers:
       return None, None
@@ -1457,7 +1475,8 @@ class KickOffJobHandler(base_handler.TaskQueueHandler):
       serialized_input_readers = model._HugeTaskPayload(
           key_name=serialized_input_readers_key, parent=state)
       readers_json_str = [i.to_json_str() for i in readers]
-      serialized_input_readers.payload = json.dumps(readers_json_str)
+      serialized_input_readers.payload = zlib.compress(json.dumps(
+                                                       readers_json_str))
     return readers, serialized_input_readers
 
   def _setup_output_writer(self, state):

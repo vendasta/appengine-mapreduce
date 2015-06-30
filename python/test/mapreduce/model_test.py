@@ -255,18 +255,18 @@ class MapreduceStateTest(unittest.TestCase):
   def testSetProcessedCounts(self):
     """Test set_processed_counts method."""
     mapreduce_state = model.MapreduceState.create_new()
-    mapreduce_state.set_processed_counts([1, 2])
+    mapreduce_state.set_processed_counts([1, 2], ['running', 'running'])
     self.assertTrue(mapreduce_state.chart_url.startswith(
-        "http://chart.apis.google.com/chart?"))
+        "https://www.google.com/chart?"))
     self.assertEquals(
-        {u"cht": [u"bvg"],
+        {u"cht": [u"bvs"],
          u"chs": [u"300x200"],
          u"chxr": [u"0,0,2.1"],
          u"chxt": [u"y,x"],
-         u"chd": [u"s:d6"],
+         u"chd": [u"s:AA,AA,d6,AA,AA"],
          u"chbh": [u"a"],
          u"chxl": [u"0:|0|2|1:|0|1"],
-         u"chco": [u"0000ff"]},
+         u"chco": [u'404040,00ac42,3636a9,e29e24,f6350f']},
         urlparse.parse_qs(urlparse.urlparse(mapreduce_state.chart_url).query))
 
 
