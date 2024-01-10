@@ -1,0 +1,25 @@
+steps:
+  - name: gcr.io/repcore-prod/build-python-appengine
+    script: |
+      #!/usr/bin/env bash
+      pip install keyring==24.3.0 keyrings.google-artifactregistry-auth==1.1.2 twine==4.0.2
+    id: "install-dependencies"
+
+  - name: gcr.io/repcore-prod/build-python-appengine
+    entrypoint: pip
+    args: ["list"]
+    waitFor: ['install-dependencies']
+    id: 'pip-list'
+
+  - name: gcr.io/repcore-prod/build-python-appengine
+    dir: /workspace/python/src
+    script: |
+      #!/usr/bin/env bash
+      python3 setup.py sdist
+      python3 -m twine upload --repository-url https://us-central1-python.pkg.dev/repcore-prod/python/ dist/*
+    waitFor: ['pip-list']
+    id: "publish"
+
+tags:
+  - AppengineMapreduce
+timeout: 1200s
