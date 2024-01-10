@@ -131,7 +131,7 @@ def execute_task(task, retries=0, handlers_map=None):
   if task["method"] == "POST":
     # taskqueue_stub base64 encodes body when it returns the task to us.
     request.body = base64.b64decode(task["body"])
-    for k, v in decode_task_payload(task).iteritems():
+    for k, v in decode_task_payload(task).items():
       request.set(k, v)
 
   response = mock_webapp.MockResponse()
@@ -195,7 +195,7 @@ def execute_all_tasks(taskqueue, queue="default", handlers_map=None):
         task_run_counts[handler.__class__] += 1
         break
       # pylint: disable=broad-except
-      except Exception, e:
+      except Exception as e:
         retries += 1
         # Arbitrary large number.
         if retries > 100:

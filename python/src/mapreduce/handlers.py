@@ -369,7 +369,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
     try:
       _tx()
     # pylint: disable=broad-except
-    except Exception, e:
+    except Exception as e:
       logging.warning(e)
       logging.warning(
           "Release lock for shard %s failed. Wait for lease to expire.",
@@ -512,7 +512,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
         # That way if finalize fails no input data will be retried.
         shard_state.set_input_finished()
     # pylint: disable=broad-except
-    except Exception, e:
+    except Exception as e:
       logging.warning("Shard %s got error.", shard_state.shard_id)
       logging.error(traceback.format_exc())
 
@@ -566,7 +566,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
 
     while True:
       try:
-        entity = iterator.next()
+        entity = next(iterator)
       except StopIteration:
         break
       # Reading input got exception. If we assume
@@ -775,7 +775,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
     except (datastore_errors.Error,
             taskqueue.Error,
             runtime.DeadlineExceededError,
-            apiproxy_errors.Error), e:
+            apiproxy_errors.Error) as e:
       logging.warning(
           "Can't transactionally continue shard. "
           "Will retry slice %s %s for the %s time.",
@@ -999,7 +999,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
         # Named task is not allowed for transactional add.
         worker_task.add(queue_name)
       except (taskqueue.TombstonedTaskError,
-              taskqueue.TaskAlreadyExistsError), e:
+              taskqueue.TaskAlreadyExistsError) as e:
         logging.warning("Task %r already exists. %s: %s",
                         worker_task.name,
                         e.__class__,
@@ -1352,7 +1352,7 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
       try:
         controller_callback_task.add(queue_name)
       except (taskqueue.TombstonedTaskError,
-              taskqueue.TaskAlreadyExistsError), e:
+              taskqueue.TaskAlreadyExistsError) as e:
         logging.warning("Task %r with params %r already exists. %s: %s",
                         task_name, task_params, e.__class__, e)
 
@@ -1850,7 +1850,7 @@ class FinalizeJobHandler(base_handler.TaskQueueHandler):
       try:
         finalize_task.add(queue_name)
       except (taskqueue.TombstonedTaskError,
-              taskqueue.TaskAlreadyExistsError), e:
+              taskqueue.TaskAlreadyExistsError) as e:
         logging.warning("Task %r already exists. %s: %s",
                         task_name, e.__class__, e)
 

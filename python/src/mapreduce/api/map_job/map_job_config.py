@@ -44,12 +44,12 @@ class JobConfig(parameters._Config):
   will be used.
   """
   # Job name in str. UI purpose only.
-  job_name = _Option(basestring, required=True)
+  job_name = _Option(str, required=True)
 
   # Job ID. Must be unique across the app.
   # This is used to store state in datastore.
   # One will be automatically generated if not given.
-  job_id = _Option(basestring, default_factory=util._get_descending_key)
+  job_id = _Option(str, default_factory=util._get_descending_key)
 
   # Reference to your mapper.
   mapper = _Option(mapper_module.Mapper, required=True)
@@ -80,7 +80,7 @@ class JobConfig(parameters._Config):
 
   # The queue where all map tasks should run on.
   queue_name = _Option(
-      basestring, default_factory=lambda: parameters.config.QUEUE_NAME)
+      str, default_factory=lambda: parameters.config.QUEUE_NAME)
 
   # max attempts to run and retry a shard.
   shard_max_attempts = _Option(
@@ -88,12 +88,12 @@ class JobConfig(parameters._Config):
 
   # The URL to GET after the job finish, regardless of success.
   # The map_job_id will be provided as a query string key.
-  done_callback_url = _Option(basestring, can_be_none=True)
+  done_callback_url = _Option(str, can_be_none=True)
 
   # Force datastore writes.
   _force_writes = _Option(bool, default_factory=lambda: False)
 
-  _base_path = _Option(basestring,
+  _base_path = _Option(str,
                        default_factory=lambda: parameters.config.BASE_PATH)
 
   _task_max_attempts = _Option(
@@ -105,7 +105,7 @@ class JobConfig(parameters._Config):
 
   _hooks_cls = _Option(hooks.Hooks, can_be_none=True)
 
-  _app = _Option(basestring, can_be_none=True)
+  _app = _Option(str, can_be_none=True)
 
   _api_version = _Option(int, default_factory=lambda: _API_VERSION)
 

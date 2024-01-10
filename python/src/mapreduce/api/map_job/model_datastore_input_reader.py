@@ -104,7 +104,7 @@ class ModelDatastoreInputReader(abstract_datastore_input_reader
     # Fail fast if Model cannot be located.
     try:
       model_class = util.for_name(entity_kind)
-    except ImportError, e:
+    except ImportError as e:
       raise errors.BadReaderParamsError("Bad entity kind: %s" % e)
     if cls.FILTERS_PARAM in params:
       filters = params[cls.FILTERS_PARAM]
@@ -146,7 +146,7 @@ class ModelDatastoreInputReader(abstract_datastore_input_reader
       # valid value to carry out splits.
       try:
         properties[prop].validate(val)
-      except db.BadValueError, e:
+      except db.BadValueError as e:
         raise errors.BadReaderParamsError(e)
 
   @classmethod
@@ -169,6 +169,6 @@ class ModelDatastoreInputReader(abstract_datastore_input_reader
       # valid value to carry out splits.
       try:
         properties[prop]._do_validate(val)
-      except db.BadValueError, e:
+      except db.BadValueError as e:
         raise errors.BadReaderParamsError(e)
 

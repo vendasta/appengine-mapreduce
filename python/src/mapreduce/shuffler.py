@@ -16,7 +16,7 @@
 
 """Mapreduce shuffler implementation."""
 
-from __future__ import with_statement
+
 
 
 
@@ -104,7 +104,7 @@ class _BatchGCSRecordsReader(
     size = 0
     try:
       while True:
-        record = super(_BatchGCSRecordsReader, self).next()
+        record = next(super(_BatchGCSRecordsReader, self))
         records.append(record)
         size += len(record)
         if size > self.BATCH_SIZE:

@@ -181,7 +181,7 @@ class GCSInputReader(map_job.InputReader):
     try:
       cloudstorage.validate_bucket_name(
           reader_params[cls.BUCKET_NAME_PARAM])
-    except ValueError, error:
+    except ValueError as error:
       raise errors.BadReaderParamsError("Bad bucket name, %s" % (error))
 
     # Object Name(s) are required
@@ -195,7 +195,7 @@ class GCSInputReader(map_job.InputReader):
           "Object name list is not a list but a %s" %
           filenames.__class__.__name__)
     for filename in filenames:
-      if not isinstance(filename, basestring):
+      if not isinstance(filename, str):
         raise errors.BadReaderParamsError(
             "Object name is not a string but a %s" %
             filename.__class__.__name__)
@@ -203,7 +203,7 @@ class GCSInputReader(map_job.InputReader):
     # Delimiter.
     if cls.DELIMITER_PARAM in reader_params:
       delimiter = reader_params[cls.DELIMITER_PARAM]
-      if not isinstance(delimiter, basestring):
+      if not isinstance(delimiter, str):
         raise errors.BadReaderParamsError(
             "%s is not a string but a %s" %
             (cls.DELIMITER_PARAM, type(delimiter)))
@@ -286,7 +286,7 @@ class GCSInputReader(map_job.InputReader):
       self._bucket_itr = before_iter
       self._slice_ctx = before_slice_ctx
 
-  def next(self):
+  def __next__(self):
     """Returns a handler to the next file.
 
     Non existent files will be logged and skipped. The file might have been
@@ -376,7 +376,7 @@ class GCSRecordInputReader(GCSInputReader):
       result.pop("_record_reader")
     return result
 
-  def next(self):
+  def __next__(self):
     """Returns the next input from this input reader, a record.
 
     Returns:
@@ -389,7 +389,7 @@ class GCSRecordInputReader(GCSInputReader):
     while True:
       if not hasattr(self, "_cur_handle") or self._cur_handle is None:
         # If there are no more files, StopIteration is raised here
-        self._cur_handle = super(GCSRecordInputReader, self).next()
+        self._cur_handle = next(super(GCSRecordInputReader, self))
       if not hasattr(self, "_record_reader") or self._record_reader is None:
         self._record_reader = records.RecordsReader(self._cur_handle)
 

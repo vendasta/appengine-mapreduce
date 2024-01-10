@@ -21,7 +21,7 @@
 # pylint: disable=g-bad-name
 # pylint: disable=g-import-not-at-top
 
-import httplib
+import http.client
 import importlib
 import logging
 import pkgutil
@@ -168,7 +168,7 @@ class TaskQueueHandler(webapp.RequestHandler):
     this method to perform controlled task retries. Only raise exceptions
     for those deserve ERROR log entries.
     """
-    self.response.set_status(httplib.SERVICE_UNAVAILABLE, "Retry task")
+    self.response.set_status(http.client.SERVICE_UNAVAILABLE, "Retry task")
     self.response.clear()
 
 
@@ -221,7 +221,7 @@ class JsonHandler(webapp.RequestHandler):
       self.json_response.clear()
       self.json_response["error_class"] = "Notice"
       self.json_response["error_message"] = "Could not find 'mapreduce.yaml'"
-    except Exception, e:
+    except Exception as e:
       logging.exception("Error in JsonHandler, returning exception.")
       # TODO(user): Include full traceback here for the end-user.
       self.json_response.clear()
@@ -232,7 +232,7 @@ class JsonHandler(webapp.RequestHandler):
     try:
       output = json.dumps(self.json_response, cls=json_util.JsonEncoder)
     # pylint: disable=broad-except
-    except Exception, e:
+    except Exception as e:
       logging.exception("Could not serialize to JSON")
       self.response.set_status(500, message="Could not serialize to JSON")
       return

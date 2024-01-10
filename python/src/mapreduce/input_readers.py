@@ -48,7 +48,7 @@ import logging
 import pickle
 import random
 import string
-import StringIO
+import io
 import time
 import zipfile
 
@@ -137,7 +137,7 @@ class InputReader(json_util.JsonMixin):
   def __iter__(self):
     return self
 
-  def next(self):
+  def __next__(self):
     """Returns the next input from this input reader as a key, value pair.
 
     Returns:
@@ -229,13 +229,13 @@ def _get_params(mapper_spec, allowed_keys=None, allow_old=True):
     if not allow_old or allowed_keys:
       raise errors.BadReaderParamsError(message)
     params = mapper_spec.params
-    params = dict((str(n), v) for n, v in params.iteritems())
+    params = dict((str(n), v) for n, v in params.items())
   else:
     if not isinstance(mapper_spec.params.get("input_reader"), dict):
       raise errors.BadReaderParamsError(
           "Input reader parameters should be a dictionary")
     params = mapper_spec.params.get("input_reader")
-    params = dict((str(n), v) for n, v in params.iteritems())
+    params = dict((str(n), v) for n, v in params.items())
     if allowed_keys:
       params_diff = set(params.keys()) - allowed_keys
       if params_diff:
@@ -454,7 +454,7 @@ class AbstractDatastoreInputReader(InputReader):
         try:
           random_keys = ds_query_with_filters.Get(shard_count *
                                                   oversampling_factor)
-        except db.NeedIndexError, why:
+        except db.NeedIndexError as why:
           logging.warning('Need to add an index for optimal mapreduce-input'
                           ' splitting:\n%s' % why)
           # We'll try again without the filter.  We hope the filter
@@ -529,7 +529,7 @@ class AbstractDatastoreInputReader(InputReader):
         batch_size = int(params[cls.BATCH_SIZE_PARAM])
         if batch_size < 1:
           raise BadReaderParamsError("Bad batch size: %s" % batch_size)
-      except ValueError, e:
+      except ValueError as e:
         raise BadReaderParamsError("Bad batch size: %s" % e)
     if cls.OVERSPLIT_FACTOR_PARAM in params:
       try:
@@ -537,7 +537,7 @@ class AbstractDatastoreInputReader(InputReader):
         if oversplit_factor < 1:
           raise BadReaderParamsError("Bad oversplit factor:"
                                      " %s" % oversplit_factor)
-      except ValueError, e:
+      except ValueError as e:
         raise BadReaderParamsError("Bad oversplit factor: %s" % e)
     try:
       bool(params.get(cls.KEYS_ONLY_PARAM, False))
@@ -546,7 +546,7 @@ class AbstractDatastoreInputReader(InputReader):
                                  params[cls.KEYS_ONLY_PARAM])
     if cls.NAMESPACE_PARAM in params:
       if not isinstance(params[cls.NAMESPACE_PARAM],
-                        (str, unicode, type(None))):
+                        (str, type(None))):
         raise BadReaderParamsError(
             "Expected a single namespace string")
     if cls.NAMESPACES_PARAM in params:
@@ -561,9 +561,9 @@ class AbstractDatastoreInputReader(InputReader):
         if len(f) != 3:
           raise BadReaderParamsError("Filter should be a 3-tuple: %s", f)
         prop, op, _ = f
-        if not isinstance(prop, basestring):
+        if not isinstance(prop, str):
           raise BadReaderParamsError("Property should be string: %s", prop)
-        if not isinstance(op, basestring):
+        if not isinstance(op, str):
           raise BadReaderParamsError("Operator should be string: %s", op)
 
   @classmethod
@@ -632,7 +632,7 @@ class DatastoreInputReader(AbstractDatastoreInputReader):
     # Fail fast if Model cannot be located.
     try:
       model_class = util.for_name(entity_kind)
-    except ImportError, e:
+    except ImportError as e:
       raise BadReaderParamsError("Bad entity kind: %s" % e)
     if cls.FILTERS_PARAM in params:
       filters = params[cls.FILTERS_PARAM]
@@ -674,7 +674,7 @@ class DatastoreInputReader(AbstractDatastoreInputReader):
       # valid value to carry out splits.
       try:
         properties[prop].validate(val)
-      except db.BadValueError, e:
+      except db.BadValueError as e:
         raise errors.BadReaderParamsError(e)
 
   @classmethod
@@ -697,7 +697,7 @@ class DatastoreInputReader(AbstractDatastoreInputReader):
       # Attempt to cast the value to a KeyProperty if appropriate.
       # This enables filtering against keys.
       try:
-        if (isinstance(val, basestring) and
+        if (isinstance(val, str) and
             isinstance(properties[prop],
               (ndb.KeyProperty, ndb.ComputedProperty))):
           val = ndb.Key(urlsafe=val)
@@ -709,7 +709,7 @@ class DatastoreInputReader(AbstractDatastoreInputReader):
       # valid value to carry out splits.
       try:
         properties[prop]._do_validate(val)
-      except db.BadValueError, e:
+      except db.BadValueError as e:
         raise errors.BadReaderParamsError(e)
 
   @classmethod
@@ -778,8 +778,8 @@ class DatastoreInputReader(AbstractDatastoreInputReader):
       # and so on. This should split fairly evenly.
       iters = [
         db_iters.RangeIteratorFactory.create_multi_property_range_iterator(
-          [iters[i] for i in xrange(start_index, len(iters), shard_count)]
-        ) for start_index in xrange(shard_count)
+          [iters[i] for i in range(start_index, len(iters), shard_count)]
+        ) for start_index in range(shard_count)
       ]
 
     return [cls(i) for i in iters]
@@ -1106,11 +1106,11 @@ class _OldAbstractDatastoreInputReader(InputReader):
         batch_size = int(params[cls.BATCH_SIZE_PARAM])
         if batch_size < 1:
           raise BadReaderParamsError("Bad batch size: %s" % batch_size)
-      except ValueError, e:
+      except ValueError as e:
         raise BadReaderParamsError("Bad batch size: %s" % e)
     if cls.NAMESPACE_PARAM in params:
       if not isinstance(params[cls.NAMESPACE_PARAM],
-                        (str, unicode, type(None))):
+                        (str, type(None))):
         raise BadReaderParamsError(
             "Expected a single namespace string")
     if cls.NAMESPACES_PARAM in params:
@@ -1124,7 +1124,7 @@ class _OldAbstractDatastoreInputReader(InputReader):
           raise BadReaderParamsError("Filter should be a tuple or list: %s", f)
         if len(f) != 3:
           raise BadReaderParamsError("Filter should be a 3-tuple: %s", f)
-        if not isinstance(f[0], basestring):
+        if not isinstance(f[0], str):
           raise BadReaderParamsError("First element should be string: %s", f)
         if f[1] != "=":
           raise BadReaderParamsError(
@@ -1324,7 +1324,7 @@ class BlobstoreLineInputReader(InputReader):
     self._has_iterated = False
     self._read_before_start = bool(start_position)
 
-  def next(self):
+  def __next__(self):
     """Returns the next input from as an (offset, line) tuple."""
     self._has_iterated = True
 
@@ -1380,7 +1380,7 @@ class BlobstoreLineInputReader(InputReader):
     if cls.BLOB_KEYS_PARAM not in params:
       raise BadReaderParamsError("Must specify 'blob_keys' for mapper input")
     blob_keys = params[cls.BLOB_KEYS_PARAM]
-    if isinstance(blob_keys, basestring):
+    if isinstance(blob_keys, str):
       # This is a mechanism to allow multiple blob keys (which do not contain
       # commas) in a single string. It may go away.
       blob_keys = blob_keys.split(",")
@@ -1407,7 +1407,7 @@ class BlobstoreLineInputReader(InputReader):
     """
     params = _get_params(mapper_spec)
     blob_keys = params[cls.BLOB_KEYS_PARAM]
-    if isinstance(blob_keys, basestring):
+    if isinstance(blob_keys, str):
       # This is a mechanism to allow multiple blob keys (which do not contain
       # commas) in a single string. It may go away.
       blob_keys = blob_keys.split(",")
@@ -1423,9 +1423,9 @@ class BlobstoreLineInputReader(InputReader):
       shards_per_blob = 1
 
     chunks = []
-    for blob_key, blob_size in blob_sizes.items():
+    for blob_key, blob_size in list(blob_sizes.items()):
       blob_chunk_size = blob_size // shards_per_blob
-      for i in xrange(shards_per_blob - 1):
+      for i in range(shards_per_blob - 1):
         chunks.append(BlobstoreLineInputReader.from_json(
             {cls.BLOB_KEY_PARAM: blob_key,
              cls.INITIAL_POSITION_PARAM: blob_chunk_size * i,
@@ -1473,7 +1473,7 @@ class BlobstoreZipInputReader(InputReader):
     self._zip = None
     self._entries = None
 
-  def next(self):
+  def __next__(self):
     """Returns the next input from this input reader as (ZipInfo, opener) tuple.
 
     Returns:
@@ -1670,7 +1670,7 @@ class BlobstoreZipLineInputReader(InputReader):
       raise BadReaderParamsError("Must specify 'blob_keys' for mapper input")
 
     blob_keys = params[cls.BLOB_KEYS_PARAM]
-    if isinstance(blob_keys, basestring):
+    if isinstance(blob_keys, str):
       # This is a mechanism to allow multiple blob keys (which do not contain
       # commas) in a single string. It may go away.
       blob_keys = blob_keys.split(",")
@@ -1701,7 +1701,7 @@ class BlobstoreZipLineInputReader(InputReader):
     """
     params = _get_params(mapper_spec)
     blob_keys = params[cls.BLOB_KEYS_PARAM]
-    if isinstance(blob_keys, basestring):
+    if isinstance(blob_keys, str):
       # This is a mechanism to allow multiple blob keys (which do not contain
       # commas) in a single string. It may go away.
       blob_keys = blob_keys.split(",")
@@ -1741,7 +1741,7 @@ class BlobstoreZipLineInputReader(InputReader):
 
     return readers
 
-  def next(self):
+  def __next__(self):
     """Returns the next line from this input reader as (lineinfo, line) tuple.
 
     Returns:
@@ -1761,7 +1761,7 @@ class BlobstoreZipLineInputReader(InputReader):
         raise StopIteration()
       entry = self._entries.pop()
       value = self._zip.read(entry.filename)
-      self._filestream = StringIO.StringIO(value)
+      self._filestream = io.StringIO(value)
       if self._initial_offset:
         self._filestream.seek(self._initial_offset)
         self._filestream.readline()
@@ -1775,7 +1775,7 @@ class BlobstoreZipLineInputReader(InputReader):
       self._filestream = None
       self._start_file_index += 1
       self._initial_offset = 0
-      return self.next()
+      return next(self)
 
     return ((self._blob_key, self._start_file_index, start_position),
             line.rstrip("\n"))
@@ -1983,7 +1983,7 @@ class NamespaceInputReader(InputReader):
         batch_size = int(params[cls.BATCH_SIZE_PARAM])
         if batch_size < 1:
           raise BadReaderParamsError("Bad batch size: %s" % batch_size)
-      except ValueError, e:
+      except ValueError as e:
         raise BadReaderParamsError("Bad batch size: %s" % e)
 
   @classmethod
@@ -2122,7 +2122,7 @@ class LogInputReader(InputReader):
       An instance of the InputReader configured using the given JSON parameters.
     """
     # Strip out unrecognized parameters, as introduced by b/5960884.
-    params = dict((str(k), v) for k, v in json.iteritems()
+    params = dict((str(k), v) for k, v in json.items()
                   if k in cls._PARAMS)
 
     # This is not symmetric with to_json() wrt. PROTOTYPE_REQUEST_PARAM because
@@ -2167,7 +2167,7 @@ class LogInputReader(InputReader):
 
     # Create a LogInputReader for each shard, modulating the params as we go.
     shards = []
-    for _ in xrange(shard_count - 1):
+    for _ in range(shard_count - 1):
       params[cls.END_TIME_PARAM] = (params[cls.START_TIME_PARAM] +
                                     seconds_per_shard)
       shards.append(LogInputReader(**params))
@@ -2225,7 +2225,7 @@ class LogInputReader(InputReader):
     # doesn't trigger any requests for actual log records.
     try:
       logservice.fetch(**params)
-    except logservice.InvalidArgumentError, e:
+    except logservice.InvalidArgumentError as e:
       raise errors.BadReaderParamsError("One or more parameters are not valid "
                                         "inputs to logservice.fetch(): %s" % e)
 
@@ -2379,7 +2379,7 @@ class _GoogleCloudStorageInputReader(InputReader):
     try:
       cloudstorage.validate_bucket_name(
           reader_spec[cls.BUCKET_NAME_PARAM])
-    except ValueError, error:
+    except ValueError as error:
       raise errors.BadReaderParamsError("Bad bucket name, %s" % (error))
 
     # Object Name(s) are required
@@ -2393,13 +2393,13 @@ class _GoogleCloudStorageInputReader(InputReader):
           "Object name list is not a list but a %s" %
           filenames.__class__.__name__)
     for filename in filenames:
-      if not isinstance(filename, basestring):
+      if not isinstance(filename, str):
         raise errors.BadReaderParamsError(
             "Object name is not a string but a %s" %
             filename.__class__.__name__)
     if cls.DELIMITER_PARAM in reader_spec:
       delimiter = reader_spec[cls.DELIMITER_PARAM]
-      if not isinstance(delimiter, basestring):
+      if not isinstance(delimiter, str):
         raise errors.BadReaderParamsError(
             "%s is not a string but a %s" %
             (cls.DELIMITER_PARAM, type(delimiter)))
@@ -2475,7 +2475,7 @@ class _GoogleCloudStorageInputReader(InputReader):
     finally:
       self._bucket_itr = before_iter
 
-  def next(self):
+  def __next__(self):
     """Returns the next input from this input reader, a block of bytes.
 
     Non existent files will be logged and skipped. The file might have been
@@ -2556,7 +2556,7 @@ class _GoogleCloudStorageRecordInputReader(_GoogleCloudStorageInputReader):
       result.pop("_record_reader")
     return result
 
-  def next(self):
+  def __next__(self):
     """Returns the next input from this input reader, a record.
 
     Returns:
@@ -2569,8 +2569,8 @@ class _GoogleCloudStorageRecordInputReader(_GoogleCloudStorageInputReader):
     while True:
       if not hasattr(self, "_cur_handle") or self._cur_handle is None:
         # If there are no more files, StopIteration is raised here
-        self._cur_handle = super(_GoogleCloudStorageRecordInputReader,
-                                 self).next()
+        self._cur_handle = next(super(_GoogleCloudStorageRecordInputReader,
+                                 self))
       if not hasattr(self, "_record_reader") or self._record_reader is None:
         self._record_reader = records.RecordsReader(self._cur_handle)
 
@@ -2616,7 +2616,7 @@ class _ReducerReader(_GoogleCloudStorageRecordInputReader):
 
     try:
       while True:
-        binary_record = super(_ReducerReader, self).next()
+        binary_record = next(super(_ReducerReader, self))
         proto = kv_pb.KeyValues()
         proto.ParseFromString(binary_record)
 

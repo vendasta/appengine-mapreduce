@@ -201,7 +201,7 @@ class _PropertyRangeModelIterator(RangeIterator):
       else:
         cursor = self._query.cursor_after()
 
-    if cursor is None or isinstance(cursor, basestring):
+    if cursor is None or isinstance(cursor, str):
       cursor_object = False
     else:
       cursor_object = True
@@ -264,7 +264,7 @@ class _MultiPropertyRangeModelIterator(RangeIterator):
     json = {"name": self.__class__.__name__,
             "num_ranges": len(self._iters)}
 
-    for i in xrange(len(self._iters)):
+    for i in range(len(self._iters)):
       json_item = self._iters[i].to_json()
       query_spec = json_item["query_spec"]
       item_name = json_item["name"]
@@ -286,7 +286,7 @@ class _MultiPropertyRangeModelIterator(RangeIterator):
     item_name = json["item_name"]
 
     p_range_iters = []
-    for i in xrange(num_ranges):
+    for i in range(num_ranges):
       json_item = json[str(i)]
       # Place query_spec, name back into each iterator
       json_item["query_spec"] = query_spec
@@ -329,7 +329,7 @@ class _KeyRangesIterator(RangeIterator):
           yield o
 
       try:
-        k_range = self._key_ranges.next()
+        k_range = next(self._key_ranges)
         self._current_iter = self._key_range_iter_cls(k_range,
                                                       self._query_spec)
       except StopIteration:
