@@ -2,3 +2,5 @@ MANIFEST
 *.pyc
 .idea
 *.iml
+venv/
+```
