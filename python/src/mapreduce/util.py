@@ -100,8 +100,8 @@ def _get_task_host():
   default_host = os.environ["DEFAULT_VERSION_HOSTNAME"]
   module = os.environ["CURRENT_MODULE_ID"]
   if os.environ["CURRENT_MODULE_ID"] == "default":
-    return "%s.%s" % (version, default_host)
-  return "%s.%s.%s" % (version, module, default_host)
+    return "{}.{}".format(version, default_host)
+  return "{}.{}.{}".format(version, module, default_host)
 
 
 def _get_task_headers(map_job_id,
@@ -222,7 +222,7 @@ def for_name(fq_name, recursive=False):
     if recursive:
       raise
     else:
-      raise ImportError("Could not find '%s' on path '%s'" % (
+      raise ImportError("Could not find '{}' on path '{}'".format(
           short_name, module_name))
   except ImportError:
     # module_name is not actually a module. Try for_name for it to figure
@@ -235,7 +235,7 @@ def for_name(fq_name, recursive=False):
         # The module was found, but the function component is missing.
         raise KeyError()
     except KeyError:
-      raise ImportError("Could not find '%s' on path '%s'" % (
+      raise ImportError("Could not find '{}' on path '{}'".format(
           short_name, module_name))
     except ImportError:
       # This means recursive import attempts failed, thus we will raise the
@@ -321,8 +321,8 @@ def is_generator(obj):
     return True
 
   CO_GENERATOR = 0x20
-  return bool(((inspect.isfunction(obj) or inspect.ismethod(obj)) and
-               obj.__code__.co_flags & CO_GENERATOR))
+  return bool((inspect.isfunction(obj) or inspect.ismethod(obj)) and
+               obj.__code__.co_flags & CO_GENERATOR)
 
 
 def get_short_name(fq_name):
@@ -405,7 +405,7 @@ def _obj_to_path(obj):
     if fetched is None:
       raise ValueError(
           "Object %r must be defined on the top level of a module." % obj)
-    return "%s.%s" % (obj.__module__, obj.__name__)
+    return "{}.{}".format(obj.__module__, obj.__name__)
   raise TypeError("Unexpected type %s." % type(obj))
 
 

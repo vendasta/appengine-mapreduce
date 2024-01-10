@@ -34,7 +34,7 @@ class PipelineBase(pipeline.Pipeline):
     return pipeline.Pipeline.start(self, **kwargs)
 
 
-class _OutputSlotsMixin(object):
+class _OutputSlotsMixin:
   """Defines common output slots for all MR user facing pipelines.
 
   result_status: one of model.MapreduceState._RESULTS. When a MR pipeline

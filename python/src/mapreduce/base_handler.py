@@ -80,7 +80,7 @@ class TaskQueueHandler(webapp.RequestHandler):
     # Since initialize will conditionally change this field,
     # it needs to be set before calling super's __init__.
     self._preprocess_success = False
-    super(TaskQueueHandler, self).__init__(*args, **kwargs)
+    super().__init__(*args, **kwargs)
     if cloudstorage:
       cloudstorage.set_default_retry_params(
           cloudstorage.RetryParams(
@@ -103,7 +103,7 @@ class TaskQueueHandler(webapp.RequestHandler):
       request: a webapp.Request instance.
       response: a webapp.Response instance.
     """
-    super(TaskQueueHandler, self).initialize(request, response)
+    super().initialize(request, response)
 
     # Check request is from taskqueue.
     if "X-AppEngine-QueueName" not in self.request.headers:
@@ -183,7 +183,7 @@ class JsonHandler(webapp.RequestHandler):
 
   def __init__(self, *args):
     """Initializer."""
-    super(JsonHandler, self).__init__(*args)
+    super().__init__(*args)
     self.json_response = {}
 
   def base_path(self):
@@ -261,7 +261,7 @@ class GetJsonHandler(JsonHandler):
 class HugeTaskHandler(TaskQueueHandler):
   """Base handler for processing HugeTasks."""
 
-  class _RequestWrapper(object):
+  class _RequestWrapper:
     """Container of a request and associated parameters."""
 
     def __init__(self, request):
@@ -278,7 +278,7 @@ class HugeTaskHandler(TaskQueueHandler):
       return getattr(self._request, name)
 
   def __init__(self, *args, **kwargs):
-    super(HugeTaskHandler, self).__init__(*args, **kwargs)
+    super().__init__(*args, **kwargs)
 
   def _preprocess(self):
     self.request = self._RequestWrapper(self.request)

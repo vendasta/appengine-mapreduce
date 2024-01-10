@@ -43,7 +43,7 @@ except ImportError:
   pass  # CloudStorage library not available
 
 
-class PathFilter(object):
+class PathFilter:
   """Path filter for GCSInputReader."""
 
   def accept(self, slice_ctx, path):
@@ -124,7 +124,7 @@ class GCSInputReader(map_job.InputReader):
       delimiter: Delimiter used as path separator. See class doc.
       path_filter: An instance of PathFilter.
     """
-    super(GCSInputReader, self).__init__()
+    super().__init__()
     self._filenames = filenames
     self._index = index
     self._buffer_size = buffer_size
@@ -256,7 +256,7 @@ class GCSInputReader(map_job.InputReader):
                 "/" + bucket + "/" + filename[:-1], delimiter=delimiter,
                 _account_id=account_id)])
       else:
-        all_filenames.append("/%s/%s" % (bucket, filename))
+        all_filenames.append("/{}/{}".format(bucket, filename))
 
     # Split into shards
     readers = []
@@ -342,7 +342,7 @@ class GCSInputReader(map_job.InputReader):
           self._filenames[self._index],
           self._index + 1,  # +1 for human 1-indexing
           num_files)
-    return "CloudStorage [%s, %s]" % (status, names)
+    return "CloudStorage [{}, {}]".format(status, names)
 
   @classmethod
   def params_to_json(cls, params):
@@ -389,7 +389,7 @@ class GCSRecordInputReader(GCSInputReader):
     while True:
       if not hasattr(self, "_cur_handle") or self._cur_handle is None:
         # If there are no more files, StopIteration is raised here
-        self._cur_handle = next(super(GCSRecordInputReader, self))
+        self._cur_handle = next(super())
       if not hasattr(self, "_record_reader") or self._record_reader is None:
         self._record_reader = records.RecordsReader(self._cur_handle)
 

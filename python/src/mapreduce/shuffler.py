@@ -104,7 +104,7 @@ class _BatchGCSRecordsReader(
     size = 0
     try:
       while True:
-        record = next(super(_BatchGCSRecordsReader, self))
+        record = next(super())
         records.append(record)
         size += len(record)
         if size > self.BATCH_SIZE:
@@ -150,7 +150,7 @@ def _sort_records_map(records):
   bucket_name = params.get("bucket_name")
   filename = (ctx.mapreduce_spec.name + "/" + ctx.mapreduce_id + "/output-" +
               ctx.shard_id + "-" + str(int(time.time())))
-  full_filename = "/%s/%s" % (bucket_name, filename)
+  full_filename = "/{}/{}".format(bucket_name, filename)
   filehandle = cloudstorage.open(full_filename, mode="w")
   with output_writers.GCSRecordsPool(filehandle, ctx=ctx) as pool:
     for key_record in key_records:
@@ -184,7 +184,7 @@ class _SortChunksPipeline(pipeline_base.PipelineBase):
       filenames_only = util.strip_prefix_from_items("/%s/" % bucket_name,
                                                     filenames[i])
       sort_mapper = yield mapper_pipeline.MapperPipeline(
-          "%s-shuffle-sort-%s" % (job_name, str(i)),
+          "{}-shuffle-sort-{}".format(job_name, str(i)),
           __name__ + "._sort_records_map",
           __name__ + "._BatchGCSRecordsReader",
           None,

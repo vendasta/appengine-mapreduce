@@ -42,7 +42,7 @@ class JsonEncoder(json.JSONEncoder):
       json_struct = encoder(o)
       json_struct[self.TYPE_ID] = type(o).__name__
       return json_struct
-    return super(JsonEncoder, self).default(o)
+    return super().default(o)
 
 
 class JsonDecoder(json.JSONDecoder):
@@ -51,7 +51,7 @@ class JsonDecoder(json.JSONDecoder):
   def __init__(self, **kwargs):
     if "object_hook" not in kwargs:
       kwargs["object_hook"] = self._dict_to_obj
-    super(JsonDecoder, self).__init__(**kwargs)
+    super().__init__(**kwargs)
 
   def _dict_to_obj(self, d):
     """Converts a dictionary of json object to a Python object."""
@@ -123,7 +123,7 @@ def _JsonDecodeKey(d):
 _register_json_primitive(ndb.Key, _JsonEncodeKey, _JsonDecodeKey)
 
 
-class JsonMixin(object):
+class JsonMixin:
   """Simple, stateless json utilities mixin.
 
   Requires class to implement two methods:
@@ -177,7 +177,7 @@ class JsonProperty(db.UnindexedProperty):
       **kwargs: remaining arguments.
     """
     kwargs["default"] = default
-    super(JsonProperty, self).__init__(**kwargs)
+    super().__init__(**kwargs)
     self.data_type = data_type
 
   def get_value_for_datastore(self, model_instance):
@@ -189,7 +189,7 @@ class JsonProperty(db.UnindexedProperty):
     Returns:
       datastore-compatible value.
     """
-    value = super(JsonProperty, self).get_value_for_datastore(model_instance)
+    value = super().get_value_for_datastore(model_instance)
     if not value:
       return None
     json_value = value
@@ -233,7 +233,7 @@ class JsonProperty(db.UnindexedProperty):
       raise datastore_errors.BadValueError(
           "Property %s must be convertible to a %s instance (%s)" %
           (self.name, self.data_type, value))
-    return super(JsonProperty, self).validate(value)
+    return super().validate(value)
 
   def empty(self, value):
     """Checks if value is empty.

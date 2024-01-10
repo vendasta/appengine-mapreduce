@@ -338,7 +338,7 @@ class KeyValues(ProtocolBuffer.ProtocolMessage):
     for e in self.value_:
       elm=""
       if printElemNumber: elm="(%d)" % cnt
-      res+=prefix+("value%s: %s\n" % (elm, self.DebugFormatString(e)))
+      res+=prefix+("value{}: {}\n".format(elm, self.DebugFormatString(e)))
       cnt+=1
     return res
 

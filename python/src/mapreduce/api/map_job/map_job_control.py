@@ -25,7 +25,7 @@ from mapreduce.api.map_job import map_job_config
 # pylint: disable=protected-access
 
 
-class Job(object):
+class Job:
   """The job submitter's view of the job.
 
   The class allows user to submit a job, control a submitted job,

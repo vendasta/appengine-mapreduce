@@ -19,7 +19,7 @@ import logging
 # pylint: disable=invalid-name
 
 
-class JobContext(object):
+class JobContext:
   """Context for map job."""
 
   def __init__(self, job_config):
@@ -34,7 +34,7 @@ class JobContext(object):
     self.job_config = job_config
 
 
-class ShardContext(object):
+class ShardContext:
   """Context for a shard."""
 
   def __init__(self, job_context, shard_state):
@@ -82,7 +82,7 @@ class ShardContext(object):
     return self._state.counters_map.get(counter_name, default)
 
 
-class SliceContext(object):
+class SliceContext:
   """Context for map job."""
 
   def __init__(self, shard_context, shard_state, tstate):

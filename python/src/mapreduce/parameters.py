@@ -89,7 +89,7 @@ class _JobConfigMeta(type):
     return cls
 
 
-class _Option(object):
+class _Option:
   """An option for _Config."""
 
   def __init__(self, kind, required=False, default_factory=None,
@@ -113,7 +113,7 @@ class _Option(object):
     self.can_be_none = can_be_none
 
 
-class _Config(object, metaclass=_JobConfigMeta):
+class _Config(metaclass=_JobConfigMeta):
   """Root class for all per job configuration."""
 
   def __init__(self, _lenient=False, **kwds):
@@ -149,10 +149,10 @@ class _Config(object, metaclass=_JobConfigMeta):
         continue
       if isinstance(v, type) and not issubclass(v, option.kind):
         raise TypeError(
-            "Expect subclass of %r for option %s. Got %r" % (
+            "Expect subclass of {!r} for option {}. Got {!r}".format(
                 option.kind, k, v))
       if not isinstance(v, type) and not isinstance(v, option.kind):
-        raise TypeError("Expect type %r for option %s. Got %r" % (
+        raise TypeError("Expect type {!r} for option {}. Got {!r}".format(
             option.kind, k, v))
 
   def __eq__(self, other):
@@ -172,7 +172,7 @@ class _Config(object, metaclass=_JobConfigMeta):
 
 
 # TODO(user): Make more of these private.
-class _ConfigDefaults(object):
+class _ConfigDefaults:
   """Default configs.
 
   Do not change parameters whose names begin with _.

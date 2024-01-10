@@ -100,7 +100,7 @@ class SampleInputReader(map_job.InputReader):
   @classmethod
   def validate(cls, job_config):
     """Inherit docs."""
-    super(SampleInputReader, cls).validate(job_config)
+    super().validate(job_config)
 
     params = job_config.input_reader_params
     # Validate count.

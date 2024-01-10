@@ -144,7 +144,7 @@ def _unmask_crc(masked_crc):
   return ((rot >> 17) | (rot << 15)) & 0xFFFFFFFF
 
 
-class RecordsWriter(object):
+class RecordsWriter:
   """A writer for records format."""
 
   def __init__(self, writer):
@@ -224,7 +224,7 @@ class RecordsWriter(object):
       self.__position += pad_length
 
 
-class RecordsReader(object):
+class RecordsReader:
   """A reader for records format."""
 
   def __init__(self, reader):

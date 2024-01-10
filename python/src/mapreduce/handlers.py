@@ -132,7 +132,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
 
   def __init__(self, *args):
     """Constructor."""
-    super(MapperWorkerCallbackHandler, self).__init__(*args)
+    super().__init__(*args)
     self._time = time.time
     self.slice_context = None
     self.shard_context = None
@@ -915,7 +915,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
     """
     # Prefix the task name with something unique to this framework's
     # namespace so we don't conflict with user tasks on the queue.
-    return "appengine-mrshard-%s-%s-retry-%s" % (
+    return "appengine-mrshard-{}-{}-retry-{}".format(
         shard_id, slice_id, retry)
 
   def _get_countdown_for_next_slice(self, spec):
@@ -1062,7 +1062,7 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
 
   def __init__(self, *args):
     """Constructor."""
-    super(ControllerCallbackHandler, self).__init__(*args)
+    super().__init__(*args)
     self._time = time.time
 
   def _drop_gracefully(self):
@@ -1295,7 +1295,7 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
     """
     # Prefix the task name with something unique to this framework's
     # namespace so we don't conflict with user tasks on the queue.
-    return "appengine-mrcontrol-%s-%s" % (
+    return "appengine-mrcontrol-{}-{}".format(
         mapreduce_spec.mapreduce_id, serial_id)
 
   @staticmethod
@@ -1542,8 +1542,8 @@ class KickOffJobHandler(base_handler.TaskQueueHandler):
 
     # Retrieves already existing shard states.
     existing_shard_states = db.get(shard.key() for shard in shard_states)
-    existing_shard_keys = set(shard.key() for shard in existing_shard_states
-                              if shard is not None)
+    existing_shard_keys = {shard.key() for shard in existing_shard_states
+                              if shard is not None}
 
     # Save non existent shard states.
     # Note: we could do this transactionally if necessary.

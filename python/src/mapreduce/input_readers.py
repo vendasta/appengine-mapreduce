@@ -229,13 +229,13 @@ def _get_params(mapper_spec, allowed_keys=None, allow_old=True):
     if not allow_old or allowed_keys:
       raise errors.BadReaderParamsError(message)
     params = mapper_spec.params
-    params = dict((str(n), v) for n, v in params.items())
+    params = {str(n): v for n, v in params.items()}
   else:
     if not isinstance(mapper_spec.params.get("input_reader"), dict):
       raise errors.BadReaderParamsError(
           "Input reader parameters should be a dictionary")
     params = mapper_spec.params.get("input_reader")
-    params = dict((str(n), v) for n, v in params.items())
+    params = {str(n): v for n, v in params.items()}
     if allowed_keys:
       params_diff = set(params.keys()) - allowed_keys
       if params_diff:
@@ -283,8 +283,7 @@ class AbstractDatastoreInputReader(InputReader):
 
   def __iter__(self):
     """Yields whatever internal iterator yields."""
-    for o in self._iter:
-      yield o
+    yield from self._iter
 
   def __str__(self):
     """Returns the string representation of this InputReader."""
@@ -450,7 +449,7 @@ class AbstractDatastoreInputReader(InputReader):
     if filters:
       ds_query_with_filters = copy.copy(ds_query)
       for (key, op, value) in filters:
-        ds_query_with_filters.update({'%s %s' % (key, op): value})
+        ds_query_with_filters.update({'{} {}'.format(key, op): value})
         try:
           random_keys = ds_query_with_filters.Get(shard_count *
                                                   oversampling_factor)
@@ -588,7 +587,7 @@ class RawDatastoreInputReader(AbstractDatastoreInputReader):
   @classmethod
   def validate(cls, mapper_spec):
     """Inherit docs."""
-    super(RawDatastoreInputReader, cls).validate(mapper_spec)
+    super().validate(mapper_spec)
     params = _get_params(mapper_spec)
     entity_kind = params[cls.ENTITY_KIND_PARAM]
     if "." in entity_kind:
@@ -626,7 +625,7 @@ class DatastoreInputReader(AbstractDatastoreInputReader):
   @classmethod
   def validate(cls, mapper_spec):
     """Inherit docs."""
-    super(DatastoreInputReader, cls).validate(mapper_spec)
+    super().validate(mapper_spec)
     params = _get_params(mapper_spec)
     entity_kind = params[cls.ENTITY_KIND_PARAM]
     # Fail fast if Model cannot be located.
@@ -719,7 +718,7 @@ class DatastoreInputReader(AbstractDatastoreInputReader):
     query_spec = cls._get_query_spec(mapper_spec)
 
     if not property_range.should_shard_by_property_range(query_spec.filters):
-      return super(DatastoreInputReader, cls).split_input(mapper_spec)
+      return super().split_input(mapper_spec)
 
     # Artificially increase the number of shards to get a more even split.
     # For example, if we are creating 7 shards for one week of data based on a
@@ -891,11 +890,9 @@ class _OldAbstractDatastoreInputReader(InputReader):
       will not include it.
     """
     if self._key_ranges is not None:
-      for o in self._iter_key_ranges():
-        yield o
+      yield from self._iter_key_ranges()
     elif self._ns_range is not None:
-      for o in self._iter_ns_range():
-        yield o
+      yield from self._iter_ns_range()
     else:
       assert False, "self._key_ranges and self._ns_range are both None"
 
@@ -2122,8 +2119,8 @@ class LogInputReader(InputReader):
       An instance of the InputReader configured using the given JSON parameters.
     """
     # Strip out unrecognized parameters, as introduced by b/5960884.
-    params = dict((str(k), v) for k, v in json.items()
-                  if k in cls._PARAMS)
+    params = {str(k): v for k, v in json.items()
+                  if k in cls._PARAMS}
 
     # This is not symmetric with to_json() wrt. PROTOTYPE_REQUEST_PARAM because
     # the constructor parameters need to be JSON-encodable, so the decoding
@@ -2235,11 +2232,11 @@ class LogInputReader(InputReader):
     for key in sorted(self.__params.keys()):
       value = self.__params[key]
       if key is self._PROTOTYPE_REQUEST_PARAM:
-        params.append("%s='%s'" % (key, value))
+        params.append("{}='{}'".format(key, value))
       elif key is self._OFFSET_PARAM:
-        params.append("%s='%s'" % (key, value))
+        params.append("{}='{}'".format(key, value))
       else:
-        params.append("%s=%s" % (key, value))
+        params.append("{}={}".format(key, value))
 
     return "LogInputReader(%s)" % ", ".join(params)
 
@@ -2436,7 +2433,7 @@ class _GoogleCloudStorageInputReader(InputReader):
                 "/" + bucket + "/" + filename[:-1], delimiter=delimiter,
                 _account_id=account_id)])
       else:
-        all_filenames.append("/%s/%s" % (bucket, filename))
+        all_filenames.append("/{}/{}".format(bucket, filename))
 
     # Split into shards
     readers = []
@@ -2535,7 +2532,7 @@ class _GoogleCloudStorageInputReader(InputReader):
           self._filenames[self._index],
           self._index + 1,  # +1 for human 1-indexing
           num_files)
-    return "CloudStorage [%s, %s]" % (status, names)
+    return "CloudStorage [{}, {}]".format(status, names)
 
 
 GoogleCloudStorageInputReader = _GoogleCloudStorageInputReader
@@ -2569,8 +2566,7 @@ class _GoogleCloudStorageRecordInputReader(_GoogleCloudStorageInputReader):
     while True:
       if not hasattr(self, "_cur_handle") or self._cur_handle is None:
         # If there are no more files, StopIteration is raised here
-        self._cur_handle = next(super(_GoogleCloudStorageRecordInputReader,
-                                 self))
+        self._cur_handle = next(super())
       if not hasattr(self, "_record_reader") or self._record_reader is None:
         self._record_reader = records.RecordsReader(self._cur_handle)
 
@@ -2600,7 +2596,7 @@ class _ReducerReader(_GoogleCloudStorageRecordInputReader):
 
   def __init__(self, filenames, index=0, buffer_size=None, _account_id=None,
                delimiter=None):
-    super(_ReducerReader, self).__init__(filenames, index, buffer_size,
+    super().__init__(filenames, index, buffer_size,
                                          _account_id, delimiter)
     self.current_key = None
     self.current_values = None
@@ -2616,7 +2612,7 @@ class _ReducerReader(_GoogleCloudStorageRecordInputReader):
 
     try:
       while True:
-        binary_record = next(super(_ReducerReader, self))
+        binary_record = next(super())
         proto = kv_pb.KeyValues()
         proto.ParseFromString(binary_record)
 
@@ -2696,7 +2692,7 @@ class _ReducerReader(_GoogleCloudStorageRecordInputReader):
     Returns:
       A json-izable version of the remaining InputReader.
     """
-    result = super(_ReducerReader, self).to_json()
+    result = super().to_json()
     result["current_key"] = self.encode_data(self.current_key)
     result["current_values"] = self.encode_data(self.current_values)
     return result
@@ -2711,7 +2707,7 @@ class _ReducerReader(_GoogleCloudStorageRecordInputReader):
     Returns:
       An instance of the InputReader configured using the values of json.
     """
-    result = super(_ReducerReader, cls).from_json(json)
+    result = super().from_json(json)
     result.current_key = _ReducerReader.decode_data(json["current_key"])
     result.current_values = _ReducerReader.decode_data(json["current_values"])
     return result

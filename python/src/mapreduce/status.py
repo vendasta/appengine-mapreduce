@@ -231,7 +231,7 @@ def parse_mapreduce_yaml(contents):
                                            len(mr_info))
 
   jobs = mr_info[0]
-  job_names = set(j.name for j in jobs.mapreduce)
+  job_names = {j.name for j in jobs.mapreduce}
   if len(jobs.mapreduce) != len(job_names):
     raise errors.BadYamlError(
         "Overlapping mapreduce names; names must be unique")

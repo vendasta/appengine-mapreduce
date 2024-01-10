@@ -79,7 +79,7 @@ class _HugeTaskPayload(db.Model):
     return "_AE_MR_TaskPayload"
 
 
-class HugeTask(object):
+class HugeTask:
   """HugeTask is a taskqueue.Task-like class that can store big payloads.
 
   Payloads are stored either in the task payload itself or in the datastore.
@@ -422,7 +422,7 @@ class MapperSpec(json_util.JsonMixin):
     return result
 
   def __str__(self):
-    return "MapperSpec(%s, %s, %s, %s)" % (
+    return "MapperSpec({}, {}, {}, {})".format(
         self.handler_spec, self.input_reader_spec, self.params,
         self.shard_count)
 
@@ -726,7 +726,7 @@ class MapreduceState(db.Model):
     return self.properties() == other.properties()
 
 
-class TransientShardState(object):
+class TransientShardState:
   """A shard's states that are kept in task payload.
 
   TransientShardState holds two types of states:
@@ -836,7 +836,7 @@ class TransientShardState(object):
           json.loads(request.get("output_writer_state", "{}"),
                      cls=json_util.JsonDecoder))
       assert isinstance(output_writer, mapper_spec.output_writer_class()), (
-          "%s.from_json returned an instance of wrong class: %s" % (
+          "{}.from_json returned an instance of wrong class: {}".format(
               mapper_spec.output_writer_class(),
               output_writer.__class__))
 
@@ -1194,7 +1194,7 @@ class MapreduceControl(db.Model):
     Returns:
       Datastore Key for the command for the given job ID.
     """
-    return db.Key.from_path(cls.kind(), "%s:%s" % (mapreduce_id, cls._KEY_NAME))
+    return db.Key.from_path(cls.kind(), "{}:{}".format(mapreduce_id, cls._KEY_NAME))
 
   @classmethod
   def abort(cls, mapreduce_id, **kwargs):
@@ -1203,11 +1203,11 @@ class MapreduceControl(db.Model):
     Args:
       mapreduce_id: The job to abort. Not verified as a valid job.
     """
-    cls(key_name="%s:%s" % (mapreduce_id, cls._KEY_NAME),
+    cls(key_name="{}:{}".format(mapreduce_id, cls._KEY_NAME),
         command=cls.ABORT).put(**kwargs)
 
 
-class QuerySpec(object):
+class QuerySpec:
   """Encapsulates everything about a query needed by DatastoreInputReader."""
 
   DEFAULT_BATCH_SIZE = 50

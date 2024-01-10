@@ -30,7 +30,7 @@ except ImportError:
   pass  # CloudStorage library not available
 
 
-class _GCSFileSegReader(object):
+class _GCSFileSegReader:
   """A simple reader for file segs produced by GCS output writer.
 
   Internal use only.

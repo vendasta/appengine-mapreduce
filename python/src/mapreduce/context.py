@@ -89,7 +89,7 @@ def _normalize_key(value):
     return value
 
 
-class _ItemList(object):
+class _ItemList:
   """A buffer that holds arbitrary items and auto flushes them when full.
 
   Callers of this class provides the logic on how to flush.
@@ -193,7 +193,7 @@ class _ItemList(object):
     return len(self.items) >= self.__max_entity_count
 
 
-class Pool(object):
+class Pool:
   """Mutation pool accumulates changes to perform them in patch.
 
   Any Pool subclass should not be public. Instead, Pool should define an
@@ -370,7 +370,7 @@ class _Counters(Pool):
 
 
 # TODO(user): Define what fields should be public.
-class Context(object):
+class Context:
   """MapReduce execution context.
 
   The main purpose of Context is to facilitate IO. User code, input reader,

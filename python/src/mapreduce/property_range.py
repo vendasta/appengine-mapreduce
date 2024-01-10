@@ -53,7 +53,7 @@ def should_shard_by_property_range(filters):
   return False
 
 
-class PropertyRange(object):
+class PropertyRange:
   """A class that represents a range on a db.Model's property.
 
   It supports splitting the range into n shards and generating a query that
@@ -213,7 +213,7 @@ class PropertyRange(object):
     if issubclass(self.model_class, db.Model):
       query = db.Query(self.model_class, namespace=ns)
       for f in self.filters:
-        query.filter("%s %s" % (f[0], f[1]), f[2])
+        query.filter("{} {}".format(f[0], f[1]), f[2])
     else:
       query = self.model_class.query(namespace=ns)
       for f in self.filters:

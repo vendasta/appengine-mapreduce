@@ -66,8 +66,7 @@ class AbstractDatastoreInputReader(input_reader.InputReader):
 
   def __iter__(self):
     """Yields whatever the internal iterator yields."""
-    for o in self._iter:
-      yield o
+    yield from self._iter
 
   def __str__(self):
     """Returns the string representation of this InputReader."""
@@ -274,7 +273,7 @@ class AbstractDatastoreInputReader(input_reader.InputReader):
   @classmethod
   def validate(cls, job_config):
     """Inherit docs."""
-    super(AbstractDatastoreInputReader, cls).validate(job_config)
+    super().validate(job_config)
     params = job_config.input_reader_params
 
     # Check for the required entity kind parameter.
