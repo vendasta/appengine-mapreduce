@@ -66,8 +66,7 @@ class AbstractDatastoreInputReader(input_reader.InputReader):
 
   def __iter__(self):
     """Yields whatever the internal iterator yields."""
-    for o in self._iter:
-      yield o
+    yield from self._iter
 
   def __str__(self):
     """Returns the string representation of this InputReader."""
@@ -274,7 +273,7 @@ class AbstractDatastoreInputReader(input_reader.InputReader):
   @classmethod
   def validate(cls, job_config):
     """Inherit docs."""
-    super(AbstractDatastoreInputReader, cls).validate(job_config)
+    super().validate(job_config)
     params = job_config.input_reader_params
 
     # Check for the required entity kind parameter.
@@ -287,7 +286,7 @@ class AbstractDatastoreInputReader(input_reader.InputReader):
         batch_size = int(params[cls.BATCH_SIZE_PARAM])
         if batch_size < 1:
           raise errors.BadReaderParamsError("Bad batch size: %s" % batch_size)
-      except ValueError, e:
+      except ValueError as e:
         raise errors.BadReaderParamsError("Bad batch size: %s" % e)
     # Validate the keys only parameter.
     try:
@@ -299,7 +298,7 @@ class AbstractDatastoreInputReader(input_reader.InputReader):
     # Validate the namespace parameter.
     if cls.NAMESPACE_PARAM in params:
       if not isinstance(params[cls.NAMESPACE_PARAM],
-                        (str, unicode, type(None))):
+                        (str, type(None))):
         raise errors.BadReaderParamsError("Expected a single namespace string")
 
     # Validate the filters parameter.
@@ -314,10 +313,10 @@ class AbstractDatastoreInputReader(input_reader.InputReader):
         if len(f) != 3:
           raise errors.BadReaderParamsError("Filter should be a 3-tuple: %s", f)
         prop, op, _ = f
-        if not isinstance(prop, basestring):
+        if not isinstance(prop, str):
           raise errors.BadReaderParamsError("Property should be string: %s",
                                             prop)
-        if not isinstance(op, basestring):
+        if not isinstance(op, str):
           raise errors.BadReaderParamsError("Operator should be string: %s", op)
 
   @classmethod

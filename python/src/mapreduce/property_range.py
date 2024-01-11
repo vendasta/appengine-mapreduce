@@ -53,7 +53,7 @@ def should_shard_by_property_range(filters):
   return False
 
 
-class PropertyRange(object):
+class PropertyRange:
   """A class that represents a range on a db.Model's property.
 
   It supports splitting the range into n shards and generating a query that
@@ -149,8 +149,8 @@ class PropertyRange(object):
           model_class._properties[  # pylint: disable=protected-access
               range_property])
     supported_properties = (
-        _DISCRETE_PROPERTY_SPLIT_FUNCTIONS.keys() +
-        _CONTINUOUS_PROPERTY_SPLIT_FUNCTIONS.keys())
+        list(_DISCRETE_PROPERTY_SPLIT_FUNCTIONS.keys()) +
+        list(_CONTINUOUS_PROPERTY_SPLIT_FUNCTIONS.keys()))
     if not isinstance(property_obj, tuple(supported_properties)):
       raise errors.BadReaderParamsError(
           "Filtered property %s is not supported by sharding.", range_property)
@@ -213,7 +213,7 @@ class PropertyRange(object):
     if issubclass(self.model_class, db.Model):
       query = db.Query(self.model_class, namespace=ns)
       for f in self.filters:
-        query.filter("%s %s" % (f[0], f[1]), f[2])
+        query.filter("{} {}".format(f[0], f[1]), f[2])
     else:
       query = self.model_class.query(namespace=ns)
       for f in self.filters:
@@ -295,7 +295,7 @@ def _split_string_property(start, end, n, include_start, include_end):
   try:
     start = start.encode("ascii")
     end = end.encode("ascii")
-  except UnicodeEncodeError, e:
+  except UnicodeEncodeError as e:
     raise ValueError("Only ascii str is supported.", e)
 
   return _split_byte_string_property(start, end, n, include_start, include_end)

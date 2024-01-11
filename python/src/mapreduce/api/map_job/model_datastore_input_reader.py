@@ -57,7 +57,7 @@ class ModelDatastoreInputReader(abstract_datastore_input_reader
     query_spec = cls._get_query_spec(params)
 
     if not property_range.should_shard_by_property_range(query_spec.filters):
-      return super(ModelDatastoreInputReader, cls).split_input(job_config)
+      return super().split_input(job_config)
 
     p_range = property_range.PropertyRange(query_spec.filters,
                                            query_spec.model_class_path)
@@ -98,13 +98,13 @@ class ModelDatastoreInputReader(abstract_datastore_input_reader
   @classmethod
   def validate(cls, job_config):
     """Inherit docs."""
-    super(ModelDatastoreInputReader, cls).validate(job_config)
+    super().validate(job_config)
     params = job_config.input_reader_params
     entity_kind = params[cls.ENTITY_KIND_PARAM]
     # Fail fast if Model cannot be located.
     try:
       model_class = util.for_name(entity_kind)
-    except ImportError, e:
+    except ImportError as e:
       raise errors.BadReaderParamsError("Bad entity kind: %s" % e)
     if cls.FILTERS_PARAM in params:
       filters = params[cls.FILTERS_PARAM]
@@ -146,7 +146,7 @@ class ModelDatastoreInputReader(abstract_datastore_input_reader
       # valid value to carry out splits.
       try:
         properties[prop].validate(val)
-      except db.BadValueError, e:
+      except db.BadValueError as e:
         raise errors.BadReaderParamsError(e)
 
   @classmethod
@@ -169,6 +169,6 @@ class ModelDatastoreInputReader(abstract_datastore_input_reader
       # valid value to carry out splits.
       try:
         properties[prop]._do_validate(val)
-      except db.BadValueError, e:
+      except db.BadValueError as e:
         raise errors.BadReaderParamsError(e)
 

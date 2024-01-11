@@ -167,7 +167,7 @@ def _key_for_namespace(namespace, app):
                             _app=app)
 
 
-class NamespaceRange(object):
+class NamespaceRange:
   """An inclusive lexographical range of namespaces.
 
   This class is immutable.
@@ -199,7 +199,7 @@ class NamespaceRange(object):
       namespace_end = MAX_NAMESPACE
 
     if namespace_start > namespace_end:
-      raise ValueError('namespace_start (%r) > namespace_end (%r)' % (
+      raise ValueError('namespace_start ({!r}) > namespace_end ({!r})'.format(
           namespace_start, namespace_end))
     self.__namespace_start = namespace_start
     self.__namespace_end = namespace_end
@@ -258,10 +258,10 @@ class NamespaceRange(object):
 
   def __repr__(self):
     if self.app is None:
-      return 'NamespaceRange(namespace_start=%r, namespace_end=%r)' % (
+      return 'NamespaceRange(namespace_start={!r}, namespace_end={!r})'.format(
           self.namespace_start, self.namespace_end)
     else:
-      return 'NamespaceRange(namespace_start=%r, namespace_end=%r, _app=%r)' % (
+      return 'NamespaceRange(namespace_start={!r}, namespace_end={!r}, _app={!r})'.format(
           self.namespace_start, self.namespace_end, self.app)
 
   def with_start_after(self, after_namespace):
@@ -344,7 +344,7 @@ class NamespaceRange(object):
             n,
             contiguous,
             can_query=itertools.chain(itertools.repeat(True, 50),
-                                      itertools.repeat(False)).next,
+                                      itertools.repeat(False)).__next__,
             _app=None):
     # pylint: disable=g-doc-args
     """Splits the complete NamespaceRange into n equally-sized NamespaceRanges.

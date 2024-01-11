@@ -21,7 +21,7 @@
 __all__ = ["Hooks"]
 
 
-class Hooks(object):
+class Hooks:
   """Allows subclasses to control some aspects of mapreduce execution.
 
   control.start_map accepts an optional "hooks" argument that can be passed a

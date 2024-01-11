@@ -18,7 +18,7 @@
 # pylint: disable=invalid-name
 
 
-class _ShardLifeCycle(object):
+class _ShardLifeCycle:
   """Abstract class for objects that live along shard's life cycle.
 
   Objects that need to plug in business logic into a shard's life cycle

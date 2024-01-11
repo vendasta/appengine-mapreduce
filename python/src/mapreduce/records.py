@@ -129,7 +129,7 @@ def _mask_crc(crc):
   Returns:
     masked integer crc.
   """
-  return (((crc >> 15) | (crc << 17)) + _CRC_MASK_DELTA) & 0xFFFFFFFFL
+  return (((crc >> 15) | (crc << 17)) + _CRC_MASK_DELTA) & 0xFFFFFFFF
 
 
 def _unmask_crc(masked_crc):
@@ -140,11 +140,11 @@ def _unmask_crc(masked_crc):
   Retruns:
     orignal crc.
   """
-  rot = (masked_crc - _CRC_MASK_DELTA) & 0xFFFFFFFFL
-  return ((rot >> 17) | (rot << 15)) & 0xFFFFFFFFL
+  rot = (masked_crc - _CRC_MASK_DELTA) & 0xFFFFFFFF
+  return ((rot >> 17) | (rot << 15)) & 0xFFFFFFFF
 
 
-class RecordsWriter(object):
+class RecordsWriter:
   """A writer for records format."""
 
   def __init__(self, writer):
@@ -224,7 +224,7 @@ class RecordsWriter(object):
       self.__position += pad_length
 
 
-class RecordsReader(object):
+class RecordsReader:
   """A reader for records format."""
 
   def __init__(self, reader):
@@ -331,7 +331,7 @@ class RecordsReader(object):
           raise errors.InvalidRecordError(
               "Unsupported record type: %s" % record_type)
 
-      except errors.InvalidRecordError, e:
+      except errors.InvalidRecordError as e:
         logging.warning("Invalid record encountered at %s (%s). Syncing to "
                         "the next block", last_offset, e)
         data = None

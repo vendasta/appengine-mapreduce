@@ -39,7 +39,7 @@ __all__ = [
     "KeyRangeEntityProtoIterator"]
 
 
-class RangeIteratorFactory(object):
+class RangeIteratorFactory:
   """Factory to create RangeIterator."""
 
   @classmethod
@@ -176,17 +176,15 @@ class _PropertyRangeModelIterator(RangeIterator):
       if isinstance(self._query, db.Query):
         if self._cursor:
           self._query.with_cursor(self._cursor)
-        for model_instance in self._query.run(
+        yield from self._query.run(
             batch_size=self._query_spec.batch_size,
-            keys_only=self._query_spec.keys_only):
-          yield model_instance
+            keys_only=self._query_spec.keys_only)
       else:
         self._query = self._query.iter(batch_size=self._query_spec.batch_size,
                                        keys_only=self._query_spec.keys_only,
                                        start_cursor=self._cursor,
                                        produce_cursors=True)
-        for model_instance in self._query:
-          yield model_instance
+        yield from self._query
       self._query = None
       self._cursor = None
       if ns != self._ns_range.namespace_end:
@@ -201,7 +199,7 @@ class _PropertyRangeModelIterator(RangeIterator):
       else:
         cursor = self._query.cursor_after()
 
-    if cursor is None or isinstance(cursor, basestring):
+    if cursor is None or isinstance(cursor, str):
       cursor_object = False
     else:
       cursor_object = True
@@ -256,15 +254,14 @@ class _MultiPropertyRangeModelIterator(RangeIterator):
     Yields:
       db model entities or ndb model entities if the model is defined with ndb.
     """
-    for model_instance in itertools.chain.from_iterable(self._iters):
-      yield model_instance
+    yield from itertools.chain.from_iterable(self._iters)
 
   def to_json(self):
     """Inherit doc."""
     json = {"name": self.__class__.__name__,
             "num_ranges": len(self._iters)}
 
-    for i in xrange(len(self._iters)):
+    for i in range(len(self._iters)):
       json_item = self._iters[i].to_json()
       query_spec = json_item["query_spec"]
       item_name = json_item["name"]
@@ -286,7 +283,7 @@ class _MultiPropertyRangeModelIterator(RangeIterator):
     item_name = json["item_name"]
 
     p_range_iters = []
-    for i in xrange(num_ranges):
+    for i in range(num_ranges):
       json_item = json[str(i)]
       # Place query_spec, name back into each iterator
       json_item["query_spec"] = query_spec
@@ -325,11 +322,10 @@ class _KeyRangesIterator(RangeIterator):
   def __iter__(self):
     while True:
       if self._current_iter:
-        for o in self._current_iter:
-          yield o
+        yield from self._current_iter
 
       try:
-        k_range = self._key_ranges.next()
+        k_range = next(self._key_ranges)
         self._current_iter = self._key_range_iter_cls(k_range,
                                                       self._query_spec)
       except StopIteration:
@@ -444,17 +440,15 @@ class KeyRangeModelIterator(AbstractKeyRangeIterator):
     if isinstance(self._query, db.Query):
       if self._cursor:
         self._query.with_cursor(self._cursor)
-      for model_instance in self._query.run(
+      yield from self._query.run(
           batch_size=self._query_spec.batch_size,
-          keys_only=self._query_spec.keys_only):
-        yield model_instance
+          keys_only=self._query_spec.keys_only)
     else:
       self._query = self._query.iter(batch_size=self._query_spec.batch_size,
                                      keys_only=self._query_spec.keys_only,
                                      start_cursor=self._cursor,
                                      produce_cursors=True)
-      for model_instance in self._query:
-        yield model_instance
+      yield from self._query
 
   def _get_cursor(self):
     if self._query is None:
@@ -474,11 +468,10 @@ class KeyRangeEntityIterator(AbstractKeyRangeIterator):
   def __iter__(self):
     self._query = self._key_range.make_ascending_datastore_query(
         self._query_spec.entity_kind, filters=self._query_spec.filters)
-    for entity in self._query.Run(config=datastore_query.QueryOptions(
+    yield from self._query.Run(config=datastore_query.QueryOptions(
         batch_size=self._query_spec.batch_size,
         keys_only=self._query_spec.keys_only or self._KEYS_ONLY,
-        start_cursor=self._cursor)):
-      yield entity
+        start_cursor=self._cursor))
 
   def _get_cursor(self):
     if self._query is None:
@@ -510,8 +503,7 @@ class KeyRangeEntityProtoIterator(AbstractKeyRangeIterator):
     # datastore_query.ResultsIterator
     self._query = datastore_query.ResultsIterator(
         query.GetQuery().run(connection, query_options))
-    for entity_proto in self._query:
-      yield entity_proto
+    yield from self._query
 
   def _get_cursor(self):
     if self._query is None:

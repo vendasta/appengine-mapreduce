@@ -21,7 +21,7 @@
 # pylint: disable=g-bad-name
 # pylint: disable=g-import-not-at-top
 
-import httplib
+import http.client
 import importlib
 import logging
 import pkgutil
@@ -80,7 +80,7 @@ class TaskQueueHandler(webapp.RequestHandler):
     # Since initialize will conditionally change this field,
     # it needs to be set before calling super's __init__.
     self._preprocess_success = False
-    super(TaskQueueHandler, self).__init__(*args, **kwargs)
+    super().__init__(*args, **kwargs)
     if cloudstorage:
       cloudstorage.set_default_retry_params(
           cloudstorage.RetryParams(
@@ -103,7 +103,7 @@ class TaskQueueHandler(webapp.RequestHandler):
       request: a webapp.Request instance.
       response: a webapp.Response instance.
     """
-    super(TaskQueueHandler, self).initialize(request, response)
+    super().initialize(request, response)
 
     # Check request is from taskqueue.
     if "X-AppEngine-QueueName" not in self.request.headers:
@@ -168,7 +168,7 @@ class TaskQueueHandler(webapp.RequestHandler):
     this method to perform controlled task retries. Only raise exceptions
     for those deserve ERROR log entries.
     """
-    self.response.set_status(httplib.SERVICE_UNAVAILABLE, "Retry task")
+    self.response.set_status(http.client.SERVICE_UNAVAILABLE, "Retry task")
     self.response.clear()
 
 
@@ -183,7 +183,7 @@ class JsonHandler(webapp.RequestHandler):
 
   def __init__(self, *args):
     """Initializer."""
-    super(JsonHandler, self).__init__(*args)
+    super().__init__(*args)
     self.json_response = {}
 
   def base_path(self):
@@ -221,7 +221,7 @@ class JsonHandler(webapp.RequestHandler):
       self.json_response.clear()
       self.json_response["error_class"] = "Notice"
       self.json_response["error_message"] = "Could not find 'mapreduce.yaml'"
-    except Exception, e:
+    except Exception as e:
       logging.exception("Error in JsonHandler, returning exception.")
       # TODO(user): Include full traceback here for the end-user.
       self.json_response.clear()
@@ -232,7 +232,7 @@ class JsonHandler(webapp.RequestHandler):
     try:
       output = json.dumps(self.json_response, cls=json_util.JsonEncoder)
     # pylint: disable=broad-except
-    except Exception, e:
+    except Exception as e:
       logging.exception("Could not serialize to JSON")
       self.response.set_status(500, message="Could not serialize to JSON")
       return
@@ -261,7 +261,7 @@ class GetJsonHandler(JsonHandler):
 class HugeTaskHandler(TaskQueueHandler):
   """Base handler for processing HugeTasks."""
 
-  class _RequestWrapper(object):
+  class _RequestWrapper:
     """Container of a request and associated parameters."""
 
     def __init__(self, request):
@@ -278,7 +278,7 @@ class HugeTaskHandler(TaskQueueHandler):
       return getattr(self._request, name)
 
   def __init__(self, *args, **kwargs):
-    super(HugeTaskHandler, self).__init__(*args, **kwargs)
+    super().__init__(*args, **kwargs)
 
   def _preprocess(self):
     self.request = self._RequestWrapper(self.request)

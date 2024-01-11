@@ -31,7 +31,7 @@ class DatastoreInputReader(abstract_datastore_input_reader
   @classmethod
   def validate(cls, job_config):
     """Inherit docs."""
-    super(DatastoreInputReader, cls).validate(job_config)
+    super().validate(job_config)
     params = job_config.input_reader_params
     entity_kind = params[cls.ENTITY_KIND_PARAM]
     # Check for a "." in the entity kind.

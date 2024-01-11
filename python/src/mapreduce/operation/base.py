@@ -21,7 +21,7 @@
 __all__ = ['Operation']
 
 
-class Operation(object):
+class Operation:
   """Base class for all mapper operations.
 
   All operations should implement __call__(self, ctx) function, which will be

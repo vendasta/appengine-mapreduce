@@ -61,7 +61,7 @@ class _JobConfigMeta(type):
     """
     options = {}
     required = set()
-    for name, option in class_dict.iteritems():
+    for name, option in class_dict.items():
       if isinstance(option, _Option):
         options[name] = option
         if option.required:
@@ -83,13 +83,13 @@ class _JobConfigMeta(type):
           parent_options.update(c.__dict__[mcs._OPTIONS])
         if mcs._REQUIRED in c.__dict__:
           required.update(c.__dict__[mcs._REQUIRED])
-      for k, v in parent_options.iteritems():
+      for k, v in parent_options.items():
         if k not in options:
           options[k] = v
     return cls
 
 
-class _Option(object):
+class _Option:
   """An option for _Config."""
 
   def __init__(self, kind, required=False, default_factory=None,
@@ -113,10 +113,8 @@ class _Option(object):
     self.can_be_none = can_be_none
 
 
-class _Config(object):
+class _Config(metaclass=_JobConfigMeta):
   """Root class for all per job configuration."""
-
-  __metaclass__ = _JobConfigMeta
 
   def __init__(self, _lenient=False, **kwds):
     """Init.
@@ -140,7 +138,7 @@ class _Config(object):
         raise ValueError("Options %s are required." % tuple(missing))
 
   def _set_values(self, kwds, _lenient):
-    for k, option in self._options.iteritems():
+    for k, option in self._options.items():
       v = kwds.get(k)
       if v is None and option.default_factory:
         v = option.default_factory()
@@ -151,10 +149,10 @@ class _Config(object):
         continue
       if isinstance(v, type) and not issubclass(v, option.kind):
         raise TypeError(
-            "Expect subclass of %r for option %s. Got %r" % (
+            "Expect subclass of {!r} for option {}. Got {!r}".format(
                 option.kind, k, v))
       if not isinstance(v, type) and not isinstance(v, option.kind):
-        raise TypeError("Expect type %r for option %s. Got %r" % (
+        raise TypeError("Expect type {!r} for option {}. Got {!r}".format(
             option.kind, k, v))
 
   def __eq__(self, other):
@@ -174,7 +172,7 @@ class _Config(object):
 
 
 # TODO(user): Make more of these private.
-class _ConfigDefaults(object):
+class _ConfigDefaults:
   """Default configs.
 
   Do not change parameters whose names begin with _.

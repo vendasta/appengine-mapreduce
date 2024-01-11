@@ -5,7 +5,7 @@
 from google.net.proto import ProtocolBuffer
 import array
 import base64
-import thread
+import _thread
 try:
   from google.net.proto import _net_proto___parse__python
 except ImportError:
@@ -166,7 +166,7 @@ class KeyValue(ProtocolBuffer.ProtocolMessage):
 
 
   def _BuildTagLookupTable(sparse, maxtag, default=None):
-    return tuple([sparse.get(i, default) for i in xrange(0, 1+maxtag)])
+    return tuple([sparse.get(i, default) for i in range(0, 1+maxtag)])
 
   kkey = 1
   kvalue = 2
@@ -235,7 +235,7 @@ class KeyValues(ProtocolBuffer.ProtocolMessage):
   def MergeFrom(self, x):
     assert x is not self
     if (x.has_key()): self.set_key(x.key())
-    for i in xrange(x.value_size()): self.add_value(x.value(i))
+    for i in range(x.value_size()): self.add_value(x.value(i))
 
   if _net_proto___parse__python is not None:
     def _CMergeFromString(self, s):
@@ -285,7 +285,7 @@ class KeyValues(ProtocolBuffer.ProtocolMessage):
     n = 0
     n += self.lengthString(len(self.key_))
     n += 1 * len(self.value_)
-    for i in xrange(len(self.value_)): n += self.lengthString(len(self.value_[i]))
+    for i in range(len(self.value_)): n += self.lengthString(len(self.value_[i]))
     return n + 1
 
   def ByteSizePartial(self):
@@ -294,7 +294,7 @@ class KeyValues(ProtocolBuffer.ProtocolMessage):
       n += 1
       n += self.lengthString(len(self.key_))
     n += 1 * len(self.value_)
-    for i in xrange(len(self.value_)): n += self.lengthString(len(self.value_[i]))
+    for i in range(len(self.value_)): n += self.lengthString(len(self.value_[i]))
     return n
 
   def Clear(self):
@@ -304,7 +304,7 @@ class KeyValues(ProtocolBuffer.ProtocolMessage):
   def OutputUnchecked(self, out):
     out.putVarInt32(10)
     out.putPrefixedString(self.key_)
-    for i in xrange(len(self.value_)):
+    for i in range(len(self.value_)):
       out.putVarInt32(18)
       out.putPrefixedString(self.value_[i])
 
@@ -312,7 +312,7 @@ class KeyValues(ProtocolBuffer.ProtocolMessage):
     if (self.has_key_):
       out.putVarInt32(10)
       out.putPrefixedString(self.key_)
-    for i in xrange(len(self.value_)):
+    for i in range(len(self.value_)):
       out.putVarInt32(18)
       out.putPrefixedString(self.value_[i])
 
@@ -338,13 +338,13 @@ class KeyValues(ProtocolBuffer.ProtocolMessage):
     for e in self.value_:
       elm=""
       if printElemNumber: elm="(%d)" % cnt
-      res+=prefix+("value%s: %s\n" % (elm, self.DebugFormatString(e)))
+      res+=prefix+("value{}: {}\n".format(elm, self.DebugFormatString(e)))
       cnt+=1
     return res
 
 
   def _BuildTagLookupTable(sparse, maxtag, default=None):
-    return tuple([sparse.get(i, default) for i in xrange(0, 1+maxtag)])
+    return tuple([sparse.get(i, default) for i in range(0, 1+maxtag)])
 
   kkey = 1
   kvalue = 2

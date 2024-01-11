@@ -102,7 +102,7 @@ def execute_task(task, retries=0, handlers_map=None):
   version = "mr-test-support-version.1"
   module = "mr-test-support-module"
   default_version_hostname = "mr-test-support.appspot.com"
-  host = "%s.%s.%s" % (version.split(".")[0],
+  host = "{}.{}.{}".format(version.split(".")[0],
                        module,
                        default_version_hostname)
 
@@ -131,7 +131,7 @@ def execute_task(task, retries=0, handlers_map=None):
   if task["method"] == "POST":
     # taskqueue_stub base64 encodes body when it returns the task to us.
     request.body = base64.b64decode(task["body"])
-    for k, v in decode_task_payload(task).iteritems():
+    for k, v in decode_task_payload(task).items():
       request.set(k, v)
 
   response = mock_webapp.MockResponse()
@@ -186,7 +186,7 @@ def execute_all_tasks(taskqueue, queue="default", handlers_map=None):
   """
   tasks = taskqueue.GetTasks(queue)
   taskqueue.FlushQueue(queue)
-  task_run_counts = collections.defaultdict(lambda: 0)
+  task_run_counts = collections.defaultdict(int)
   for task in tasks:
     retries = 0
     while True:
@@ -195,7 +195,7 @@ def execute_all_tasks(taskqueue, queue="default", handlers_map=None):
         task_run_counts[handler.__class__] += 1
         break
       # pylint: disable=broad-except
-      except Exception, e:
+      except Exception as e:
         retries += 1
         # Arbitrary large number.
         if retries > 100:
@@ -223,7 +223,7 @@ def execute_until_empty(taskqueue, queue="default", handlers_map=None):
     task_run_counts: a dict from handler class to the number of tasks
       it handled.
   """
-  task_run_counts = collections.defaultdict(lambda: 0)
+  task_run_counts = collections.defaultdict(int)
   while taskqueue.GetTasks(queue):
     new_counts = execute_all_tasks(taskqueue, queue, handlers_map)
     for handler_cls in new_counts:

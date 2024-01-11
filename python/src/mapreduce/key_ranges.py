@@ -27,7 +27,7 @@ __all__ = [
 # pylint: disable=g-bad-name
 
 
-class KeyRangesFactory(object):
+class KeyRangesFactory:
   """Factory for KeyRanges."""
 
   @classmethod
@@ -72,13 +72,13 @@ class KeyRangesFactory(object):
     raise ValueError("Invalid json %s", json)
 
 
-class KeyRanges(object):
+class KeyRanges:
   """An abstraction for a collection of key_range.KeyRange objects."""
 
   def __iter__(self):
     return self
 
-  def next(self):
+  def __next__(self):
     """Iterator iteraface."""
     raise NotImplementedError()
 
@@ -107,7 +107,7 @@ class _KeyRangesFromList(KeyRanges):
       return False
     return self._key_ranges == other._key_ranges
 
-  def next(self):
+  def __next__(self):
     if self._key_ranges:
       return self._key_ranges.pop()
     raise StopIteration()
@@ -116,11 +116,11 @@ class _KeyRangesFromList(KeyRanges):
     if len(self._key_ranges) == 1:
       return "Single KeyRange %s" % (self._key_ranges[0])
     if self._key_ranges:
-      return "From %s to %s" % (self._key_ranges[0], self._key_ranges[-1])
+      return "From {} to {}".format(self._key_ranges[0], self._key_ranges[-1])
     return "Empty KeyRange."
 
   def to_json(self):
-    json = super(_KeyRangesFromList, self).to_json()
+    json = super().to_json()
     json.update(
         {"list_of_key_ranges": [kr.to_json() for kr in self._key_ranges]})
     return json
@@ -149,11 +149,11 @@ class _KeyRangesFromNSRange(KeyRanges):
   def __str__(self):
     return str(self._ns_range)
 
-  def next(self):
+  def __next__(self):
     if self._ns_range is None:
       raise StopIteration()
 
-    self._last_ns = self._iter.next()
+    self._last_ns = next(self._iter)
     current_ns_range = self._ns_range
     if self._last_ns == self._ns_range.namespace_end:
       self._ns_range = None
@@ -161,7 +161,7 @@ class _KeyRangesFromNSRange(KeyRanges):
                               _app=current_ns_range.app)
 
   def to_json(self):
-    json = super(_KeyRangesFromNSRange, self).to_json()
+    json = super().to_json()
     ns_range = self._ns_range
     if self._ns_range is not None and self._last_ns is not None:
       ns_range = ns_range.with_start_after(self._last_ns)

@@ -83,13 +83,13 @@ def _normalize_key(value):
     return None
   if getattr(value, "key", None):
     return value.key()
-  elif isinstance(value, basestring):
+  elif isinstance(value, str):
     return datastore.Key(value)
   else:
     return value
 
 
-class _ItemList(object):
+class _ItemList:
   """A buffer that holds arbitrary items and auto flushes them when full.
 
   Callers of this class provides the logic on how to flush.
@@ -154,7 +154,7 @@ class _ItemList(object):
         self.__flush_function(self.items, options)
         self.clear()
         break
-      except db.Timeout, e:
+      except db.Timeout as e:
         logging.warning(e)
         logging.warning("Flushing '%s' timed out. Will retry for the %s time.",
                         self, retry)
@@ -174,7 +174,7 @@ class _ItemList(object):
 
     sizes = [len(self.__repr_function(i)) for i in self.items]
     largest = heapq.nlargest(self._LARGEST_ITEMS_TO_LOG,
-                             zip(sizes, self.items),
+                             list(zip(sizes, self.items)),
                              lambda t: t[0])
     # Set field for for test only.
     self._largest = [(s, self.__repr_function(i)) for s, i in largest]
@@ -193,7 +193,7 @@ class _ItemList(object):
     return len(self.items) >= self.__max_entity_count
 
 
-class Pool(object):
+class Pool:
   """Mutation pool accumulates changes to perform them in patch.
 
   Any Pool subclass should not be public. Instead, Pool should define an
@@ -370,7 +370,7 @@ class _Counters(Pool):
 
 
 # TODO(user): Define what fields should be public.
-class Context(object):
+class Context:
   """MapReduce execution context.
 
   The main purpose of Context is to facilitate IO. User code, input reader,
@@ -435,7 +435,7 @@ class Context(object):
 
   def flush(self):
     """Flush all information recorded in context."""
-    for pool in self._pools.values():
+    for pool in list(self._pools.values()):
       pool.flush()
 
   def register_pool(self, key, pool):

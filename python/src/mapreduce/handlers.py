@@ -132,7 +132,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
 
   def __init__(self, *args):
     """Constructor."""
-    super(MapperWorkerCallbackHandler, self).__init__(*args)
+    super().__init__(*args)
     self._time = time.time
     self.slice_context = None
     self.shard_context = None
@@ -369,7 +369,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
     try:
       _tx()
     # pylint: disable=broad-except
-    except Exception, e:
+    except Exception as e:
       logging.warning(e)
       logging.warning(
           "Release lock for shard %s failed. Wait for lease to expire.",
@@ -512,7 +512,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
         # That way if finalize fails no input data will be retried.
         shard_state.set_input_finished()
     # pylint: disable=broad-except
-    except Exception, e:
+    except Exception as e:
       logging.warning("Shard %s got error.", shard_state.shard_id)
       logging.error(traceback.format_exc())
 
@@ -566,7 +566,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
 
     while True:
       try:
-        entity = iterator.next()
+        entity = next(iterator)
       except StopIteration:
         break
       # Reading input got exception. If we assume
@@ -775,7 +775,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
     except (datastore_errors.Error,
             taskqueue.Error,
             runtime.DeadlineExceededError,
-            apiproxy_errors.Error), e:
+            apiproxy_errors.Error) as e:
       logging.warning(
           "Can't transactionally continue shard. "
           "Will retry slice %s %s for the %s time.",
@@ -915,7 +915,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
     """
     # Prefix the task name with something unique to this framework's
     # namespace so we don't conflict with user tasks on the queue.
-    return "appengine-mrshard-%s-%s-retry-%s" % (
+    return "appengine-mrshard-{}-{}-retry-{}".format(
         shard_id, slice_id, retry)
 
   def _get_countdown_for_next_slice(self, spec):
@@ -999,7 +999,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
         # Named task is not allowed for transactional add.
         worker_task.add(queue_name)
       except (taskqueue.TombstonedTaskError,
-              taskqueue.TaskAlreadyExistsError), e:
+              taskqueue.TaskAlreadyExistsError) as e:
         logging.warning("Task %r already exists. %s: %s",
                         worker_task.name,
                         e.__class__,
@@ -1062,7 +1062,7 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
 
   def __init__(self, *args):
     """Constructor."""
-    super(ControllerCallbackHandler, self).__init__(*args)
+    super().__init__(*args)
     self._time = time.time
 
   def _drop_gracefully(self):
@@ -1295,7 +1295,7 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
     """
     # Prefix the task name with something unique to this framework's
     # namespace so we don't conflict with user tasks on the queue.
-    return "appengine-mrcontrol-%s-%s" % (
+    return "appengine-mrcontrol-{}-{}".format(
         mapreduce_spec.mapreduce_id, serial_id)
 
   @staticmethod
@@ -1352,7 +1352,7 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
       try:
         controller_callback_task.add(queue_name)
       except (taskqueue.TombstonedTaskError,
-              taskqueue.TaskAlreadyExistsError), e:
+              taskqueue.TaskAlreadyExistsError) as e:
         logging.warning("Task %r with params %r already exists. %s: %s",
                         task_name, task_params, e.__class__, e)
 
@@ -1542,8 +1542,8 @@ class KickOffJobHandler(base_handler.TaskQueueHandler):
 
     # Retrieves already existing shard states.
     existing_shard_states = db.get(shard.key() for shard in shard_states)
-    existing_shard_keys = set(shard.key() for shard in existing_shard_states
-                              if shard is not None)
+    existing_shard_keys = {shard.key() for shard in existing_shard_states
+                              if shard is not None}
 
     # Save non existent shard states.
     # Note: we could do this transactionally if necessary.
@@ -1850,7 +1850,7 @@ class FinalizeJobHandler(base_handler.TaskQueueHandler):
       try:
         finalize_task.add(queue_name)
       except (taskqueue.TombstonedTaskError,
-              taskqueue.TaskAlreadyExistsError), e:
+              taskqueue.TaskAlreadyExistsError) as e:
         logging.warning("Task %r already exists. %s: %s",
                         task_name, e.__class__, e)
 

@@ -15,7 +15,7 @@
 
 """Output writers for MapReduce."""
 
-from __future__ import with_statement
+
 
 
 
@@ -34,7 +34,7 @@ __all__ = [
 # pylint: disable=g-bad-name
 # pylint: disable=protected-access
 
-import cStringIO
+import io
 import gc
 import logging
 import pickle
@@ -312,13 +312,13 @@ def _get_params(mapper_spec, allowed_keys=None, allow_old=True):
     if not allow_old or allowed_keys:
       raise errors.BadWriterParamsError(message)
     params = mapper_spec.params
-    params = dict((str(n), v) for n, v in params.iteritems())
+    params = {str(n): v for n, v in params.items()}
   else:
     if not isinstance(mapper_spec.params.get("output_writer"), dict):
       raise errors.BadWriterParamsError(
           "Output writer parameters should be a dictionary")
     params = mapper_spec.params.get("output_writer")
-    params = dict((str(n), v) for n, v in params.iteritems())
+    params = {str(n): v for n, v in params.items()}
     if allowed_keys:
       params_diff = set(params.keys()) - allowed_keys
       if params_diff:
@@ -373,7 +373,7 @@ class _RecordsPoolBase(context.Pool):
   def flush(self):
     """Flush pool contents."""
     # Write data to in-memory buffer first.
-    buf = cStringIO.StringIO()
+    buf = io.StringIO()
     with records.RecordsWriter(buf) as w:
       for record in self._buffer:
         w.write(record)
@@ -425,7 +425,7 @@ class GCSRecordsPool(_RecordsPoolBase):
                ctx=None,
                exclusive=False):
     """Requires the filehandle of an open GCS file to write to."""
-    super(GCSRecordsPool, self).__init__(flush_size_chars, ctx, exclusive)
+    super().__init__(flush_size_chars, ctx, exclusive)
     self._filehandle = filehandle
     self._buf_size = 0
 
@@ -441,7 +441,7 @@ class GCSRecordsPool(_RecordsPoolBase):
       force: Inserts additional padding to achieve the minimum block size
         required for GCS.
     """
-    super(GCSRecordsPool, self).flush()
+    super().flush()
     if force:
       extra_padding = self._buf_size % self._GCS_BLOCK_SIZE
       if extra_padding > 0:
@@ -566,9 +566,9 @@ class _GoogleCloudStorageOutputWriterBase(_GoogleCloudStorageBase):
         return template.substitute(name=name, id=job_id, num=num,
                                    attempt=attempt,
                                    seg=seg_index)
-    except ValueError, error:
+    except ValueError as error:
       raise errors.BadWriterParamsError("Naming template is bad, %s" % (error))
-    except KeyError, error:
+    except KeyError as error:
       raise errors.BadWriterParamsError("Naming template '%s' has extra "
                                         "mappings, %s" % (naming_format, error))
 
@@ -603,7 +603,7 @@ class _GoogleCloudStorageOutputWriterBase(_GoogleCloudStorageBase):
     try:
       cloudstorage.validate_bucket_name(
           writer_spec[cls.BUCKET_NAME_PARAM])
-    except ValueError, error:
+    except ValueError as error:
       raise errors.BadWriterParamsError("Bad bucket name, %s" % (error))
 
     # Validate the naming format does not throw any errors using dummy values
@@ -621,7 +621,7 @@ class _GoogleCloudStorageOutputWriterBase(_GoogleCloudStorageBase):
       account_id = cls._get_account_id(writer_spec)
 
     # GoogleCloudStorage format for filenames, Initial slash is required
-    filename = "/%s/%s" % (bucket, filename_suffix)
+    filename = "/{}/{}".format(bucket, filename_suffix)
 
     content_type = writer_spec.get(cls.CONTENT_TYPE_PARAM, None)
 
@@ -720,7 +720,7 @@ class _GoogleCloudStorageOutputWriter(_GoogleCloudStorageOutputWriterBase):
     writer_spec = cls.get_params(mapper_spec, allow_old=False)
     if writer_spec.get(cls._NO_DUPLICATE, False) not in (True, False):
       raise errors.BadWriterParamsError("No duplicate must a boolean.")
-    super(_GoogleCloudStorageOutputWriter, cls).validate(mapper_spec)
+    super().validate(mapper_spec)
 
   def _get_write_buffer(self):
     return self._streaming_buffer
@@ -848,7 +848,7 @@ class _GoogleCloudStorageOutputWriter(_GoogleCloudStorageOutputWriterBase):
 GoogleCloudStorageOutputWriter = _GoogleCloudStorageOutputWriter
 
 
-class _ConsistentStatus(object):
+class _ConsistentStatus:
   """Object used to pass status to the next slice."""
 
   def __init__(self):
@@ -1008,7 +1008,7 @@ class GoogleCloudStorageConsistentOutputWriter(
     return {self._JSON_STATUS: pickle.dumps(self.status)}
 
   def write(self, data):
-    super(GoogleCloudStorageConsistentOutputWriter, self).write(data)
+    super().write(data)
     self._data_written_to_slice = True
 
   def _try_to_clean_garbage(self, writer_spec, exclude_list=()):
@@ -1026,7 +1026,7 @@ class GoogleCloudStorageConsistentOutputWriter(
         id=self.status.mapreduce_id, shard=self.status.shard)
     bucket = self._get_tmp_gcs_bucket(writer_spec)
     account_id = self._get_tmp_account_id(writer_spec)
-    for f in cloudstorage.listbucket("/%s/%s" % (bucket, prefix),
+    for f in cloudstorage.listbucket("/{}/{}".format(bucket, prefix),
                                      _account_id=account_id):
       if f.filename not in exclude_list:
         self._remove_tmpfile(f.filename, self.status.writer_spec)
