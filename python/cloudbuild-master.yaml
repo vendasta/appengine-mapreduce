@@ -2,7 +2,7 @@ steps:
   - name: gcr.io/repcore-prod/build-python-appengine
     script: |
       #!/usr/bin/env bash
-      pip install keyring==24.3.0 keyrings.google-artifactregistry-auth==1.1.2 twine==4.0.2
+      pip install keyring==24.3.0 keyrings.google-artifactregistry-auth==1.1.2 twine==4.0.2 --user
     id: "install-dependencies"
 
   - name: gcr.io/repcore-prod/build-python-appengine
