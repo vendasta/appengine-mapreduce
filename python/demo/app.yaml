@@ -1,8 +1,7 @@
 application: mapreduce-demo
 version: 1
-runtime: python27
+runtime: python39
 api_version: 1
-threadsafe: no
 
 handlers:
 - url: /favicon.ico
@@ -17,11 +16,9 @@ handlers:
   script: main.app
   login: required
 
-includes:
-- mapreduce/include.yaml
+- url: /mapreduce/pipeline/images
+  static_dir: pipeline/ui/images
 
-libraries:
-- name: webapp2
-  version: "2.5.1"
-- name: jinja2
-  version: "2.6"
+- url: /mapreduce(/.*)?
+  script: mapreduce.main.APP
+  login: admin
