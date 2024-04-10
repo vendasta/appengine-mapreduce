@@ -580,7 +580,7 @@ class _GoogleCloudStorageOutputWriterBase(_GoogleCloudStorageBase):
           "%s is required for Google Cloud Storage" %
           cls.BUCKET_NAME_PARAM)
     try:
-        storage.Client(project='repcore-prod').get_bucket('byates')
+        storage.Client().get_bucket(cls.BUCKET_NAME_PARAM)
     except exceptions.NotFound as error:
         raise errors.BadReaderParamsError("Bad bucket name, %s" % (error))
 
