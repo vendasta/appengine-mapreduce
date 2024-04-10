@@ -47,8 +47,6 @@ import zlib
 from google.appengine.api import memcache, taskqueue
 from google.appengine.datastore import datastore_rpc
 from google.appengine.ext import db
-from graphy import bar_chart
-from graphy.backends import google_chart_api
 
 from mapreduce import context, hooks, json_util, util
 
@@ -635,53 +633,7 @@ class MapreduceState(db.Model):
       shards_processed: list of integers with number of processed entities in
         each shard
     """
-    chart = google_chart_api.BarChart()
-
-    def filter_status(status_to_filter):
-      return [count if status == status_to_filter else 0
-              for count, status in zip(shards_processed, shards_status)]
-
-    if shards_status:
-      # Each index will have only one non-zero count, so stack them to color-
-      # code the bars by status
-      # These status values are computed in _update_state_from_shard_states,
-      # in mapreduce/handlers.py.
-      chart.stacked = True
-      chart.AddBars(filter_status("unknown"), color="404040")
-      chart.AddBars(filter_status("success"), color="00ac42")
-      chart.AddBars(filter_status("running"), color="3636a9")
-      chart.AddBars(filter_status("aborted"), color="e29e24")
-      chart.AddBars(filter_status("failed"), color="f6350f")
-    else:
-      chart.AddBars(shards_processed)
-
-    shard_count = len(shards_processed)
-
-    if shard_count > 95:
-      # Auto-spacing does not work for large numbers of shards.
-      pixels_per_shard = 700.0 / shard_count
-      bar_thickness = int(pixels_per_shard * .9)
-
-      chart.style = bar_chart.BarChartStyle(bar_thickness=bar_thickness,
-        bar_gap=0.1, use_fractional_gap_spacing=True)
-
-    if shards_processed and shard_count <= 95:
-      # Adding labels puts us in danger of exceeding the URL length, only
-      # do it when we have a small amount of data to plot.
-      # Only 16 labels on the whole chart.
-      stride_length = max(1, shard_count / 16)
-      chart.bottom.labels = []
-      for x in range(shard_count):
-        if (x % stride_length == 0 or
-            x == shard_count - 1):
-          chart.bottom.labels.append(x)
-        else:
-          chart.bottom.labels.append("")
-      chart.left.labels = ["0", str(max(shards_processed))]
-      chart.left.min = 0
-
-    self.chart_width = min(700, max(300, shard_count * 20))
-    self.chart_url = chart.display.Url(self.chart_width, 200)
+    pass
 
   def get_processed(self):
     """Number of processed entities.

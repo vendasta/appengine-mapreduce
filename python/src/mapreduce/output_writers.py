@@ -51,29 +51,8 @@ from mapreduce import operation
 from mapreduce import records
 from mapreduce import shard_life_cycle
 
-# pylint: disable=g-import-not-at-top
-# TODO(user): Cleanup imports if/when cloudstorage becomes part of runtime.
-try:
-  # Check if the full cloudstorage package exists. The stub part is in runtime.
-  cloudstorage = None
-  import cloudstorage
-  if hasattr(cloudstorage, "_STUB"):
-    cloudstorage = None
-  # "if" is needed because apphosting/ext/datastore_admin:main_test fails.
-  if cloudstorage:
-    from cloudstorage import cloudstorage_api
-    from cloudstorage import errors as cloud_errors
-except ImportError:
-  pass  # CloudStorage library not available
-
-# Attempt to load cloudstorage from the bundle (availble in some tests)
-if cloudstorage is None:
-  try:
-    import cloudstorage
-    from cloudstorage import cloudstorage_api
-  except ImportError:
-    pass  # CloudStorage library really not available
-
+from google.cloud import storage
+from google.api_core import exceptions
 
 # Counter name for number of bytes written.
 COUNTER_IO_WRITE_BYTES = "io-write-bytes"
@@ -601,10 +580,9 @@ class _GoogleCloudStorageOutputWriterBase(_GoogleCloudStorageBase):
           "%s is required for Google Cloud Storage" %
           cls.BUCKET_NAME_PARAM)
     try:
-      cloudstorage.validate_bucket_name(
-          writer_spec[cls.BUCKET_NAME_PARAM])
-    except ValueError as error:
-      raise errors.BadWriterParamsError("Bad bucket name, %s" % (error))
+        storage.Client(project='repcore-prod').get_bucket('byates')
+    except exceptions.NotFound as error:
+        raise errors.BadReaderParamsError("Bad bucket name, %s" % (error))
 
     # Validate the naming format does not throw any errors using dummy values
     cls._generate_filename(writer_spec, "name", "id", 0)

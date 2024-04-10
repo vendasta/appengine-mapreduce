@@ -32,6 +32,7 @@ import traceback
 import zlib
 import json
 
+from flask import request
 from google.appengine.ext import ndb
 
 from google.appengine import runtime
@@ -51,19 +52,6 @@ from mapreduce import shard_life_cycle
 from mapreduce import util
 from mapreduce.api import map_job
 from google.appengine.runtime import apiproxy_errors
-
-# pylint: disable=g-import-not-at-top
-try:
-  import cloudstorage
-  # In 25 runtime, the above code will be scrubbed to import the stub version
-  # of cloudstorage. All occurences of the following if condition in MR
-  # codebase is to tell it apart.
-  # TODO(user): Remove after 25 runtime MR is abondoned.
-  if hasattr(cloudstorage, "_STUB"):
-    cloudstorage = None
-except ImportError:
-  cloudstorage = None  # CloudStorage library not available
-
 
 # A guide to logging.
 # log.critical: messages user absolutely should see, e.g. failed job.
@@ -138,8 +126,8 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
     Set current shard_state to failed. Controller logic will take care of
     other shards and the entire MR.
     """
-    shard_id = self.request.headers[util._MR_SHARD_ID_TASK_HEADER]
-    mr_id = self.request.headers[util._MR_ID_TASK_HEADER]
+    shard_id = request.headers.get(util._MR_SHARD_ID_TASK_HEADER)
+    mr_id = request.headers.get(util._MR_ID_TASK_HEADER)
     shard_state, mr_state = db.get([
         model.ShardState.get_key_by_shard_id(shard_id),
         model.MapreduceState.get_key_by_job_id(mr_id)])
@@ -424,8 +412,8 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
     """
     # Reconstruct basic states.
     self._start_time = self._time()
-    shard_id = self.request.headers[util._MR_SHARD_ID_TASK_HEADER]
-    mr_id = self.request.headers[util._MR_ID_TASK_HEADER]
+    shard_id = request.headers.get(util._MR_SHARD_ID_TASK_HEADER)
+    mr_id = request.headers.get(util._MR_ID_TASK_HEADER)
     spec = model.MapreduceSpec._get_mapreduce_spec(mr_id)
     shard_state, control = db.get([
         model.ShardState.get_key_by_shard_id(shard_id),
@@ -1071,7 +1059,7 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
     want the tasks to stop badly, and if force_writes was False,
     the job would have never been started.
     """
-    mr_id = self.request.headers[util._MR_ID_TASK_HEADER]
+    mr_id = request.headers.get(util._MR_ID_TASK_HEADER)
     state = model.MapreduceState.get_by_job_id(mr_id)
     if not state or not state.active:
       return
@@ -1095,7 +1083,7 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
   def handle(self):
     """Handle request."""
     spec = model.MapreduceSpec.from_json_str(
-        self.request.get("mapreduce_spec"))
+        request.args.get("mapreduce_spec"))
     state, control = db.get([
         model.MapreduceState.get_key_by_job_id(spec.mapreduce_id),
         model.MapreduceControl.get_key_by_job_id(spec.mapreduce_id),
@@ -1210,7 +1198,7 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
     Returns:
       serial identifier as int.
     """
-    return int(self.request.get("serial_id"))
+    return int(request.args.get("serial_id"))
 
   @classmethod
   def _finalize_outputs(cls, mapreduce_spec, mapreduce_state):
@@ -1371,7 +1359,7 @@ class KickOffJobHandler(base_handler.TaskQueueHandler):
   def handle(self):
     """Handles kick off request."""
     # Get and verify mr state.
-    mr_id = self.request.get("mapreduce_id")
+    mr_id = request.args.get("mapreduce_id")
     # Log the mr_id since this is started in an unnamed task
     logging.info("Processing kickoff for job %s", mr_id)
     state = model.MapreduceState.get_by_job_id(mr_id)
@@ -1400,7 +1388,7 @@ class KickOffJobHandler(base_handler.TaskQueueHandler):
     elif not result:
       return
 
-    queue_name = self.request.headers.get("X-AppEngine-QueueName")
+    queue_name = request.headers.get("X-AppEngine-QueueName")
     KickOffJobHandler._schedule_shards(state.mapreduce_spec, readers,
                                        queue_name,
                                        state.mapreduce_spec.params["base_path"],
@@ -1411,7 +1399,7 @@ class KickOffJobHandler(base_handler.TaskQueueHandler):
 
   def _drop_gracefully(self):
     """See parent."""
-    mr_id = self.request.get("mapreduce_id")
+    mr_id = request.args.get("mapreduce_id")
     logging.error("Failed to kick off job %s", mr_id)
 
     state = model.MapreduceState.get_by_job_id(mr_id)
@@ -1610,7 +1598,7 @@ class StartJobHandler(base_handler.PostJsonHandler):
     mapreduce_name = self._get_required_param("name")
     mapper_input_reader_spec = self._get_required_param("mapper_input_reader")
     mapper_handler_spec = self._get_required_param("mapper_handler")
-    mapper_output_writer_spec = self.request.get("mapper_output_writer")
+    mapper_output_writer_spec = request.args.get("mapper_output_writer")
     mapper_params = self._get_params(
         "mapper_params_validator", "mapper_params.")
     params = self._get_params(
@@ -1657,7 +1645,7 @@ class StartJobHandler(base_handler.PostJsonHandler):
     Returns:
       The user parameters.
     """
-    params_validator = self.request.get(validator_parameter)
+    params_validator = request.args.get(validator_parameter)
 
     user_params = {}
     for key in self.request.arguments():
@@ -1687,7 +1675,7 @@ class StartJobHandler(base_handler.PostJsonHandler):
     Raises:
       errors.NotEnoughArgumentsError: if parameter is not specified.
     """
-    value = self.request.get(param_name)
+    value = request.args.get(param_name)
     if not value:
       raise errors.NotEnoughArgumentsError(param_name + " not specified")
     return value
@@ -1810,7 +1798,7 @@ class FinalizeJobHandler(base_handler.TaskQueueHandler):
   """Finalize map job by deleting all temporary entities."""
 
   def handle(self):
-    mapreduce_id = self.request.get("mapreduce_id")
+    mapreduce_id = request.args.get("mapreduce_id")
     mapreduce_state = model.MapreduceState.get_by_job_id(mapreduce_id)
     if mapreduce_state:
       config = (
@@ -1854,7 +1842,7 @@ class CleanUpJobHandler(base_handler.PostJsonHandler):
   """Command to kick off tasks to clean up a job's data."""
 
   def handle(self):
-    mapreduce_id = self.request.get("mapreduce_id")
+    mapreduce_id = request.args.get("mapreduce_id")
 
     mapreduce_state = model.MapreduceState.get_by_job_id(mapreduce_id)
     if mapreduce_state:
@@ -1870,5 +1858,5 @@ class AbortJobHandler(base_handler.PostJsonHandler):
   """Command to abort a running job."""
 
   def handle(self):
-    model.MapreduceControl.abort(self.request.get("mapreduce_id"))
+    model.MapreduceControl.abort(request.args.get("mapreduce_id"))
     self.json_response["status"] = "Abort signal sent."

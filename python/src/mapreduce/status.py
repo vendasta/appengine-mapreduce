@@ -24,7 +24,7 @@ import pkgutil
 import time
 import zipfile
 
-from flask import Response
+from flask import Response, request
 from flask.views import MethodView
 from google.appengine.api import validation
 from google.appengine.api import yaml_builder
@@ -313,8 +313,8 @@ class ListJobsHandler(base_handler.GetJsonHandler):
   """Lists running and completed mapreduce jobs for an overview as JSON."""
 
   def handle(self):
-    cursor = self.request.get("cursor")
-    count = int(self.request.get("count", "50"))
+    cursor = request.args.get("cursor")
+    count = int(request.args.get("count", "50"))
 
     query = model.MapreduceState.all()
     if cursor:
@@ -355,7 +355,7 @@ class GetJobDetailHandler(base_handler.GetJsonHandler):
   """Retrieves the details of a mapreduce job as JSON."""
 
   def handle(self):
-    mapreduce_id = self.request.get("mapreduce_id")
+    mapreduce_id = request.args.get("mapreduce_id")
     if not mapreduce_id:
       raise BadStatusParameterError("'mapreduce_id' was invalid")
     job = model.MapreduceState.get_by_key_name(mapreduce_id)

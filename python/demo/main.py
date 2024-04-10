@@ -39,7 +39,6 @@ from flask import Flask, redirect, render_template, request, url_for
 from flask.views import MethodView
 from google.appengine.api import app_identity, users, wrap_wsgi_app
 from google.appengine.ext import blobstore, db
-from werkzeug.middleware.dispatcher import DispatcherMiddleware
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '../src'))
 
