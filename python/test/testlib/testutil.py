@@ -32,8 +32,6 @@ import os
 import sys
 import unittest
 
-import mox
-
 from google.appengine.datastore import entity_pb
 from google.appengine.ext import ndb
 from google.appengine.api import datastore_types
@@ -44,16 +42,6 @@ from google.appengine.ext import db
 from google.appengine.ext import testbed
 from mapreduce import json_util
 from mapreduce import model
-
-# TODO(user): Cleanup imports if/when cloudstorage becomes part of runtime.
-try:
-  # Check if the full cloudstorage package exists. The stub part is in runtime.
-  import cloudstorage
-  enable_cloudstorage_tests = True
-  if hasattr(cloudstorage, "_STUB"):
-    cloudstorage = None
-except ImportError:
-  cloudstorage = None
 
 # pylint: disable=unused-import
 try:
@@ -178,13 +166,13 @@ def _create_entities(keys_itr,
   return entities
 
 
-class MatchesUserRPC(mox.Comparator):
+class MatchesUserRPC(mock.Base):
   """Mox comparator for UserRPC objects."""
 
   def __init__(self, **kwargs):
     self.kwargs = kwargs
 
-  def equals(self, rpc):
+  def matches(self, rpc):
     """Check to see if rpc matches arguments."""
     if self.kwargs.get("deadline", None) != rpc.deadline:
       return False
@@ -201,7 +189,7 @@ class HandlerTestBase(unittest.TestCase):
 
   def setUp(self):
     unittest.TestCase.setUp(self)
-    self.mox = mox.Mox()
+    self.mox = mock.MagicMock()
 
     self.appid = "testapp"
     self.major_version_id = "1"
@@ -245,9 +233,9 @@ class HandlerTestBase(unittest.TestCase):
 
   def tearDown(self):
     try:
-      self.mox.VerifyAll()
+      self.mox.assert_called_with()
     finally:
-      self.mox.UnsetStubs()
+      self.mox.reset_mock()
 
     del os.environ["APPLICATION_ID"]
     del os.environ["CURRENT_VERSION_ID"]
@@ -281,14 +269,3 @@ class HandlerTestBase(unittest.TestCase):
 
 class CloudStorageTestBase(HandlerTestBase):
   """Test base class that ensures cloudstorage library is available."""
-
-  def setUp(self):
-    if cloudstorage is None:
-      # skipTest is only supported starting in Python 2.7, prior to 2.7
-      # the test will result in an error due to the ImportWarning
-      if sys.version_info < (2, 7):
-        raise ImportWarning("Unable to test Google Cloud Storage. "
-                            "Library not found,")
-      else:
-        self.skipTest("Unable to test Google Cloud Storage. Library not found.")
-    super(CloudStorageTestBase, self).setUp()
