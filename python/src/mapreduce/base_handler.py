@@ -64,14 +64,6 @@ class TaskQueueHandler(MethodView):
   def __init__(self, *args, **kwargs):
       self._preprocess_success = False
       super().__init__(*args, **kwargs)
-      if storage:
-          storage.Client._http._retry = storage.Retry(
-              total=10,
-              initial=5,
-              maximum=parameters._GCS_URLFETCH_TIMEOUT_SEC,
-              method_whitelist=False,
-              status_forcelist=[500, 502, 503, 504]
-          )
 
   def dispatch_request(self):
     # Check request is from taskqueue.
@@ -104,7 +96,8 @@ class TaskQueueHandler(MethodView):
 
   def post(self):
     if self._preprocess_success:
-      self.handle()
+      return self.handle()
+    return make_response("Preprocessing failed", 200)
 
   def handle(self):
     """To be implemented by subclasses."""
