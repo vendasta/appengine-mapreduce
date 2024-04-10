@@ -21,30 +21,19 @@
 # pylint: disable=g-bad-name
 # pylint: disable=g-import-not-at-top
 
-import http.client
 import importlib
 import logging
 import pkgutil
-
-try:
-  import json
-except ImportError:
-  import simplejson as json
+import json
 
 pipeline_base = None
 
 if pkgutil.find_loader('mapreduce.pipeline_base') is not None:
   pipeline_base = importlib.import_module('mapreduce.pipeline_base')
 
-try:
-  # Check if the full cloudstorage package exists. The stub part is in runtime.
-  import cloudstorage
-  if hasattr(cloudstorage, "_STUB"):
-    cloudstorage = None
-except ImportError:
-  cloudstorage = None
-
-from google.appengine.ext import webapp
+from google.cloud import storage
+from flask import abort, make_response, request
+from flask.views import MethodView
 from mapreduce import errors
 from mapreduce import json_util
 from mapreduce import model
@@ -59,7 +48,7 @@ class BadRequestPathError(Error):
   """The request path for the handler is invalid."""
 
 
-class TaskQueueHandler(webapp.RequestHandler):
+class TaskQueueHandler(MethodView):
   """Base class for handlers intended to be run only from the task queue.
 
   Sub-classes should implement
@@ -68,70 +57,50 @@ class TaskQueueHandler(webapp.RequestHandler):
   3. '_drop_gracefully' method if _preprocess fails and the task has to
      be dropped.
 
-  In Python27 runtime, webapp2 will automatically replace webapp.
   """
 
   _DEFAULT_USER_AGENT = "App Engine Python MR"
 
   def __init__(self, *args, **kwargs):
-    # webapp framework invokes initialize after __init__.
-    # webapp2 framework invokes initialize within __init__.
-    # Python27 runtime swap webapp with webapp2 underneath us.
-    # Since initialize will conditionally change this field,
-    # it needs to be set before calling super's __init__.
-    self._preprocess_success = False
-    super().__init__(*args, **kwargs)
-    if cloudstorage:
-      cloudstorage.set_default_retry_params(
-          cloudstorage.RetryParams(
-              min_retries=5,
-              max_retries=10,
-              urlfetch_timeout=parameters._GCS_URLFETCH_TIMEOUT_SEC,
-              save_access_token=True,
-              _user_agent=self._DEFAULT_USER_AGENT))
+      self._preprocess_success = False
+      super().__init__(*args, **kwargs)
+      if storage:
+          storage.Client._http._retry = storage.Retry(
+              total=10,
+              initial=5,
+              maximum=parameters._GCS_URLFETCH_TIMEOUT_SEC,
+              method_whitelist=False,
+              status_forcelist=[500, 502, 503, 504]
+          )
 
-  def initialize(self, request, response):
-    """Initialize.
-
-    1. call webapp init.
-    2. check request is indeed from taskqueue.
-    3. check the task has not been retried too many times.
-    4. run handler specific processing logic.
-    5. run error handling logic if precessing failed.
-
-    Args:
-      request: a webapp.Request instance.
-      response: a webapp.Response instance.
-    """
-    super().initialize(request, response)
-
+  def dispatch_request(self):
     # Check request is from taskqueue.
-    if "X-AppEngine-QueueName" not in self.request.headers:
-      logging.error(self.request.headers)
-      logging.error("Task queue handler received non-task queue request")
-      self.response.set_status(
-          403, message="Task queue handler received non-task queue request")
-      return
+      if "X-AppEngine-QueueName" not in request.headers:
+          logging.error(request.headers)
+          logging.error("Task queue handler received non-task queue request")
+          abort(403, "Task queue handler received non-task queue request")
 
     # Check task has not been retried too many times.
-    if self.task_retry_count() + 1 > parameters.config.TASK_MAX_ATTEMPTS:
-      logging.error(
-          "Task %s has been attempted %s times. Dropping it permanently.",
-          self.request.headers["X-AppEngine-TaskName"],
-          self.task_retry_count() + 1)
-      self._drop_gracefully()
-      return
+      if self.task_retry_count() + 1 > parameters.config.TASK_MAX_ATTEMPTS:
+          logging.error(
+              "Task %s has been attempted %s times. Dropping it permanently.",
+              request.headers["X-AppEngine-TaskName"],
+              self.task_retry_count() + 1)
+          self._drop_gracefully()
+          return make_response("Task dropped", 200)
 
-    try:
-      self._preprocess()
-      self._preprocess_success = True
-    # pylint: disable=bare-except
-    except:
-      self._preprocess_success = False
-      logging.error(
-          "Preprocess task %s failed. Dropping it permanently.",
-          self.request.headers["X-AppEngine-TaskName"])
-      self._drop_gracefully()
+      try:
+          self._preprocess()
+          self._preprocess_success = True
+      except Exception as e:
+          self._preprocess_success = False
+          logging.error(
+              "Preprocess task %s failed. Dropping it permanently.",
+              request.headers["X-AppEngine-TaskName"])
+          self._drop_gracefully()
+          return make_response("Preprocessing failed", 200)
+
+      return super().dispatch_request()
 
   def post(self):
     if self._preprocess_success:
@@ -158,7 +127,7 @@ class TaskQueueHandler(webapp.RequestHandler):
 
   def task_retry_count(self):
     """Number of times this task has been retried."""
-    return int(self.request.headers.get("X-AppEngine-TaskExecutionCount", 0))
+    return int(request.headers.get("X-AppEngine-TaskExecutionCount", 0))
 
   def retry_task(self):
     """Ask taskqueue to retry this task.
@@ -168,11 +137,10 @@ class TaskQueueHandler(webapp.RequestHandler):
     this method to perform controlled task retries. Only raise exceptions
     for those deserve ERROR log entries.
     """
-    self.response.set_status(http.client.SERVICE_UNAVAILABLE, "Retry task")
-    self.response.clear()
+    abort(503, "Retry Task")
 
 
-class JsonHandler(webapp.RequestHandler):
+class JsonHandler(MethodView):
   """Base class for JSON handlers for user interface.
 
   Sub-classes should implement the 'handle' method. They should put their
@@ -198,7 +166,7 @@ class JsonHandler(webapp.RequestHandler):
     Returns:
       The base path.
     """
-    path = self.request.path
+    path = request.path
     base_path = path[:path.rfind("/")]
     if not base_path.endswith("/command"):
       raise BadRequestPathError(
@@ -207,11 +175,9 @@ class JsonHandler(webapp.RequestHandler):
 
   def _handle_wrapper(self):
     """The helper method for handling JSON Post and Get requests."""
-    if self.request.headers.get("X-Requested-With") != "XMLHttpRequest":
+    if request.headers.get("X-Requested-With") != "XMLHttpRequest":
       logging.error("Got JSON request with no X-Requested-With header")
-      self.response.set_status(
-          403, message="Got JSON request with no X-Requested-With header")
-      return
+      abort(403, "Got JSON request with no X-Requested-With header")
 
     self.json_response.clear()
     try:
@@ -228,16 +194,14 @@ class JsonHandler(webapp.RequestHandler):
       self.json_response["error_class"] = e.__class__.__name__
       self.json_response["error_message"] = str(e)
 
-    self.response.headers["Content-Type"] = "text/javascript"
     try:
-      output = json.dumps(self.json_response, cls=json_util.JsonEncoder)
+      response = make_response(json.dumps(self.json_response, cls=json_util.JsonEncoder), 200)
+      response.headers["Content-Type"] = "text/javascript"
+      return response
     # pylint: disable=broad-except
     except Exception as e:
       logging.exception("Could not serialize to JSON")
-      self.response.set_status(500, message="Could not serialize to JSON")
-      return
-    else:
-      self.response.out.write(output)
+      abort(500, "Could not serialize to JSON")
 
   def handle(self):
     """To be implemented by sub-classes."""

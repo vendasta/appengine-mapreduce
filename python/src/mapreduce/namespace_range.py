@@ -16,7 +16,6 @@
 """Represents a lexographic range of namespaces."""
 
 
-
 # pylint: disable=g-bad-name
 
 __all__ = [
@@ -36,10 +35,9 @@ from google.appengine.api import datastore
 from google.appengine.ext import db
 from google.appengine.ext.db import metadata
 
-NAMESPACE_CHARACTERS = ''.join(sorted(string.digits +
-                                      string.lowercase +
-                                      string.uppercase +
-                                      '._-'))
+NAMESPACE_CHARACTERS = "".join(
+    sorted(string.digits + string.ascii_lowercase + string.ascii_uppercase + "._-")
+)
 MAX_NAMESPACE_LENGTH = 100
 MIN_NAMESPACE = ''
 NAMESPACE_BATCH_SIZE = 50

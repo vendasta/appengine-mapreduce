@@ -52,12 +52,9 @@ import io
 import time
 import zipfile
 
-from google.net.proto import ProtocolBuffer
 from google.appengine.ext import ndb
 
 from google.appengine.api import datastore
-from google.appengine.api import logservice
-from google.appengine.api.logservice import log_service_pb
 from google.appengine.ext import blobstore
 from google.appengine.ext import db
 from google.appengine.ext import key_range

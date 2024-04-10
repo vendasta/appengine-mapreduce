@@ -30,25 +30,24 @@ Bunch)"""
 # Using opensource naming conventions, pylint: disable=g-bad-name
 
 import datetime
-import jinja2
 import logging
+import os
 import re
-import urllib
-import webapp2
+import sys
 
-from google.appengine.ext import blobstore
-from google.appengine.ext import db
+from flask import Flask, redirect, render_template, request, url_for
+from flask.views import MethodView
+from google.appengine.api import app_identity, users, wrap_wsgi_app
+from google.appengine.ext import blobstore, db
+from werkzeug.middleware.dispatcher import DispatcherMiddleware
 
-from google.appengine.ext.webapp import blobstore_handlers
+sys.path.append(os.path.join(os.path.dirname(__file__), '../src'))
 
-from google.appengine.api import app_identity
-from google.appengine.api import taskqueue
-from google.appengine.api import users
+import mapreduce
+from mapreduce import base_handler, mapreduce_pipeline
 
-from mapreduce import base_handler
-from mapreduce import mapreduce_pipeline
-from mapreduce import operation as op
-from mapreduce import shuffler
+app = Flask(__name__)
+app.wsgi_app = wrap_wsgi_app(app.wsgi_app, use_legacy_context_mode=True)
 
 
 class FileMetadata(db.Model):
@@ -130,52 +129,42 @@ class FileMetadata(db.Model):
     return str(username + sep + str(date) + sep + blob_key)
 
 
-class IndexHandler(webapp2.RequestHandler):
-  """The main page that users will interact with, which presents users with
-  the ability to upload new data or run MapReduce jobs on their existing data.
-  """
+class IndexHandler(MethodView):
+    def get(self):
+        user = users.get_current_user()
+        username = user.nickname()
 
-  template_env = jinja2.Environment(loader=jinja2.FileSystemLoader("templates"),
-                                    autoescape=True)
+        first = FileMetadata.getFirstKeyForUser(username)
+        last = FileMetadata.getLastKeyForUser(username)
 
-  def get(self):
-    user = users.get_current_user()
-    username = user.nickname()
+        q = FileMetadata.all()
+        q.filter("__key__ >", first)
+        q.filter("__key__ < ", last)
+        results = q.fetch(10)
 
-    first = FileMetadata.getFirstKeyForUser(username)
-    last = FileMetadata.getLastKeyForUser(username)
+        items = [result for result in results]
+        length = len(items)
 
-    q = FileMetadata.all()
-    q.filter("__key__ >", first)
-    q.filter("__key__ < ", last)
-    results = q.fetch(10)
+        bucket_name = app_identity.get_default_gcs_bucket_name()
+        upload_url = blobstore.create_upload_url("/upload", gs_bucket_name=bucket_name)
 
-    items = [result for result in results]
-    length = len(items)
+        return render_template("index.html", username=username, items=items, length=length, upload_url=upload_url)
 
-    bucket_name = app_identity.get_default_gcs_bucket_name()
-    upload_url = blobstore.create_upload_url("/upload",
-                                             gs_bucket_name=bucket_name)
+    def post(self):
+        filekey = request.form.get("filekey")
+        blob_key = request.form.get("blobkey")
 
-    self.response.out.write(self.template_env.get_template("index.html").render(
-        {"username": username,
-         "items": items,
-         "length": length,
-         "upload_url": upload_url}))
+        if request.form.get("word_count"):
+            pipeline = WordCountPipeline(filekey, blob_key)
+        elif request.form.get("index"):
+            pipeline = IndexPipeline(filekey, blob_key)
+        else:
+            pipeline = PhrasesPipeline(filekey, blob_key)
 
-  def post(self):
-    filekey = self.request.get("filekey")
-    blob_key = self.request.get("blobkey")
+        pipeline.start()
+        return redirect(f'{pipeline.base_path}/status?root={pipeline.pipeline_id}')
 
-    if self.request.get("word_count"):
-      pipeline = WordCountPipeline(filekey, blob_key)
-    elif self.request.get("index"):
-      pipeline = IndexPipeline(filekey, blob_key)
-    else:
-      pipeline = PhrasesPipeline(filekey, blob_key)
-
-    pipeline.start()
-    self.redirect(pipeline.base_path + "/status?root=" + pipeline.pipeline_id)
+app.add_url_rule('/', view_func=IndexHandler.as_view('index'))
 
 
 def split_into_sentences(s):
@@ -373,14 +362,14 @@ class StoreOutput(base_handler.PipelineBase):
 
     m.put()
 
-class UploadHandler(blobstore_handlers.BlobstoreUploadHandler):
+class UploadHandler(blobstore.BlobstoreUploadHandler):
   """Handler to upload data to blobstore."""
 
   def post(self):
     source = "uploaded by user"
-    upload_files = self.get_uploads("file")
+    upload_files = self.get_uploads(request.environ)
     blob_key = upload_files[0].key()
-    name = self.request.get("name")
+    name = request.form.get('name')
 
     user = users.get_current_user()
 
@@ -397,22 +386,29 @@ class UploadHandler(blobstore_handlers.BlobstoreUploadHandler):
     m.blobkey = str_blob_key
     m.put()
 
-    self.redirect("/")
+    import logging
+    logging.critical('redirecting to index')
+    return redirect(url_for('index'))
 
 
-class DownloadHandler(blobstore_handlers.BlobstoreDownloadHandler):
+@app.route('/upload', methods=['POST'])
+def upload():
+  return UploadHandler().post()
+
+
+class DownloadHandler(blobstore.BlobstoreDownloadHandler):
   """Handler to download blob by blobkey."""
 
   def get(self, key):
-    key = str(urllib.unquote(key)).strip()
-    logging.debug("key is %s" % key)
-    self.send_blob(key)
+    headers = self.send_blob(request.environ, key)
+    headers['Content-Type'] = None
+    return '', headers
 
 
-app = webapp2.WSGIApplication(
-    [
-        ('/', IndexHandler),
-        ('/upload', UploadHandler),
-        (r'/blobstore/(.*)', DownloadHandler),
-    ],
-    debug=True)
+@app.route('/blobstore/<path:key>')
+def download(key):
+  return DownloadHandler().get(key)
+
+mapreduce_handlers = mapreduce.create_handlers_map("/mapreduce")
+for route, handler in mapreduce_handlers:
+    app.add_url_rule(route, view_func=handler.as_view(route.lstrip("/")))

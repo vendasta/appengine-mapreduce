@@ -38,25 +38,19 @@ __all__ = ["MapreduceState",
 
 import cgi
 import datetime
-import urllib.request, urllib.parse, urllib.error
+import json
+import urllib.error
+import urllib.parse
+import urllib.request
 import zlib
+
+from google.appengine.api import memcache, taskqueue
+from google.appengine.datastore import datastore_rpc
+from google.appengine.ext import db
 from graphy import bar_chart
 from graphy.backends import google_chart_api
 
-try:
-  import json
-except ImportError:
-  import simplejson as json
-
-from google.appengine.api import memcache
-from google.appengine.api import taskqueue
-from google.appengine.datastore import datastore_rpc
-from google.appengine.ext import db
-from mapreduce import context
-from mapreduce import hooks
-from mapreduce import json_util
-from mapreduce import util
-
+from mapreduce import context, hooks, json_util, util
 
 # pylint: disable=protected-access
 

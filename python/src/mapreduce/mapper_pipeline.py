@@ -51,7 +51,7 @@ class MapperPipeline(pipeline_base._OutputSlotsMixin,
     job_id: mr id that can be used to query model.MapreduceState. Available
       immediately after run returns.
   """
-  async = True
+  async_ = True
 
   # TODO(user): we probably want to output counters too.
   # Might also need to double filenames as named output.

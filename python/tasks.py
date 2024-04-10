@@ -12,7 +12,7 @@ def serve(ctx):
         '--clear_datastore=yes',
         './demo'
     ]
-    invoke.run(" ".join(args))
+    invoke.run(" ".join(args), env={'APPLICATION_ID': 'mapreduce-demo'})
 
 
 @task()

@@ -24,13 +24,14 @@ import pkgutil
 import time
 import zipfile
 
+from flask import Response
+from flask.views import MethodView
 from google.appengine.api import validation
 from google.appengine.api import yaml_builder
 from google.appengine.api import yaml_errors
 from google.appengine.api import yaml_listener
 from google.appengine.api import yaml_object
 from google.appengine.ext import db
-from google.appengine.ext import webapp
 from mapreduce import base_handler
 from mapreduce import errors
 from mapreduce import model
@@ -262,43 +263,43 @@ def get_mapreduce_yaml(parse=parse_mapreduce_yaml):
     mr_yaml_file.close()
 
 
-class ResourceHandler(webapp.RequestHandler):
-  """Handler for static resources."""
+class ResourceHandler(MethodView):
+    """Handler for static resources."""
 
-  _RESOURCE_MAP = {
-      "status": ("overview.html", "text/html"),
-      "detail": ("detail.html", "text/html"),
-      "base.css": ("base.css", "text/css"),
-      "jquery.js": ("jquery-1.6.1.min.js", "text/javascript"),
-      "jquery-json.js": ("jquery.json-2.2.min.js", "text/javascript"),
-      "jquery-url.js": ("jquery.url.js", "text/javascript"),
-      "status.js": ("status.js", "text/javascript"),
-  }
+    _RESOURCE_MAP = {
+        "status": ("overview.html", "text/html"),
+        "detail": ("detail.html", "text/html"),
+        "base.css": ("base.css", "text/css"),
+        "jquery.js": ("jquery-1.6.1.min.js", "text/javascript"),
+        "jquery-json.js": ("jquery.json-2.2.min.js", "text/javascript"),
+        "jquery-url.js": ("jquery.url.js", "text/javascript"),
+        "status.js": ("status.js", "text/javascript"),
+    }
 
-  def get(self, relative):
-    if relative not in self._RESOURCE_MAP:
-      self.response.set_status(404)
-      self.response.out.write("Resource not found.")
-      return
+    def get(self, resource):
+        if resource not in self._RESOURCE_MAP:
+            return Response("Resource not found.", status=404)
 
-    real_path, content_type = self._RESOURCE_MAP[relative]
-    path = os.path.join(os.path.dirname(__file__), "static", real_path)
+        real_path, content_type = self._RESOURCE_MAP[resource]
+        path = os.path.join(os.path.dirname(__file__), "static", real_path)
 
-    # It's possible we're inside a zipfile (zipimport).  If so, path
-    # will include 'something.zip'.
-    if ('.zip' + os.sep) in path:
-      (zip_file, zip_path) = os.path.relpath(path).split('.zip' + os.sep, 1)
-      content = zipfile.ZipFile(zip_file + '.zip').read(zip_path)
-    else:
-      try:
-        data = pkgutil.get_data(__name__, "static/" + real_path)
-      except AttributeError:  # Python < 2.6.
-        data = None
-      content = data or open(path, 'rb').read()
+        # It's possible we're inside a zipfile (zipimport).  If so, path
+        # will include 'something.zip'.
+        if ('.zip' + os.sep) in path:
+            (zip_file, zip_path) = os.path.relpath(path).split('.zip' + os.sep, 1)
+            content = zipfile.ZipFile(zip_file + '.zip').read(zip_path)
+        else:
+            try:
+                data = pkgutil.get_data(__name__, "static/" + real_path)
+            except AttributeError:  # Python < 2.6.
+                data = None
+            content = data or open(path, 'rb').read()
 
-    self.response.headers["Cache-Control"] = "public; max-age=300"
-    self.response.headers["Content-Type"] = content_type
-    self.response.out.write(content)
+        response = Response(content)
+        response.headers["Cache-Control"] = "public; max-age=300"
+        response.headers["Content-Type"] = content_type
+
+        return response
 
 
 class ListConfigsHandler(base_handler.GetJsonHandler):
