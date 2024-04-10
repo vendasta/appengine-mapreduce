@@ -207,7 +207,7 @@ class GoogleCloudStorageConsistentOutputWriterEndToEndTest(
     # and only expected files in regular bucket
     files_in_bucket = [
         f.filename for f in cloudstorage.listbucket("/%s" % bucket_name)]
-    self.assertEquals(filenames, files_in_bucket)
+    self.assertEqual(filenames, files_in_bucket)
 
   def testSingleShard(self):
     self._runTest(num_shards=1)

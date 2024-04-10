@@ -92,29 +92,29 @@ class ForNameTest(unittest.TestCase):
 
   def testClassName(self):
     """Test passing fq class name."""
-    self.assertEquals(TestHandler, util.for_name("__main__.TestHandler"))
+    self.assertEqual(TestHandler, util.for_name("__main__.TestHandler"))
 
   def testFunctionName(self):
     """Test passing function name."""
-    self.assertEquals(test_handler_function,
+    self.assertEqual(test_handler_function,
                       util.for_name("__main__.test_handler_function"))
 
   def testMethodName(self):
     """Test passing method name."""
-    self.assertEquals(TestHandler.process,
+    self.assertEqual(TestHandler.process,
                       util.for_name("__main__.TestHandler.process"))
 
   def testClassWithArgs(self):
     """Test passing method name of class with constructor args."""
-    self.assertEquals(TestHandlerWithArgs.process,
+    self.assertEqual(TestHandlerWithArgs.process,
                       util.for_name("__main__.TestHandlerWithArgs.process"))
 
   def testBadModule(self):
     """Tests when the module name is bogus."""
     try:
       util.for_name("this_is_a_bad_module_name.stuff")
-    except ImportError, e:
-      self.assertEquals(
+    except ImportError as e:
+      self.assertEqual(
           "Could not find 'stuff' on path 'this_is_a_bad_module_name'",
           str(e))
     else:
@@ -124,8 +124,8 @@ class ForNameTest(unittest.TestCase):
     """Tests when the module name is good but the function is missing."""
     try:
       util.for_name("__main__.does_not_exist")
-    except ImportError, e:
-      self.assertEquals(
+    except ImportError as e:
+      self.assertEqual(
           "Could not find 'does_not_exist' on path '__main__'",
           str(e))
     else:
@@ -135,8 +135,8 @@ class ForNameTest(unittest.TestCase):
     """Tests when the class is found but the function name is missing."""
     try:
       util.for_name("__main__.TestHandlerWithArgs.missing")
-    except ImportError, e:
-      self.assertEquals(
+    except ImportError as e:
+      self.assertEqual(
           "Could not find 'missing' on path '__main__.TestHandlerWithArgs'",
           str(e))
     else:
@@ -146,7 +146,7 @@ class ForNameTest(unittest.TestCase):
     """Tests when the name has no dots in it."""
     try:
       util.for_name("this_is_a_bad_module_name")
-    except ImportError, e:
+    except ImportError as e:
       self.assertTrue(str(e).startswith(
           "Could not find 'this_is_a_bad_module_name' on path "))
     else:
@@ -170,24 +170,24 @@ class SerializeHandlerTest(unittest.TestCase):
 
   def testNonSerializableTypes(self):
     # function.
-    self.assertEquals(None, util.try_serialize_handler(test_handler_function))
+    self.assertEqual(None, util.try_serialize_handler(test_handler_function))
     # Unbound method.
-    self.assertEquals(None, util.try_serialize_handler(TestHandler.process))
+    self.assertEqual(None, util.try_serialize_handler(TestHandler.process))
     # bounded method.
-    self.assertEquals(None, util.try_serialize_handler(TestHandler().process))
+    self.assertEqual(None, util.try_serialize_handler(TestHandler().process))
     # class method.
-    self.assertEquals(None, util.try_serialize_handler(TestHandler.process3))
+    self.assertEqual(None, util.try_serialize_handler(TestHandler.process3))
     # staticmethod, which is really a function.
-    self.assertEquals(None, util.try_serialize_handler(TestHandler.process2))
+    self.assertEqual(None, util.try_serialize_handler(TestHandler.process2))
 
   def testSerializableTypes(self):
     # new style callable instance.
     i = TestHandler()
-    self.assertNotEquals(
+    self.assertNotEqual(
         None, util.try_deserialize_handler(util.try_serialize_handler(i)))
 
     i = TestHandlerOldStyle()
-    self.assertNotEquals(
+    self.assertNotEqual(
         None, util.try_deserialize_handler(util.try_serialize_handler(i)))
 
 
@@ -242,10 +242,10 @@ class GetShortNameTest(unittest.TestCase):
   """Test util.get_short_name function."""
 
   def testGetShortName(self):
-    self.assertEquals("blah", util.get_short_name("blah"))
-    self.assertEquals("blah", util.get_short_name(".blah"))
-    self.assertEquals("blah", util.get_short_name("__mmm__.blah"))
-    self.assertEquals("blah", util.get_short_name("__mmm__.Krb.blah"))
+    self.assertEqual("blah", util.get_short_name("blah"))
+    self.assertEqual("blah", util.get_short_name(".blah"))
+    self.assertEqual("blah", util.get_short_name("__mmm__.blah"))
+    self.assertEqual("blah", util.get_short_name("__mmm__.Krb.blah"))
 
 
 class TotalSecondsTest(unittest.TestCase):
@@ -263,14 +263,14 @@ class ParseBoolTest(unittest.TestCase):
   """Test util.parse_bool function."""
 
   def testParseBool(self):
-    self.assertEquals(True, util.parse_bool(True))
-    self.assertEquals(False, util.parse_bool(False))
-    self.assertEquals(True, util.parse_bool("True"))
-    self.assertEquals(False, util.parse_bool("False"))
-    self.assertEquals(True, util.parse_bool(1))
-    self.assertEquals(False, util.parse_bool(0))
-    self.assertEquals(True, util.parse_bool("on"))
-    self.assertEquals(False, util.parse_bool("off"))
+    self.assertEqual(True, util.parse_bool(True))
+    self.assertEqual(False, util.parse_bool(False))
+    self.assertEqual(True, util.parse_bool("True"))
+    self.assertEqual(False, util.parse_bool("False"))
+    self.assertEqual(True, util.parse_bool(1))
+    self.assertEqual(False, util.parse_bool(0))
+    self.assertEqual(True, util.parse_bool("on"))
+    self.assertEqual(False, util.parse_bool("off"))
 
 
 class CreateConfigTest(unittest.TestCase):
@@ -337,7 +337,7 @@ class GetDescendingKeyTest(unittest.TestCase):
     now = 1234567890
     os.environ["REQUEST_ID_HASH"] = "12345678"
 
-    self.assertEquals(
+    self.assertEqual(
         "159453012940012345678",
         util._get_descending_key(
             gettime=lambda: now))
@@ -351,7 +351,7 @@ class StripPrefixFromItemsTest(unittest.TestCase):
     items = ["/foo/bar", "/foos/bar2", "/bar3"]
     prefix = "/foo/"
 
-    self.assertEquals(["bar", "/foos/bar2", "/bar3"],
+    self.assertEqual(["bar", "/foos/bar2", "/bar3"],
                       util.strip_prefix_from_items(prefix, items))
 
 

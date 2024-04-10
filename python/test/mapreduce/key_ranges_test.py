@@ -56,14 +56,14 @@ class KeyRangesTest(unittest.TestCase):
     results = []
     while True:
       try:
-        results.append(kranges.next())
+        results.append(next(kranges))
         kranges = kranges.__class__.from_json(kranges.to_json())
       except StopIteration:
         break
-    self.assertRaises(StopIteration, kranges.next)
+    self.assertRaises(StopIteration, kranges.__next__)
     expected.sort()
     results.sort()
-    self.assertEquals(expected, results)
+    self.assertEqual(expected, results)
 
   def create_entities_in_multiple_ns(self, names):
     ns = namespace_manager.get_namespace()

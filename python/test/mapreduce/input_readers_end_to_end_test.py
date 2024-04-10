@@ -148,12 +148,12 @@ class GoogleCloudStorageInputReaderEndToEndTest(testutil.CloudStorageTestBase):
     mr_id = _RunMR(False)
     self.assertEqual([str(num + 100) for num in [0, 1, 2, 3, 4, 6, 7, 8, 9]],
                      sorted(_memory_mapper_data))
-    self.assertEquals(model.MapreduceState.get_by_job_id(mr_id).result_status,
+    self.assertEqual(model.MapreduceState.get_by_job_id(mr_id).result_status,
                       model.MapreduceState.RESULT_SUCCESS)
 
     # Strict MR fails.
     mr_id = _RunMR(True)
-    self.assertEquals(model.MapreduceState.get_by_job_id(mr_id).result_status,
+    self.assertEqual(model.MapreduceState.get_by_job_id(mr_id).result_status,
                       model.MapreduceState.RESULT_FAILED)
 
 

@@ -175,18 +175,18 @@ class MutationPoolTest(testutil.HandlerTestBase):
     """Test put method."""
     e = new_datastore_entity()
     self.pool.put(e)
-    self.assertEquals([e], self.pool.puts.items)
+    self.assertEqual([e], self.pool.puts.items)
 
     # Mix in a model instance.
     # Model instance is "normalized", meaning internal fields are populated
     # in order to accurately calculate size.
     e2 = TestEntity()
     self.pool.put(e2)
-    self.assertEquals([e, context._normalize_entity(e2)], self.pool.puts.items)
+    self.assertEqual([e, context._normalize_entity(e2)], self.pool.puts.items)
 
-    self.assertEquals([], self.pool.deletes.items)
-    self.assertEquals([], self.pool.ndb_puts.items)
-    self.assertEquals([], self.pool.ndb_deletes.items)
+    self.assertEqual([], self.pool.deletes.items)
+    self.assertEqual([], self.pool.ndb_puts.items)
+    self.assertEqual([], self.pool.ndb_deletes.items)
 
   def testDeleteEntity(self):
     """Test delete method."""
@@ -202,37 +202,37 @@ class MutationPoolTest(testutil.HandlerTestBase):
     # String of key.
     self.pool.delete(str(k))
 
-    self.assertEquals([e1.key(), e2.key(), k, k], self.pool.deletes.items)
-    self.assertEquals([], self.pool.puts.items)
-    self.assertEquals([], self.pool.ndb_puts.items)
-    self.assertEquals([], self.pool.ndb_deletes.items)
+    self.assertEqual([e1.key(), e2.key(), k, k], self.pool.deletes.items)
+    self.assertEqual([], self.pool.puts.items)
+    self.assertEqual([], self.pool.ndb_puts.items)
+    self.assertEqual([], self.pool.ndb_deletes.items)
 
   def testPutNdbEntity(self):
     """Test put() using an NDB entity."""
     e = NdbTestEntity()
     self.pool.put(e)
-    self.assertEquals([e], self.pool.ndb_puts.items)
-    self.assertEquals([], self.pool.ndb_deletes.items)
-    self.assertEquals([], self.pool.puts.items)
-    self.assertEquals([], self.pool.deletes.items)
+    self.assertEqual([e], self.pool.ndb_puts.items)
+    self.assertEqual([], self.pool.ndb_deletes.items)
+    self.assertEqual([], self.pool.puts.items)
+    self.assertEqual([], self.pool.deletes.items)
 
   def testDeleteNdbEntity(self):
     """Test delete method with an NDB model instance."""
     e = NdbTestEntity(id='goingaway')
     self.pool.delete(e)
-    self.assertEquals([], self.pool.ndb_puts.items)
-    self.assertEquals([e.key], self.pool.ndb_deletes.items)
-    self.assertEquals([], self.pool.puts.items)
-    self.assertEquals([], self.pool.deletes.items)
+    self.assertEqual([], self.pool.ndb_puts.items)
+    self.assertEqual([e.key], self.pool.ndb_deletes.items)
+    self.assertEqual([], self.pool.puts.items)
+    self.assertEqual([], self.pool.deletes.items)
 
   def testDeleteNdbKey(self):
     """Test delete method with an NDB key."""
     e = NdbTestEntity(id='goingaway')
     self.pool.delete(e.key)
-    self.assertEquals([], self.pool.ndb_puts.items)
-    self.assertEquals([e.key], self.pool.ndb_deletes.items)
-    self.assertEquals([], self.pool.puts.items)
-    self.assertEquals([], self.pool.deletes.items)
+    self.assertEqual([], self.pool.ndb_puts.items)
+    self.assertEqual([e.key], self.pool.ndb_deletes.items)
+    self.assertEqual([], self.pool.puts.items)
+    self.assertEqual([], self.pool.deletes.items)
 
   def testFlush(self):
     """Combined test for all db implicit and explicit flushing."""
@@ -249,10 +249,10 @@ class MutationPoolTest(testutil.HandlerTestBase):
       self.assertEqual(len(self.pool.deletes.items), (i%3) + 1)
 
     self.pool.flush()
-    self.assertEquals(len(self.pool.puts.items), 0)
-    self.assertEquals(len(self.pool.deletes.items), 0)
-    self.assertEquals(len(self.pool.ndb_puts.items), 0)
-    self.assertEquals(len(self.pool.ndb_deletes.items), 0)
+    self.assertEqual(len(self.pool.puts.items), 0)
+    self.assertEqual(len(self.pool.deletes.items), 0)
+    self.assertEqual(len(self.pool.ndb_puts.items), 0)
+    self.assertEqual(len(self.pool.ndb_deletes.items), 0)
 
   def testNdbFlush(self):
     """Combined test for all NDB implicit and explicit flushing."""
@@ -264,13 +264,13 @@ class MutationPoolTest(testutil.HandlerTestBase):
 
     for i in range(5):
       self.pool.delete(ndb.Key(NdbTestEntity, 'x%d' % i))
-      self.assertEquals(len(self.pool.ndb_deletes.items), (i%3) + 1)
+      self.assertEqual(len(self.pool.ndb_deletes.items), (i%3) + 1)
 
     self.pool.flush()
-    self.assertEquals(len(self.pool.ndb_puts.items), 0)
-    self.assertEquals(len(self.pool.ndb_deletes.items), 0)
-    self.assertEquals(len(self.pool.puts.items), 0)
-    self.assertEquals(len(self.pool.deletes.items), 0)
+    self.assertEqual(len(self.pool.ndb_puts.items), 0)
+    self.assertEqual(len(self.pool.ndb_deletes.items), 0)
+    self.assertEqual(len(self.pool.puts.items), 0)
+    self.assertEqual(len(self.pool.deletes.items), 0)
 
   def testFlushLogLargestItems(self):
     self.pool = context._MutationPool(max_entity_count=3)
@@ -322,9 +322,9 @@ class ContextTest(testutil.HandlerTestBase):
     ctx = context.Context(None, None)
     self.assertFalse(context.get())
     context.Context._set(ctx)
-    self.assertEquals(ctx, context.get())
+    self.assertEqual(ctx, context.get())
     context.Context._set(None)
-    self.assertEquals(None, context.get())
+    self.assertEqual(None, context.get())
 
   def testArbitraryPool(self):
     """Test arbitrary pool registration."""
@@ -334,7 +334,7 @@ class ContextTest(testutil.HandlerTestBase):
     self.assertFalse(ctx.get_pool("test"))
     pool = m.CreateMockAnything()
     ctx.register_pool("test", pool)
-    self.assertEquals(pool, ctx.get_pool("test"))
+    self.assertEqual(pool, ctx.get_pool("test"))
 
     # Record calls
     pool.flush()

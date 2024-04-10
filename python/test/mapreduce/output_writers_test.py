@@ -62,8 +62,8 @@ class GCSRecordsPoolTest(testutil.CloudStorageTestBase):
                       self.filename)
     # File handle does need to be explicitly closed.
     self.filehandle.close()
-    self.assertEquals(32 * 1024, cloudstorage.stat(self.filename).st_size)
-    self.assertEquals(
+    self.assertEqual(32 * 1024, cloudstorage.stat(self.filename).st_size)
+    self.assertEqual(
         ["a", "b"],
         list(records.RecordsReader(cloudstorage.open(self.filename))))
 
@@ -80,8 +80,8 @@ class GCSRecordsPoolTest(testutil.CloudStorageTestBase):
     # File handle does need to be explicitly closed.
     self.filehandle.close()
     # Check the file size contains the padding.
-    self.assertEquals(256 * 1024, cloudstorage.stat(self.filename).st_size)
-    self.assertEquals(
+    self.assertEqual(256 * 1024, cloudstorage.stat(self.filename).st_size)
+    self.assertEqual(
         ["a", "b"],
         list(records.RecordsReader(cloudstorage.open(self.filename))))
 
@@ -336,7 +336,7 @@ class GCSOutputWriterTestCommon(GCSOutputTestBase):
     writer.finalize(ctx, shard_state)
     filename = self.WRITER_CLS._get_filename(shard_state)
 
-    self.assertNotEquals(None, filename)
+    self.assertNotEqual(None, filename)
     self.assertEqual(data, cloudstorage.open(filename).read())
 
   def testCreateWritersWithRetries(self):
@@ -428,7 +428,7 @@ class GCSOutputWriterTestCommon(GCSOutputTestBase):
 
     filename = self.WRITER_CLS._get_filename(shard_state)
 
-    self.assertNotEquals(None, filename)
+    self.assertNotEqual(None, filename)
     self.assertEqual(data + data, cloudstorage.open(filename).read())
 
   def testWriterCounters(self):
@@ -594,7 +594,7 @@ class GCSOutputConsistentOutputWriterTest(GCSOutputWriterTestCommon,
     writer.finalize(ctx, shard_state)
 
     names = [l.filename for l in cloudstorage.listbucket("/test")]
-    self.assertEquals(
+    self.assertEqual(
         ["/test/DummyMapReduceJobName/DummyMapReduceJobId/output-0"], names)
 
   def testRemovingIgnoredNonExistent(self):
@@ -636,8 +636,8 @@ class GCSOutputConsistentOutputWriterTest(GCSOutputWriterTestCommon,
     writer = self.WRITER_CLS.create(mapreduce_state.mapreduce_spec,
                                     shard_state.shard_number, 0)
 
-    self.assertEquals("bucket", writer._get_tmp_gcs_bucket(writer_spec))
-    self.assertEquals("account", writer._get_tmp_account_id(writer_spec))
+    self.assertEqual("bucket", writer._get_tmp_gcs_bucket(writer_spec))
+    self.assertEqual("account", writer._get_tmp_account_id(writer_spec))
 
   def testTmpTakesPrecedence(self):
     writer_spec = {self.WRITER_CLS.BUCKET_NAME_PARAM: "bucket",
@@ -652,8 +652,8 @@ class GCSOutputConsistentOutputWriterTest(GCSOutputWriterTestCommon,
     writer = self.WRITER_CLS.create(mapreduce_state.mapreduce_spec,
                                     shard_state.shard_number, 0)
 
-    self.assertEquals("tmp_bucket", writer._get_tmp_gcs_bucket(writer_spec))
-    self.assertEquals(None, writer._get_tmp_account_id(writer_spec))
+    self.assertEqual("tmp_bucket", writer._get_tmp_gcs_bucket(writer_spec))
+    self.assertEqual(None, writer._get_tmp_account_id(writer_spec))
 
   def testRemoveGarbage(self):
     """Make sure abandoned files get removed."""

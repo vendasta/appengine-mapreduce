@@ -200,7 +200,7 @@ class EndToEndTest(testutil.HandlerTestBase):
         base_path="/mapreduce_base_path")
 
     task_run_counts = test_support.execute_until_empty(self.taskqueue)
-    self.assertEquals(
+    self.assertEqual(
         task_run_counts[handlers.MapperWorkerCallbackHandler],
         # Shard retries + one per entity + one to exhaust input reader + one for
         # finalization.
@@ -208,7 +208,7 @@ class EndToEndTest(testutil.HandlerTestBase):
     vals = [e.int_property for e in TestEntity.all()]
     vals.sort()
     # SerializableHandler updates int_property to be incremental from 0 to 9.
-    self.assertEquals(range(10), vals)
+    self.assertEqual(list(range(10)), vals)
 
   def testLotsOfEntities(self):
     entity_count = 1000
@@ -227,7 +227,7 @@ class EndToEndTest(testutil.HandlerTestBase):
         base_path="/mapreduce_base_path")
 
     test_support.execute_until_empty(self.taskqueue)
-    self.assertEquals(entity_count, len(TestHandler.processed_entites))
+    self.assertEqual(entity_count, len(TestHandler.processed_entites))
 
   def testEntityQuery(self):
     entity_count = 1000
@@ -249,7 +249,7 @@ class EndToEndTest(testutil.HandlerTestBase):
         base_path="/mapreduce_base_path")
 
     test_support.execute_until_empty(self.taskqueue)
-    self.assertEquals(200, len(TestHandler.processed_entites))
+    self.assertEqual(200, len(TestHandler.processed_entites))
 
   def testLotsOfNdbEntities(self):
     entity_count = 1000
@@ -268,7 +268,7 @@ class EndToEndTest(testutil.HandlerTestBase):
         base_path="/mapreduce_base_path")
 
     test_support.execute_until_empty(self.taskqueue)
-    self.assertEquals(entity_count, len(TestHandler.processed_entites))
+    self.assertEqual(entity_count, len(TestHandler.processed_entites))
 
   def testInputReaderDedicatedParameters(self):
     entity_count = 100
@@ -289,7 +289,7 @@ class EndToEndTest(testutil.HandlerTestBase):
         base_path="/mapreduce_base_path")
 
     test_support.execute_until_empty(self.taskqueue)
-    self.assertEquals(entity_count, len(TestHandler.processed_entites))
+    self.assertEqual(entity_count, len(TestHandler.processed_entites))
 
   def testOutputWriter(self):
     """End-to-end test with output writer."""
@@ -310,8 +310,8 @@ class EndToEndTest(testutil.HandlerTestBase):
         output_writer_spec=__name__ + ".TestOutputWriter")
 
     test_support.execute_until_empty(self.taskqueue)
-    self.assertEquals(entity_count,
-                      sum(map(len, TestOutputWriter.file_contents.values())))
+    self.assertEqual(entity_count,
+                      sum(map(len, list(TestOutputWriter.file_contents.values()))))
 
   def testRecordsReader(self):
     """End-to-end test for records reader."""
@@ -340,7 +340,7 @@ class EndToEndTest(testutil.HandlerTestBase):
         base_path="/mapreduce_base_path")
 
     test_support.execute_until_empty(self.taskqueue)
-    self.assertEquals(100, len(TestHandler.processed_entites))
+    self.assertEqual(100, len(TestHandler.processed_entites))
 
   def testHugeTaskPayloadTest(self):
     """Test map job with huge parameter values."""
@@ -372,8 +372,8 @@ class EndToEndTest(testutil.HandlerTestBase):
         base_path="/mapreduce_base_path")
 
     test_support.execute_until_empty(self.taskqueue)
-    self.assertEquals(100, len(TestHandler.processed_entites))
-    self.assertEquals([], model._HugeTaskPayload.all().fetch(100))
+    self.assertEqual(100, len(TestHandler.processed_entites))
+    self.assertEqual([], model._HugeTaskPayload.all().fetch(100))
 
   def testHugeTaskUseDatastore(self):
     """Test map job with huge parameter values."""
@@ -405,8 +405,8 @@ class EndToEndTest(testutil.HandlerTestBase):
         base_path="/mapreduce_base_path")
 
     test_support.execute_until_empty(self.taskqueue)
-    self.assertEquals(100, len(TestHandler.processed_entites))
-    self.assertEquals([], model._HugeTaskPayload.all().fetch(100))
+    self.assertEqual(100, len(TestHandler.processed_entites))
+    self.assertEqual([], model._HugeTaskPayload.all().fetch(100))
 
 
 class GCSOutputWriterTestBase(testutil.CloudStorageTestBase):
@@ -470,7 +470,7 @@ class GCSOutputWriterNoDupModeTest(GCSOutputWriterTestBase):
                      mr_state.result_status)
 
     # Read output info from shard states.
-    shard_state = model.ShardState.find_all_by_mapreduce_state(mr_state).next()
+    shard_state = next(model.ShardState.find_all_by_mapreduce_state(mr_state))
     writer_state = shard_state.writer_state
     last_seg_index = writer_state[self.writer_cls._LAST_SEG_INDEX]
     seg_prefix = writer_state[self.writer_cls._SEG_PREFIX]
@@ -516,7 +516,7 @@ class GCSOutputWriterNoDupModeTest(GCSOutputWriterTestBase):
                      mr_state.result_status)
 
     # Read output info from shard states.
-    shard_state = model.ShardState.find_all_by_mapreduce_state(mr_state).next()
+    shard_state = next(model.ShardState.find_all_by_mapreduce_state(mr_state))
     writer_state = shard_state.writer_state
     last_seg_index = writer_state[self.writer_cls._LAST_SEG_INDEX]
     seg_prefix = writer_state[self.writer_cls._SEG_PREFIX]
@@ -553,7 +553,7 @@ class GCSOutputWriterNoDupModeTest(GCSOutputWriterTestBase):
                      mr_state.result_status)
 
     # Read output info from shard states.
-    shard_state = model.ShardState.find_all_by_mapreduce_state(mr_state).next()
+    shard_state = next(model.ShardState.find_all_by_mapreduce_state(mr_state))
     writer_state = shard_state.writer_state
     last_seg_index = writer_state[self.writer_cls._LAST_SEG_INDEX]
     seg_prefix = writer_state[self.writer_cls._SEG_PREFIX]

@@ -73,7 +73,7 @@ class LargeMapreduceTest(testutil.HandlerTestBase):
     p.start()
     test_support.execute_until_empty(self.taskqueue)
 
-    self.assertEquals(1, len(self.emails))
+    self.assertEqual(1, len(self.emails))
     self.assertTrue(self.emails[0][1].startswith(
         "Pipeline successful:"))
 
@@ -88,7 +88,7 @@ class LargeMapreduceTest(testutil.HandlerTestBase):
     expected_data = ["('1', 50000)"]
     expected_data.sort()
     output_data.sort()
-    self.assertEquals(expected_data, output_data)
+    self.assertEqual(expected_data, output_data)
 
 
 if __name__ == "__main__":

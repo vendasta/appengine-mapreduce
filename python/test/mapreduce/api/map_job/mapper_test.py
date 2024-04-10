@@ -101,7 +101,7 @@ class MapperTest(testutil.HandlerTestBase):
         output_writer_params={"bucket_name": "bucket"}))
     test_support.execute_until_empty(self.taskqueue)
     total = 0
-    for m in MyMapper.mappers.values():
+    for m in list(MyMapper.mappers.values()):
       total += m.processed
     self.assertEqual(entity_count, total)
 

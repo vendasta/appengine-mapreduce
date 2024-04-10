@@ -57,25 +57,25 @@ class PropertyRangeTest(unittest.TestCase):
     filters = [("a", "=", 1), ("b", "=", 2)]
     prop, start, end = property_range.PropertyRange._get_range_from_filters(
         filters, TestEntity)
-    self.assertEquals(prop, None)
-    self.assertEquals(start, None)
-    self.assertEquals(end, None)
+    self.assertEqual(prop, None)
+    self.assertEqual(start, None)
+    self.assertEqual(end, None)
 
     filters = [["a", ">", 1], ["a", "<", 2]]
     prop, start, end = property_range.PropertyRange._get_range_from_filters(
         filters, TestEntity)
-    self.assertEquals(prop, TestEntity.a)
-    self.assertEquals(start, ["a", ">", 1])
-    self.assertEquals(end, ["a", "<", 2])
+    self.assertEqual(prop, TestEntity.a)
+    self.assertEqual(start, ["a", ">", 1])
+    self.assertEqual(end, ["a", "<", 2])
 
     filters = [["datetime_property", ">", old],
                ["datetime_property", "<=", new],
                ["a", "=", 1]]
     prop, start, end = property_range.PropertyRange._get_range_from_filters(
         filters, TestEntity)
-    self.assertEquals(prop, TestEntity.datetime_property)
-    self.assertEquals(start, ["datetime_property", ">", old])
-    self.assertEquals(end, ["datetime_property", "<=", new])
+    self.assertEqual(prop, TestEntity.datetime_property)
+    self.assertEqual(start, ["datetime_property", ">", old])
+    self.assertEqual(end, ["datetime_property", "<=", new])
 
     # Expect a range.
     filters = [("a", "<=", 1)]
@@ -103,32 +103,32 @@ class PropertyRangeTest(unittest.TestCase):
         [("a", ">=", 1), ("a", "<=", 4), ("b", "=", 1)],
         "__main__.TestEntity")
     results = r.split(10)
-    self.assertEquals(4, len(results))
+    self.assertEqual(4, len(results))
     for r in results:
-      self.assertEquals(TestEntity, r.model_class)
-    self.assertEquals([("a", ">=", 1), ("a", "<", 2), ("b", "=", 1)],
+      self.assertEqual(TestEntity, r.model_class)
+    self.assertEqual([("a", ">=", 1), ("a", "<", 2), ("b", "=", 1)],
                       results[0].filters)
-    self.assertEquals([("a", ">=", 2), ("a", "<", 3), ("b", "=", 1)],
+    self.assertEqual([("a", ">=", 2), ("a", "<", 3), ("b", "=", 1)],
                       results[1].filters)
-    self.assertEquals([("a", ">=", 3), ("a", "<", 4), ("b", "=", 1)],
+    self.assertEqual([("a", ">=", 3), ("a", "<", 4), ("b", "=", 1)],
                       results[2].filters)
-    self.assertEquals([("a", ">=", 4), ("a", "<", 5), ("b", "=", 1)],
+    self.assertEqual([("a", ">=", 4), ("a", "<", 5), ("b", "=", 1)],
                       results[3].filters)
 
     r = property_range.PropertyRange(
         [("c", ">=", 1), ("c", "<=", 4), ("b", "=", 1)],
         "__main__.TestEntity")
     results = r.split(4)
-    self.assertEquals(4, len(results))
+    self.assertEqual(4, len(results))
     for r in results:
-      self.assertEquals(TestEntity, r.model_class)
-    self.assertEquals([("c", ">=", 1), ("c", "<", 1.75), ("b", "=", 1)],
+      self.assertEqual(TestEntity, r.model_class)
+    self.assertEqual([("c", ">=", 1), ("c", "<", 1.75), ("b", "=", 1)],
                       results[0].filters)
-    self.assertEquals([("c", ">=", 1.75), ("c", "<", 2.5), ("b", "=", 1)],
+    self.assertEqual([("c", ">=", 1.75), ("c", "<", 2.5), ("b", "=", 1)],
                       results[1].filters)
-    self.assertEquals([("c", ">=", 2.5), ("c", "<", 3.25), ("b", "=", 1)],
+    self.assertEqual([("c", ">=", 2.5), ("c", "<", 3.25), ("b", "=", 1)],
                       results[2].filters)
-    self.assertEquals([("c", ">=", 3.25), ("c", "<=", 4), ("b", "=", 1)],
+    self.assertEqual([("c", ">=", 3.25), ("c", "<=", 4), ("b", "=", 1)],
                       results[3].filters)
 
   def testSplit_reallyBigN(self):
@@ -136,14 +136,14 @@ class PropertyRangeTest(unittest.TestCase):
         [("a", ">", 1), ("a", "<=", 4), ("b", "=", 1)],
         "__main__.TestEntity")
     results = r.split(100)
-    self.assertEquals(3, len(results))
+    self.assertEqual(3, len(results))
     for r in results:
-      self.assertEquals(TestEntity, r.model_class)
-    self.assertEquals([("a", ">=", 2), ("a", "<", 3), ("b", "=", 1)],
+      self.assertEqual(TestEntity, r.model_class)
+    self.assertEqual([("a", ">=", 2), ("a", "<", 3), ("b", "=", 1)],
                       results[0].filters)
-    self.assertEquals([("a", ">=", 3), ("a", "<", 4), ("b", "=", 1)],
+    self.assertEqual([("a", ">=", 3), ("a", "<", 4), ("b", "=", 1)],
                       results[1].filters)
-    self.assertEquals([("a", ">=", 4), ("a", "<", 5), ("b", "=", 1)],
+    self.assertEqual([("a", ">=", 4), ("a", "<", 5), ("b", "=", 1)],
                       results[2].filters)
 
   def testMakeQuery(self):
@@ -163,8 +163,8 @@ class PropertyRangeTest(unittest.TestCase):
     query = r.make_query(ns)
     results = set()
     for i in query.run():
-      self.assertEquals(3, i.a)
-      self.assertEquals(1, i.b)
+      self.assertEqual(3, i.a)
+      self.assertEqual(1, i.b)
       self.assertFalse(i.key().name() in results)
       results.add(i.key().name())
 
@@ -184,8 +184,8 @@ class PropertyRangeTest(unittest.TestCase):
     query = r.make_query(ns)
     results = set()
     for i in query.iter():
-      self.assertEquals(3, i.a)
-      self.assertEquals(1, i.b)
+      self.assertEqual(3, i.a)
+      self.assertEqual(1, i.b)
       self.assertFalse(i.key.name() in results)
       results.add(i.key.name())
 
@@ -195,7 +195,7 @@ class PropertyRangeTest(unittest.TestCase):
     end = datetime.datetime(1, 1, 1, 0, 0, 0, 3)
 
     # Test combinations of inclusion and exclusion of start and end.
-    self.assertEquals(
+    self.assertEqual(
         [start,
          datetime.datetime(1, 1, 1, 0, 0, 0, 1),
          datetime.datetime(1, 1, 1, 0, 0, 0, 2),
@@ -204,7 +204,7 @@ class PropertyRangeTest(unittest.TestCase):
         ],
         property_range._split_datetime_property(start, end, 4, True, True))
 
-    self.assertEquals(
+    self.assertEqual(
         [start,
          datetime.datetime(1, 1, 1, 0, 0, 0, 1),
          datetime.datetime(1, 1, 1, 0, 0, 0, 2),
@@ -212,7 +212,7 @@ class PropertyRangeTest(unittest.TestCase):
         ],
         property_range._split_datetime_property(start, end, 3, True, False))
 
-    self.assertEquals(
+    self.assertEqual(
         [datetime.datetime(1, 1, 1, 0, 0, 0, 1),
          datetime.datetime(1, 1, 1, 0, 0, 0, 2),
          end,
@@ -222,7 +222,7 @@ class PropertyRangeTest(unittest.TestCase):
 
     # points >> shards
     end = datetime.datetime(1, 1, 1, 0, 0, 0, 100)
-    self.assertEquals(
+    self.assertEqual(
         [datetime.datetime(1, 1, 1, 0, 0, 0, 1),
          datetime.datetime(1, 1, 1, 0, 0, 0, 34),
          datetime.datetime(1, 1, 1, 0, 0, 0, 67),
@@ -242,10 +242,10 @@ class PropertyRangeTest(unittest.TestCase):
     result = property_range._split_float_property(start, end, 11)
     for point in result:
       self.assertTrue(isinstance(point, float))
-    self.assertEquals([start + i * delta for i in range(1, 11)], result)
+    self.assertEqual([start + i * delta for i in range(1, 11)], result)
 
     end = .9
-    self.assertEquals([-4.1],
+    self.assertEqual([-4.1],
                       property_range._split_float_property(start, end, 2))
 
     end = -10.1
@@ -260,41 +260,41 @@ class PropertyRangeTest(unittest.TestCase):
     result = property_range._split_integer_property(start, end, 10, True, True)
     for point in result:
       self.assertTrue(isinstance(point, int))
-    self.assertEquals(list(range(1, 12)), result)
+    self.assertEqual(list(range(1, 12)), result)
 
     result = property_range._split_integer_property(start, end, 9, False, True)
     for point in result:
       self.assertTrue(isinstance(point, int))
-    self.assertEquals(list(range(2, 12)), result)
+    self.assertEqual(list(range(2, 12)), result)
 
     result = property_range._split_integer_property(start, end, 9, True, False)
     for point in result:
       self.assertTrue(isinstance(point, int))
-    self.assertEquals(list(range(1, 11)), result)
+    self.assertEqual(list(range(1, 11)), result)
 
     result = property_range._split_integer_property(start, end, 8, False, False)
     for point in result:
       self.assertTrue(isinstance(point, int))
-    self.assertEquals(list(range(2, 11)), result)
+    self.assertEqual(list(range(2, 11)), result)
 
     # Irregular splits
     end = 11
     result = property_range._split_integer_property(start, end, 10, True, True)
     for point in result:
       self.assertTrue(isinstance(point, int))
-    self.assertEquals([1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12], result)
+    self.assertEqual([1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12], result)
 
     # Points >> shards
     end = 100
     result = property_range._split_integer_property(start, end, 3, True, True)
-    self.assertEquals([1, 34, 68, 101], result)
+    self.assertEqual([1, 34, 68, 101], result)
 
     # Tricky edge cases.
     end = 1
     result = property_range._split_integer_property(start, end, 20, True, True)
     for point in result:
       self.assertTrue(isinstance(point, int))
-    self.assertEquals([1, 2], result)
+    self.assertEqual([1, 2], result)
 
     end = 2
     self.assertRaises(ValueError, property_range._split_integer_property,
@@ -310,7 +310,7 @@ class PropertyRangeTest(unittest.TestCase):
                 "\x01\x02\x03"]
     for c in contents:
       weights = property_range._get_weights(len(c))
-      self.assertEquals(
+      self.assertEqual(
           c, property_range._ord_to_str(
               property_range._str_to_ord(c, weights), weights))
 
@@ -335,21 +335,21 @@ class PropertyRangeTest(unittest.TestCase):
     # This should produce intuitive splitting.
     result = property_range._split_byte_string_property(start, end, 4,
                                                         True, False)
-    self.assertEquals(["a\x01", "a\x02", "a\x03", "a\x04", "a\x05"], result)
+    self.assertEqual(["a\x01", "a\x02", "a\x03", "a\x04", "a\x05"], result)
 
     property_range._STRING_LENGTH = 1
     result = property_range._split_byte_string_property(start, end, 4,
                                                         False, True)
-    self.assertEquals(["a\x02", "a\x03", "a\x04", "a\x05", "a\x06"], result)
+    self.assertEqual(["a\x02", "a\x03", "a\x04", "a\x05", "a\x06"], result)
 
     result = property_range._split_byte_string_property(start, end, 5,
                                                         True, True)
-    self.assertEquals(["a\x01", "a\x02", "a\x03", "a\x04", "a\x05", "a\x06"],
+    self.assertEqual(["a\x01", "a\x02", "a\x03", "a\x04", "a\x05", "a\x06"],
                       result)
 
     result = property_range._split_byte_string_property(start, end, 3,
                                                         False, False)
-    self.assertEquals(["a\x02", "a\x03", "a\x04", "a\x05"], result)
+    self.assertEqual(["a\x02", "a\x03", "a\x04", "a\x05"], result)
 
     # points >> shards
     # 100 in decimal
@@ -359,13 +359,13 @@ class PropertyRangeTest(unittest.TestCase):
     # ord('"') = 34
     # ord("D") = 68
     # ord("e") = 101
-    self.assertEquals(["a\x01", "a\"", "aD", "ae"], result)
+    self.assertEqual(["a\x01", "a\"", "aD", "ae"], result)
 
     # Tricky edge cases.
     end = "a\x01"
     result = property_range._split_byte_string_property(start, end, 6,
                                                         True, True)
-    self.assertEquals(["a\x01", "a\x02"], result)
+    self.assertEqual(["a\x01", "a\x02"], result)
 
     self.assertRaises(ValueError, property_range._split_byte_string_property,
                       start, end, 6, False, True)
@@ -384,15 +384,15 @@ class PropertyRangeTest(unittest.TestCase):
 
     result = property_range._split_byte_string_property(start, end, 2,
                                                         True, False)
-    self.assertEquals(["aa", "aaabb", "aabbb"], result)
+    self.assertEqual(["aa", "aaabb", "aabbb"], result)
 
     result = property_range._split_byte_string_property(start, end, 3,
                                                         True, False)
-    self.assertEquals(["aa", "aaab", "aaba", "aabbb"], result)
+    self.assertEqual(["aa", "aaab", "aaba", "aabbb"], result)
 
     result = property_range._split_byte_string_property(start, end, 4,
                                                         True, False)
-    self.assertEquals(["aa", "aaaab", "aaabb", "aabab", "aabbb"], result)
+    self.assertEqual(["aa", "aaaab", "aaabb", "aabab", "aabbb"], result)
 
   def testSplitByteStringPropertySmallRange(self):
     """User specified a small range.
@@ -409,15 +409,15 @@ class PropertyRangeTest(unittest.TestCase):
 
     result = property_range._split_byte_string_property(start, end, 2,
                                                         True, False)
-    self.assertEquals(["aa" "a", "aa" "ab", "aa" "b"], result)
+    self.assertEqual(["aa" "a", "aa" "ab", "aa" "b"], result)
 
     result = property_range._split_byte_string_property(start, end, 3,
                                                         True, False)
-    self.assertEquals(["aa" "a", "aa" "aaa", "aa" "aba", "aa" "b"], result)
+    self.assertEqual(["aa" "a", "aa" "aaa", "aa" "aba", "aa" "b"], result)
 
     result = property_range._split_byte_string_property(start, end, 4,
                                                         True, False)
-    self.assertEquals(["aa" "a", "aa" "aaa", "aa" "ab", "aa" "aba", "aa" "b"],
+    self.assertEqual(["aa" "a", "aa" "aaa", "aa" "ab", "aa" "aba", "aa" "b"],
                       result)
 
   def testSplitByteStringPropertyInputWithSuffix(self):
@@ -433,11 +433,11 @@ class PropertyRangeTest(unittest.TestCase):
 
     result = property_range._split_byte_string_property(start, end, 2,
                                                         True, False)
-    self.assertEquals([start, "aa" "abb", end], result)
+    self.assertEqual([start, "aa" "abb", end], result)
 
     result = property_range._split_byte_string_property(start, end, 2,
                                                         True, True)
-    self.assertEquals([start, "aa" "abb", "aa" "bab" "aaa"], result)
+    self.assertEqual([start, "aa" "abb", "aa" "bab" "aaa"], result)
 
   def testSplitStringProperty(self):
     start = "\x8f"

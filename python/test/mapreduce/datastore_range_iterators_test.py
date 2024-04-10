@@ -86,15 +86,15 @@ class IteratorTest(unittest.TestCase):
     itr = itr.__class__.from_json_str(itr.to_json_str())
     results = []
     for _ in expected:
-      key = get_key(iter(itr).next())
+      key = get_key(next(iter(itr)))
       results.append(key)
       # Convert to str to test everything is indeed json compatible.
       itr = itr.__class__.from_json_str(itr.to_json_str())
       # Convert twice to check consistency.
       itr = itr.__class__.from_json_str(itr.to_json_str())
     results.sort()
-    self.assertEquals(expected, results)
-    self.assertRaises(StopIteration, iter(itr).next)
+    self.assertEqual(expected, results)
+    self.assertRaises(StopIteration, iter(itr).__next__)
 
   def _AssertEquals(self, itr, expected, get_key):
     """AssertEquals helper.
@@ -110,7 +110,7 @@ class IteratorTest(unittest.TestCase):
     """
     results = [get_key(i) for i in itr]
     results.sort()
-    self.assertEquals(expected, results)
+    self.assertEqual(expected, results)
 
 
 class PropertyRangeIteratorTest(IteratorTest):

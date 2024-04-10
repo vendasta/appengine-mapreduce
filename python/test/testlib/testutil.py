@@ -58,7 +58,7 @@ except ImportError:
 # pylint: disable=unused-import
 try:
   import mock
-except ImportError, e:
+except ImportError as e:
   _NAME = os.environ.get("ROOT_PACKAGE_NAME")
   if not _NAME:
     raise e
@@ -261,8 +261,8 @@ class HandlerTestBase(unittest.TestCase):
 
   def assertTaskStarted(self, queue="default"):
     tasks = self.taskqueue.GetTasks(queue)
-    self.assertEquals(1, len(tasks))
-    self.assertEquals(tasks[0]["url"], self.MAPREDUCE_URL)
+    self.assertEqual(1, len(tasks))
+    self.assertEqual(tasks[0]["url"], self.MAPREDUCE_URL)
 
   def create_shard_state(self, shard_number):
     """Create a model.ShardState.

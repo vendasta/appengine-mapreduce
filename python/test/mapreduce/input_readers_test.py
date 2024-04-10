@@ -23,7 +23,7 @@
 # pylint: disable=g-bad-import-order
 from google.appengine.tools import os_compat  # pylint: disable=unused-import
 
-import cStringIO
+import io
 import datetime
 import math
 import os
@@ -176,18 +176,18 @@ class AbstractDatastoreInputReaderTest(unittest.TestCase):
 
   def testChooseSplitPoints(self):
     """Tests AbstractDatastoreInputReader._choose_split_points."""
-    self.assertEquals(
+    self.assertEqual(
         [5],
         input_readers.AbstractDatastoreInputReader._choose_split_points(
             sorted([0, 9, 8, 7, 1, 2, 3, 4, 5, 6]), 2))
 
-    self.assertEquals(
+    self.assertEqual(
         [3, 7],
         input_readers.AbstractDatastoreInputReader._choose_split_points(
             sorted([0, 1, 7, 8, 9, 3, 2, 4, 6, 5]), 3))
 
-    self.assertEquals(
-        range(1, 10),
+    self.assertEqual(
+        list(range(1, 10)),
         input_readers.AbstractDatastoreInputReader._choose_split_points(
             sorted([0, 1, 7, 8, 9, 3, 2, 4, 6, 5]), 10))
 
@@ -201,11 +201,11 @@ class AbstractDatastoreInputReaderTest(unittest.TestCase):
           filters=None):
     results = input_readers.RawDatastoreInputReader._split_ns_by_scatter(
         shards, ns, "TestEntity", filters, self.appid)
-    self.assertEquals(expected, results)
+    self.assertEqual(expected, results)
 
   def testSplitNSByScatter_NotEnoughData(self):
     """Splits should not intersect, if there's not enough data for each."""
-    testutil._create_entities(range(2), {"1": 1})
+    testutil._create_entities(list(range(2)), {"1": 1})
 
     expected = [key_range.KeyRange(key_start=None,
                                    key_end=testutil.key("1"),
@@ -226,7 +226,7 @@ class AbstractDatastoreInputReaderTest(unittest.TestCase):
 
   def testSplitNSByScatter_NotEnoughData2(self):
     """Splits should not intersect, if there's not enough data for each."""
-    testutil._create_entities(range(10), {"2": 2, "4": 4})
+    testutil._create_entities(list(range(10)), {"2": 2, "4": 4})
     expected = [key_range.KeyRange(key_start=None,
                                    key_end=testutil.key("2"),
                                    direction="ASC",
@@ -253,7 +253,7 @@ class AbstractDatastoreInputReaderTest(unittest.TestCase):
 
   def testSplitNSByScatter_LotsOfData(self):
     """Split lots of data for each shard."""
-    testutil._create_entities(range(100),
+    testutil._create_entities(list(range(100)),
                               {"80": 80, "50": 50, "30": 30, "10": 10},
                               ns="google")
     expected = [key_range.KeyRange(key_start=None,
@@ -287,7 +287,7 @@ class AbstractDatastoreInputReaderTest(unittest.TestCase):
   def testToKeyRangesByShard(self):
     namespaces = [str(i) for i in range(3)]
     for ns in namespaces:
-      testutil._create_entities(range(10), {"5": 5}, ns)
+      testutil._create_entities(list(range(10)), {"5": 5}, ns)
     shards = 2
 
     expected = [
@@ -340,20 +340,20 @@ class AbstractDatastoreInputReaderTest(unittest.TestCase):
         input_readers.AbstractDatastoreInputReader._to_key_ranges_by_shard(
             self.appid, namespaces, shards,
             model.QuerySpec(entity_kind="TestEntity")))
-    self.assertEquals(shards, len(kranges_by_shard))
+    self.assertEqual(shards, len(kranges_by_shard))
 
     expected.sort()
     results = []
     for kranges in kranges_by_shard:
       results.extend(list(kranges))
     results.sort()
-    self.assertEquals(expected, results)
+    self.assertEqual(expected, results)
 
   def testToKeyRangesByShard_UnevenNamespaces(self):
     namespaces = [str(i) for i in range(3)]
-    testutil._create_entities(range(10), {"5": 5}, namespaces[0])
-    testutil._create_entities(range(10), {"5": 5, "6": 6}, namespaces[1])
-    testutil._create_entities(range(10), {"5": 5, "6": 6, "7": 7},
+    testutil._create_entities(list(range(10)), {"5": 5}, namespaces[0])
+    testutil._create_entities(list(range(10)), {"5": 5, "6": 6}, namespaces[1])
+    testutil._create_entities(list(range(10)), {"5": 5, "6": 6, "7": 7},
                               namespaces[2])
     shards = 3
 
@@ -422,14 +422,14 @@ class AbstractDatastoreInputReaderTest(unittest.TestCase):
         input_readers.AbstractDatastoreInputReader._to_key_ranges_by_shard(
             self.appid, namespaces, shards,
             model.QuerySpec(entity_kind="TestEntity")))
-    self.assertEquals(shards, len(kranges_by_shard))
+    self.assertEqual(shards, len(kranges_by_shard))
 
     expected.sort()
     results = []
     for kranges in kranges_by_shard:
       results.extend(list(kranges))
     results.sort()
-    self.assertEquals(expected, results)
+    self.assertEqual(expected, results)
 
 
 class DatastoreInputReaderTestCommon(unittest.TestCase):
@@ -467,13 +467,13 @@ class DatastoreInputReaderTestCommon(unittest.TestCase):
     results = []
     while True:
       try:
-        results.append(self._get_keyname(iter(itr).next()))
+        results.append(self._get_keyname(next(iter(itr))))
         itr = itr.__class__.from_json(itr.to_json())
       except StopIteration:
         break
     results.sort()
     keys.sort()
-    self.assertEquals(keys, results)
+    self.assertEqual(keys, results)
 
   # Subclass should override with its own assert equals.
   def _assertEqualsForAllShards_splitInput(self, keys, max_read, *itrs):
@@ -493,7 +493,7 @@ class DatastoreInputReaderTestCommon(unittest.TestCase):
     for itr in itrs:
       while True:
         try:
-          results.append(self._get_keyname(iter(itr).next()))
+          results.append(self._get_keyname(next(iter(itr))))
           itr = itr.__class__.from_json(itr.to_json())
           if max_read is not None and len(results) > max_read:
             self.fail("Too many results found")
@@ -501,7 +501,7 @@ class DatastoreInputReaderTestCommon(unittest.TestCase):
           break
     results.sort()
     keys.sort()
-    self.assertEquals(keys, results)
+    self.assertEqual(keys, results)
 
   def setUp(self):
     self.testbed = testbed.Testbed()
@@ -525,7 +525,7 @@ class DatastoreInputReaderTestCommon(unittest.TestCase):
     self.testbed.deactivate()
 
   def testSplitInput_withNs(self):
-    self._create_entities(range(3), {"1": 1}, "f")
+    self._create_entities(list(range(3)), {"1": 1}, "f")
     params = {
         "entity_kind": self.entity_kind,
         "namespace": "f",
@@ -535,11 +535,11 @@ class DatastoreInputReaderTestCommon(unittest.TestCase):
         "InputReader",
         params, 2)
     results = self.reader_cls.split_input(mapper_spec)
-    self.assertEquals(2, len(results))
+    self.assertEqual(2, len(results))
     self._assertEqualsForAllShards_splitInput(["0", "1", "2"], None, *results)
 
   def testSplitInput_withNs_moreShardThanScatter(self):
-    self._create_entities(range(3), {"1": 1}, "f")
+    self._create_entities(list(range(3)), {"1": 1}, "f")
     params = {
         "entity_kind": self.entity_kind,
         "namespace": "f",
@@ -561,11 +561,11 @@ class DatastoreInputReaderTestCommon(unittest.TestCase):
         "InputReader",
         params, 1)
     results = self.reader_cls.split_input(mapper_spec)
-    self.assertEquals(None, results)
+    self.assertEqual(None, results)
 
   def testSplitInput_moreThanOneNS(self):
-    self._create_entities(range(3), {"1": 1}, "1")
-    self._create_entities(range(10, 13), {"11": 11}, "2")
+    self._create_entities(list(range(3)), {"1": 1}, "1")
+    self._create_entities(list(range(10, 13)), {"11": 11}, "2")
     params = {
         "entity_kind": self.entity_kind,
         }
@@ -579,8 +579,8 @@ class DatastoreInputReaderTestCommon(unittest.TestCase):
         ["0", "1", "2", "10", "11", "12"], None, *results)
 
   def testSplitInput_moreThanOneUnevenNS(self):
-    self._create_entities(range(5), {"1": 1, "3": 3}, "1")
-    self._create_entities(range(10, 13), {"11": 11}, "2")
+    self._create_entities(list(range(5)), {"1": 1, "3": 3}, "1")
+    self._create_entities(list(range(10, 13)), {"11": 11}, "2")
     params = {
         "entity_kind": self.entity_kind,
         }
@@ -594,9 +594,9 @@ class DatastoreInputReaderTestCommon(unittest.TestCase):
         ["0", "1", "2", "3", "4", "10", "11", "12"], None, *results)
 
   def testSplitInput_lotsOfNS(self):
-    self._create_entities(range(3), {"1": 1}, "9")
-    self._create_entities(range(3, 6), {"4": 4}, "_")
-    self._create_entities(range(6, 9), {"7": 7}, "a")
+    self._create_entities(list(range(3)), {"1": 1}, "9")
+    self._create_entities(list(range(3, 6)), {"4": 4}, "_")
+    self._create_entities(list(range(6, 9)), {"7": 7}, "a")
     params = {
         "entity_kind": self.entity_kind,
         }
@@ -605,7 +605,7 @@ class DatastoreInputReaderTestCommon(unittest.TestCase):
         "InputReader",
         params, 3)
     results = self.reader_cls.split_input(mapper_spec)
-    self.assertEquals(3, len(results))
+    self.assertEqual(3, len(results))
     self._assertEquals_splitInput(results[0], ["0", "1", "2"])
     self._assertEquals_splitInput(results[1], ["3", "4", "5"])
     self._assertEquals_splitInput(results[2], ["6", "7", "8"])
@@ -675,7 +675,7 @@ class RawDatastoreInputReaderTest(DatastoreInputReaderTestCommon):
                       mapper_spec)
 
   def testEntityKindWithDot(self):
-    self._create_entities(range(3), {"1": 1}, "", testutil.TestEntityWithDot)
+    self._create_entities(list(range(3)), {"1": 1}, "", testutil.TestEntityWithDot)
 
     params = {
         "entity_kind": testutil.TestEntityWithDot.kind(),
@@ -686,7 +686,7 @@ class RawDatastoreInputReaderTest(DatastoreInputReaderTestCommon):
         "RawDatastoreInputReader",
         params, 2)
     results = self.reader_cls.split_input(mapper_spec)
-    self.assertEquals(2, len(results))
+    self.assertEqual(2, len(results))
     self._assertEqualsForAllShards_splitInput(["0", "1", "2"], None, *results)
 
   def testRawEntityTypeFromOtherApp(self):
@@ -822,7 +822,7 @@ class DatastoreInputReaderTest(DatastoreInputReaderTestCommon):
       e.put()
 
   def testSplitInput_shardByFilters_withNs(self):
-    entities = self._create_entities(range(12), {}, "f")
+    entities = self._create_entities(list(range(12)), {}, "f")
     self._set_vals(entities, list(range(6)), list(range(2)))
     params = {
         "entity_kind": self.entity_kind,
@@ -836,7 +836,7 @@ class DatastoreInputReaderTest(DatastoreInputReaderTestCommon):
         "InputReader",
         params, 2)
     results = self.reader_cls.split_input(mapper_spec)
-    self.assertEquals(2, len(results))
+    self.assertEqual(2, len(results))
     self._assertEquals_splitInput(results[0], ["3", "5"])
     self._assertEquals_splitInput(results[1], ["7"])
 
@@ -851,13 +851,13 @@ class DatastoreInputReaderTest(DatastoreInputReaderTestCommon):
         "InputReader",
         params, 100)
     results = self.reader_cls.split_input(mapper_spec)
-    self.assertEquals(3, len(results))
+    self.assertEqual(3, len(results))
     self._assertEquals_splitInput(results[0], [])
     self._assertEquals_splitInput(results[1], [])
     self._assertEquals_splitInput(results[2], [])
 
   def testSplitInput_shardByFilters_bigShardNumber(self):
-    entities = self._create_entities(range(12), {}, "f")
+    entities = self._create_entities(list(range(12)), {}, "f")
     self._set_vals(entities, list(range(6)), list(range(2)))
     params = {
         "entity_kind": self.entity_kind,
@@ -869,20 +869,20 @@ class DatastoreInputReaderTest(DatastoreInputReaderTestCommon):
         "InputReader",
         params, 100)
     results = self.reader_cls.split_input(mapper_spec)
-    self.assertEquals(3, len(results))
+    self.assertEqual(3, len(results))
     self._assertEquals_splitInput(results[0], ["3"])
     self._assertEquals_splitInput(results[1], ["5"])
     self._assertEquals_splitInput(results[2], ["7"])
 
   def testSplitInput_shardByFilters_lotsOfNS(self):
     """Lots means more than 2 in test cases."""
-    entities = self._create_entities(range(12), {}, "f")
+    entities = self._create_entities(list(range(12)), {}, "f")
     self._set_vals(entities, list(range(6)), list(range(2)))
-    entities = self._create_entities(range(12, 24), {}, "g")
+    entities = self._create_entities(list(range(12, 24)), {}, "g")
     self._set_vals(entities, list(range(6)), list(range(2)))
-    entities = self._create_entities(range(24, 36), {}, "h")
+    entities = self._create_entities(list(range(24, 36)), {}, "h")
     self._set_vals(entities, list(range(6)), list(range(2)))
-    entities = self._create_entities(range(36, 48), {}, "h")
+    entities = self._create_entities(list(range(36, 48)), {}, "h")
     self._set_vals(entities, [0]*6, list(range(2)))
 
     params = {
@@ -894,7 +894,7 @@ class DatastoreInputReaderTest(DatastoreInputReaderTestCommon):
         "InputReader",
         params, 100)
     results = self.reader_cls.split_input(mapper_spec)
-    self.assertEquals(3, len(results))
+    self.assertEqual(3, len(results))
     self._assertEquals_splitInput(results[0], ["3", "5", "7"])
     self._assertEquals_splitInput(results[1], ["15", "17", "19"])
     self._assertEquals_splitInput(results[2], ["27", "29", "31"])
@@ -902,7 +902,7 @@ class DatastoreInputReaderTest(DatastoreInputReaderTestCommon):
   def testSplitInput_shardByFilters_imbalancedKeys(self):
     # Create 24 entities with keys 0..23
     scatters = {str(i): i for i in list(range(12)) + [12, 18]}
-    entities = self._create_entities(range(24), scatters, "f")
+    entities = self._create_entities(list(range(24)), scatters, "f")
     # 12 of the entities have a in range(6). These all have __scatter__ set.
     # The other 12 have a = 100. Only 2 of these have __scatter__ set.
     self._set_vals(entities, list(range(6)) + [100] * 6, list(range(2)))
@@ -921,7 +921,7 @@ class DatastoreInputReaderTest(DatastoreInputReaderTestCommon):
     results = self.reader_cls.split_input(mapper_spec)
 
     # Verify that the input was evenly split
-    self.assertEquals(2, len(results))
+    self.assertEqual(2, len(results))
     self._assertEquals_splitInput(results[0], [str(i) for i in range(12, 18)])
     self._assertEquals_splitInput(results[1], [str(i) for i in range(18, 24)])
 
@@ -1003,11 +1003,11 @@ class BlobstoreLineInputReaderBlobstoreStubTest(unittest.TestCase):
     for reader in blob_readers:
       while True:
         try:
-          unused_offset, line = reader.next()
+          unused_offset, line = next(reader)
           actual_results.append(line)
         except StopIteration:
           break
-    self.assertEquals(expected_results, actual_results)
+    self.assertEqual(expected_results, actual_results)
 
   def EndToEndTest(self, data, shard_count):
     """Create a blobstorelineinputreader and run it through its paces."""
@@ -1124,12 +1124,12 @@ class BlobstoreLineInputReaderTest(unittest.TestCase):
     return r
 
   def assertNextEquals(self, reader, expected_k, expected_v):
-    k, v = reader.next()
-    self.assertEquals(expected_k, k)
-    self.assertEquals(expected_v, v)
+    k, v = next(reader)
+    self.assertEqual(expected_k, k)
+    self.assertEqual(expected_v, v)
 
   def assertDone(self, reader):
-    self.assertRaises(StopIteration, reader.next)
+    self.assertRaises(StopIteration, reader.__next__)
 
   def testAtStart(self):
     """If we start at position 0, read the first record."""
@@ -1198,7 +1198,7 @@ class BlobstoreLineInputReaderTest(unittest.TestCase):
         "mapper_shard_count": 1})
     blob_readers = input_readers.BlobstoreLineInputReader.split_input(
         mapper_spec)
-    self.assertEquals([{"blob_key": "foo",
+    self.assertEqual([{"blob_key": "foo",
                         "initial_position": 0,
                         "end_position": 200}],
                       [r.to_json() for r in blob_readers])
@@ -1219,7 +1219,7 @@ class BlobstoreLineInputReaderTest(unittest.TestCase):
     # Blob readers are built out of a dictionary of blob_keys and thus unsorted.
     blob_readers_json = [r.to_json() for r in blob_readers]
     blob_readers_json.sort(key=lambda r: r["blob_key"])
-    self.assertEquals([{"blob_key": "foo%d" % i,
+    self.assertEqual([{"blob_key": "foo%d" % i,
                         "initial_position": 0,
                         "end_position": 200} for i in range(5)],
                       blob_readers_json)
@@ -1235,7 +1235,7 @@ class BlobstoreLineInputReaderTest(unittest.TestCase):
         "mapper_shard_count": 2})
     blob_readers = input_readers.BlobstoreLineInputReader.split_input(
         mapper_spec)
-    self.assertEquals(
+    self.assertEqual(
         [{"blob_key": "foo",
           "initial_position": 0,
           "end_position": 99},
@@ -1257,7 +1257,7 @@ class BlobstoreLineInputReaderTest(unittest.TestCase):
     blob_readers = input_readers.BlobstoreLineInputReader.split_input(
         mapper_spec)
     stringified = [str(s) for s in blob_readers]
-    self.assertEquals(
+    self.assertEqual(
         ["blobstore.BlobKey('foo'):[0, 99]",
          "blobstore.BlobKey('foo'):[99, 199]"],
         stringified)
@@ -1312,7 +1312,7 @@ class BlobstoreZipInputReaderTest(unittest.TestCase):
     self.appid = "testapp"
     os.environ["APPLICATION_ID"] = self.appid
 
-    self.zipdata = cStringIO.StringIO()
+    self.zipdata = io.StringIO()
     archive = zipfile.ZipFile(self.zipdata, "w")
     for i in range(10):
       archive.writestr("%d.txt" % i, "%d: %s" % (i, "*"*i))
@@ -1326,7 +1326,7 @@ class BlobstoreZipInputReaderTest(unittest.TestCase):
   def testReadFirst(self):
     """Test that the first file in the zip is returned correctly."""
     reader = input_readers.BlobstoreZipInputReader("", 0, 1, self.mockZipReader)
-    file_info, data_func = reader.next()
+    file_info, data_func = next(reader)
     self.assertEqual(file_info.filename, "0.txt")
     self.assertEqual(data_func(), "0: ")
 
@@ -1334,15 +1334,15 @@ class BlobstoreZipInputReaderTest(unittest.TestCase):
     """Test we can read right up to the last file in the zip."""
     reader = input_readers.BlobstoreZipInputReader("", 9, 10,
                                                    self.mockZipReader)
-    file_info, data_func = reader.next()
+    file_info, data_func = next(reader)
     self.assertEqual(file_info.filename, "9.txt")
     self.assertEqual(data_func(), "9: *********")
 
   def testStopIteration(self):
     """Test that StopIteration is raised when we fetch past the end."""
     reader = input_readers.BlobstoreZipInputReader("", 0, 1, self.mockZipReader)
-    reader.next()
-    self.assertRaises(StopIteration, reader.next)
+    next(reader)
+    self.assertRaises(StopIteration, reader.__next__)
 
   def testSplitInput(self):
     """Test that split_input functions as expected."""
@@ -1362,7 +1362,7 @@ class BlobstoreZipInputReaderTest(unittest.TestCase):
     reader = input_readers.BlobstoreZipInputReader("someblob", 0, 1,
                                                    self.mockZipReader)
     json = reader.to_json()
-    self.assertEquals({"blob_key": "someblob",
+    self.assertEqual({"blob_key": "someblob",
                        "start_index": 0,
                        "end_index": 1},
                       json)
@@ -1385,7 +1385,7 @@ class BlobstoreZipLineInputReaderTest(unittest.TestCase):
     self.zipdata = {}
     blob_keys = []
     for blob_number in range(blob_count):
-      stream = cStringIO.StringIO()
+      stream = io.StringIO()
       archive = zipfile.ZipFile(stream, "w")
       for file_number in range(3):
         lines = []
@@ -1477,35 +1477,35 @@ class BlobstoreZipLineInputReaderTest(unittest.TestCase):
     self.create_zip_data(1)
     reader = input_readers.BlobstoreZipLineInputReader("blob0", 0, 1, 0,
                                                        self.mockZipReader)
-    offset_info, line = reader.next()
+    offset_info, line = next(reader)
     self.assertEqual(("blob0", 0, 0), offset_info)
     self.assertEqual("archive 0 file 0 line 0", line)
 
     # This file only has one line.
-    self.assertRaises(StopIteration, reader.next)
+    self.assertRaises(StopIteration, reader.__next__)
 
   def testReadTwoLineFile(self):
     """Test that the second file in the zip is returned correctly."""
     self.create_zip_data(1)
     reader = input_readers.BlobstoreZipLineInputReader("blob0", 1, 2, 0,
                                                        self.mockZipReader)
-    offset_info, line = reader.next()
+    offset_info, line = next(reader)
     self.assertEqual(("blob0", 1, 0), offset_info)
     self.assertEqual("archive 0 file 1 line 0", line)
 
-    offset_info, line = reader.next()
+    offset_info, line = next(reader)
     self.assertEqual(("blob0", 1, 24), offset_info)
     self.assertEqual("archive 0 file 1 line 1", line)
 
     # This file only has two lines.
-    self.assertRaises(StopIteration, reader.next)
+    self.assertRaises(StopIteration, reader.__next__)
 
   def testReadSecondLineFile(self):
     """Test that the second line is returned correctly."""
     self.create_zip_data(1)
     reader = input_readers.BlobstoreZipLineInputReader("blob0", 2, 3, 5,
                                                        self.mockZipReader)
-    offset_info, line = reader.next()
+    offset_info, line = next(reader)
     self.assertEqual(("blob0", 2, 24), offset_info)
     self.assertEqual("archive 0 file 2 line 1", line)
 
@@ -1514,7 +1514,7 @@ class BlobstoreZipLineInputReaderTest(unittest.TestCase):
     reader2 = input_readers.BlobstoreZipLineInputReader.from_json(
         reader.to_json(), self.mockZipReader)
 
-    offset_info, line = reader2.next()
+    offset_info, line = next(reader2)
     self.assertEqual(("blob0", 2, 48), offset_info)
     self.assertEqual("archive 0 file 2 line 2", line)
 
@@ -1526,20 +1526,20 @@ class BlobstoreZipLineInputReaderTest(unittest.TestCase):
 
     for file_number in range(3):
       for i in range(file_number + 1):
-        offset_info, line = reader.next()
+        offset_info, line = next(reader)
         self.assertEqual("blob0", offset_info[0])
         self.assertEqual(file_number, offset_info[1])
         self.assertEqual("archive %s file %s line %s" % (0, file_number, i),
                          line)
 
-    self.assertRaises(StopIteration, reader.next)
+    self.assertRaises(StopIteration, reader.__next__)
 
   def testJson(self):
     """Test that we can persist/restore using the json mechanism."""
     reader = input_readers.BlobstoreZipLineInputReader("blob0", 0, 3, 20,
                                                        self.mockZipReader)
     json = reader.to_json()
-    self.assertEquals({"blob_key": "blob0",
+    self.assertEqual({"blob_key": "blob0",
                        "start_file_index": 0,
                        "end_file_index": 3,
                        "offset": 20},
@@ -1560,8 +1560,8 @@ class RandomStringInputReaderTest(unittest.TestCase):
     i = 0
     for content in input_reader:
       i += 1
-      self.assertEquals(9, len(content))
-    self.assertEquals(10, i)
+      self.assertEqual(9, len(content))
+    self.assertEqual(10, i)
 
   def testEndToEnd(self):
     mapper_spec = model.MapperSpec(
@@ -1578,7 +1578,7 @@ class RandomStringInputReaderTest(unittest.TestCase):
     for reader in readers:
       for _ in reader:
         i += 1
-    self.assertEquals(1000, i)
+    self.assertEqual(1000, i)
 
   def testValidate(self):
     mapper_spec = model.MapperSpec(
@@ -1637,9 +1637,9 @@ class RandomStringInputReaderTest(unittest.TestCase):
   def testToFromJson(self):
     input_reader = input_readers.RandomStringInputReader(10, 9)
     reader_in_json = input_reader.to_json()
-    self.assertEquals({"count": 10, "string_length": 9}, reader_in_json)
+    self.assertEqual({"count": 10, "string_length": 9}, reader_in_json)
     input_readers.RandomStringInputReader.from_json(reader_in_json)
-    self.assertEquals(10, input_reader._count)
+    self.assertEqual(10, input_reader._count)
 
 
 class NamespaceInputReaderTest(unittest.TestCase):
@@ -1670,23 +1670,23 @@ class NamespaceInputReaderTest(unittest.TestCase):
   def testSplitInputNoData(self):
     """Test reader with no data in datastore."""
     readers = input_readers.NamespaceInputReader.split_input(self.mapper_spec)
-    self.assertEquals(10, len(readers))
+    self.assertEqual(10, len(readers))
 
     namespaces = set()
     for r in readers:
       namespaces.update(list(r))
-    self.assertEquals(set(), namespaces)
+    self.assertEqual(set(), namespaces)
 
   def testSplitDefaultNamespaceOnly(self):
     """Test reader with only default namespace populated."""
     testutil.TestEntity().put()
     readers = input_readers.NamespaceInputReader.split_input(self.mapper_spec)
-    self.assertEquals(10, len(readers))
+    self.assertEqual(10, len(readers))
 
     namespaces = set()
     for r in readers:
       namespaces.update(list(r))
-    self.assertEquals(set([""]), namespaces)
+    self.assertEqual(set([""]), namespaces)
 
   def testSplitNamespacesPresent(self):
     """Test reader with multiple namespaces present."""
@@ -1697,14 +1697,14 @@ class NamespaceInputReaderTest(unittest.TestCase):
     namespace_manager.set_namespace(None)
 
     readers = input_readers.NamespaceInputReader.split_input(self.mapper_spec)
-    self.assertEquals(10, len(readers))
+    self.assertEqual(10, len(readers))
 
     namespaces = set()
     for r in readers:
       namespaces.update(list(r))
 
     # test read
-    self.assertEquals(set(list(string.letters + string.digits) + [""]),
+    self.assertEqual(set(list(string.letters + string.digits) + [""]),
                       namespaces)
 
   def testValidate_Passes(self):
@@ -1748,24 +1748,24 @@ class NamespaceInputReaderTest(unittest.TestCase):
     reader = input_readers.NamespaceInputReader(
         namespace_range.NamespaceRange("", "A"))
 
-    self.assertEquals(
+    self.assertEqual(
         {"namespace_range": {"namespace_end": "A", "namespace_start": ""},
          "batch_size": 10},
         reader.to_json())
 
     testutil.TestEntity().put()
-    iter(reader).next()
+    next(iter(reader))
     json = reader.to_json()
-    self.assertEquals(
+    self.assertEqual(
         {"namespace_range": {"namespace_end": "A", "namespace_start": "-"},
          "batch_size": 10},
         json)
 
-    self.assertEquals(
+    self.assertEqual(
         reader.ns_range,
         input_readers.NamespaceInputReader.from_json(json).ns_range)
 
-    self.assertEquals(
+    self.assertEqual(
         reader._batch_size,
         input_readers.NamespaceInputReader.from_json(json)._batch_size)
 
@@ -1916,13 +1916,13 @@ class LogInputReaderTest(unittest.TestCase):
 
   def testEvenLogSplit(self):
     readers = input_readers.LogInputReader.split_input(self.mapper_spec)
-    self.assertEquals(self.num_shards, len(readers))
+    self.assertEqual(self.num_shards, len(readers))
 
     for i, reader in enumerate(readers):
       start = i * 32
       end = (i + 1) * 32
-      self.assertEquals(start, reader._LogInputReader__params["start_time"])
-      self.assertEquals(end, reader._LogInputReader__params["end_time"])
+      self.assertEqual(start, reader._LogInputReader__params["start_time"])
+      self.assertEqual(end, reader._LogInputReader__params["end_time"])
 
   def testUnevenLogSplit(self):
     start = 0
@@ -1936,14 +1936,14 @@ class LogInputReaderTest(unittest.TestCase):
         num_shards)
 
     readers = input_readers.LogInputReader.split_input(mapper_spec)
-    self.assertEquals(num_shards, len(readers))
+    self.assertEqual(num_shards, len(readers))
 
-    self.assertEquals(0, readers[0]._LogInputReader__params["start_time"])
-    self.assertEquals(33, readers[0]._LogInputReader__params["end_time"])
-    self.assertEquals(33, readers[1]._LogInputReader__params["start_time"])
-    self.assertEquals(66, readers[1]._LogInputReader__params["end_time"])
-    self.assertEquals(66, readers[2]._LogInputReader__params["start_time"])
-    self.assertEquals(100, readers[2]._LogInputReader__params["end_time"])
+    self.assertEqual(0, readers[0]._LogInputReader__params["start_time"])
+    self.assertEqual(33, readers[0]._LogInputReader__params["end_time"])
+    self.assertEqual(33, readers[1]._LogInputReader__params["start_time"])
+    self.assertEqual(66, readers[1]._LogInputReader__params["end_time"])
+    self.assertEqual(66, readers[2]._LogInputReader__params["start_time"])
+    self.assertEqual(100, readers[2]._LogInputReader__params["end_time"])
 
   def testToJsonFromJson(self):
     """Test to/from json implementations."""
@@ -1955,24 +1955,24 @@ class LogInputReaderTest(unittest.TestCase):
       # Full roundtrip test; this cannot verify that all fields are encoded.
       as_json = reader.to_json_str()
       from_json = input_readers.LogInputReader.from_json_str(as_json)
-      self.assertEquals(from_json.to_json_str(), as_json)
+      self.assertEqual(from_json.to_json_str(), as_json)
 
       # Test correctness of individual fields.
       params_from_json = from_json._LogInputReader__params
-      self.assertEquals(params_from_json["start_time"],
+      self.assertEqual(params_from_json["start_time"],
                         start_time + i * seconds_per_shard)
       if i != len(readers) - 1:
-        self.assertEquals(params_from_json["end_time"],
+        self.assertEqual(params_from_json["end_time"],
                           start_time + (i + 1) * seconds_per_shard)
       else:
-        self.assertEquals(params_from_json["end_time"], end_time)
-      self.assertEquals(params_from_json["offset"], self.offset)
-      self.assertEquals(params_from_json["version_ids"], ["1"])
-      self.assertEquals(params_from_json["minimum_log_level"],
+        self.assertEqual(params_from_json["end_time"], end_time)
+      self.assertEqual(params_from_json["offset"], self.offset)
+      self.assertEqual(params_from_json["version_ids"], ["1"])
+      self.assertEqual(params_from_json["minimum_log_level"],
                         logservice.LOG_LEVEL_INFO)
-      self.assertEquals(params_from_json["include_incomplete"], True)
-      self.assertEquals(params_from_json["include_app_logs"], True)
-      self.assertEquals(params_from_json["prototype_request"].app_id(),
+      self.assertEqual(params_from_json["include_incomplete"], True)
+      self.assertEqual(params_from_json["include_app_logs"], True)
+      self.assertEqual(params_from_json["prototype_request"].app_id(),
                         self.app_id)
 
   def createLogs(self, count=10):
@@ -1984,7 +1984,7 @@ class LogInputReaderTest(unittest.TestCase):
 
     # Write test data.
     expected = []
-    for i in xrange(count):
+    for i in range(count):
       stub.start_request(request_id=i,
                          user_request_id="",
                          ip="127.0.0.1",
@@ -2011,10 +2011,10 @@ class LogInputReaderTest(unittest.TestCase):
         values to be compared against the corresponding entries in 'retrieved'.
       retrieved: A list of RequestLog objects, hopefully matching 'expected'.
     """
-    self.assertEquals(len(expected), len(retrieved))
+    self.assertEqual(len(expected), len(retrieved))
     for expected, retrieved in zip(expected, retrieved):
-      for property_name, value in expected.iteritems():
-        self.assertEquals(value, getattr(retrieved, property_name))
+      for property_name, value in expected.items():
+        self.assertEqual(value, getattr(retrieved, property_name))
 
   def testIter(self):
     """Test __iter__ implementation."""
@@ -2042,7 +2042,7 @@ class LogInputReaderTest(unittest.TestCase):
         iterator = reader.__iter__()
         restart_counter = 0
       try:
-        logs.append(iterator.next())
+        logs.append(next(iterator))
       except StopIteration:
         break
     self.verifyLogs(expected, logs)
@@ -2128,24 +2128,24 @@ class ReducerReaderTest(testutil.HandlerTestBase):
     # the input file is consumed and passed through the combiner function.
     reader = input_readers._ReducerReader([self.input_file])
     it = iter(reader)
-    self.assertEquals(input_readers.ALLOW_CHECKPOINT, it.next())
+    self.assertEqual(input_readers.ALLOW_CHECKPOINT, next(it))
 
     reader = input_readers._ReducerReader.from_json(reader.to_json())
     it = iter(reader)
-    self.assertEquals(("key1", [97, 98]), it.next())
+    self.assertEqual(("key1", [97, 98]), next(it))
 
     reader = input_readers._ReducerReader.from_json(reader.to_json())
     it = iter(reader)
-    self.assertEquals(input_readers.ALLOW_CHECKPOINT, it.next())
+    self.assertEqual(input_readers.ALLOW_CHECKPOINT, next(it))
 
     reader = input_readers._ReducerReader.from_json(reader.to_json())
     it = iter(reader)
-    self.assertEquals(("key2", [99, 100, 101, 102]), it.next())
+    self.assertEqual(("key2", [99, 100, 101, 102]), next(it))
 
   def testSingleRequest(self):
     """Tests when a key can be handled during a single request."""
     reader = input_readers._ReducerReader([self.input_file])
-    self.assertEquals(
+    self.assertEqual(
         [("key1", ["a", "b"]),
          input_readers.ALLOW_CHECKPOINT,
          ("key2", ["c", "d", "e", "f"])],
@@ -2154,25 +2154,25 @@ class ReducerReaderTest(testutil.HandlerTestBase):
     # now test state serialization
     reader = input_readers._ReducerReader([self.input_file])
     i = reader.__iter__()
-    self.assertEquals("Ti4=", reader.to_json()["current_values"])
-    self.assertEquals("Ti4=", reader.to_json()["current_key"])
+    self.assertEqual("Ti4=", reader.to_json()["current_values"])
+    self.assertEqual("Ti4=", reader.to_json()["current_key"])
 
-    self.assertEquals(("key1", ["a", "b"]), i.next())
-    self.assertEquals("KGxwMApTJ2MnCnAxCmFTJ2QnCnAyCmEu",
+    self.assertEqual(("key1", ["a", "b"]), next(i))
+    self.assertEqual("KGxwMApTJ2MnCnAxCmFTJ2QnCnAyCmEu",
                       reader.to_json()["current_values"])
-    self.assertEquals("UydrZXkyJwpwMAou", reader.to_json()["current_key"])
+    self.assertEqual("UydrZXkyJwpwMAou", reader.to_json()["current_key"])
 
-    self.assertEquals(input_readers.ALLOW_CHECKPOINT, i.next())
-    self.assertEquals("KGxwMApTJ2MnCnAxCmFTJ2QnCnAyCmEu",
+    self.assertEqual(input_readers.ALLOW_CHECKPOINT, next(i))
+    self.assertEqual("KGxwMApTJ2MnCnAxCmFTJ2QnCnAyCmEu",
                       reader.to_json()["current_values"])
-    self.assertEquals("UydrZXkyJwpwMAou", reader.to_json()["current_key"])
+    self.assertEqual("UydrZXkyJwpwMAou", reader.to_json()["current_key"])
 
-    self.assertEquals(("key2", ["c", "d", "e", "f"]), i.next())
-    self.assertEquals("Ti4=", reader.to_json()["current_values"])
-    self.assertEquals("Ti4=", reader.to_json()["current_key"])
+    self.assertEqual(("key2", ["c", "d", "e", "f"]), next(i))
+    self.assertEqual("Ti4=", reader.to_json()["current_values"])
+    self.assertEqual("Ti4=", reader.to_json()["current_key"])
 
     try:
-      i.next()
+      next(i)
       self.fail("Exception expected")
     except StopIteration:
       # expected
@@ -2182,17 +2182,17 @@ class ReducerReaderTest(testutil.HandlerTestBase):
     """Test deserialization at every moment."""
     reader = input_readers._ReducerReader([self.input_file])
     i = reader.__iter__()
-    self.assertEquals(("key1", ["a", "b"]), i.next())
+    self.assertEqual(("key1", ["a", "b"]), next(i))
 
     reader = input_readers._ReducerReader.from_json(reader.to_json())
     i = reader.__iter__()
-    self.assertEquals(("key2", ["c", "d", "e", "f"]), i.next())
+    self.assertEqual(("key2", ["c", "d", "e", "f"]), next(i))
 
     reader = input_readers._ReducerReader.from_json(reader.to_json())
     i = reader.__iter__()
 
     try:
-      i.next()
+      next(i)
       self.fail("Exception expected")
     except StopIteration:
       # expected
@@ -2603,7 +2603,7 @@ class GoogleCloudStorageInputReaderTest(GoogleCloudStorageInputTestBase):
 
     found_content = []
     for _ in range(self.test_num_files):
-      reader_file = reader.next()
+      reader_file = next(reader)
       found_content.append(reader_file.read())
       # serialize/deserialize after each file is read
       reader = self.READER_CLS.from_json(reader.to_json())
@@ -2612,7 +2612,7 @@ class GoogleCloudStorageInputReaderTest(GoogleCloudStorageInputTestBase):
       self.assertTrue(content in found_content)
 
     # verify a reader at EOF still raises EOF after serialization
-    self.assertRaises(StopIteration, reader.next)
+    self.assertRaises(StopIteration, reader.__next__)
 
 
 class GoogleCloudStorageRecordInputReaderTest(GoogleCloudStorageInputTestBase):
@@ -2640,7 +2640,7 @@ class GoogleCloudStorageRecordInputReaderTest(GoogleCloudStorageInputTestBase):
     self.create_test_file(filename, [])
     reader = self.READER_CLS([filename])
 
-    self.assertRaises(StopIteration, reader.next)
+    self.assertRaises(StopIteration, reader.__next__)
 
   def testSingleFileOneRecord(self):
     filename = "/%s/single-record-file" % self.TEST_BUCKET
@@ -2648,8 +2648,8 @@ class GoogleCloudStorageRecordInputReaderTest(GoogleCloudStorageInputTestBase):
     self.create_test_file(filename, [data])
     reader = self.READER_CLS([filename])
 
-    self.assertEqual(data, reader.next())
-    self.assertRaises(StopIteration, reader.next)
+    self.assertEqual(data, next(reader))
+    self.assertRaises(StopIteration, reader.__next__)
 
   def testSingleFileManyRecords(self):
     filename = "/%s/many-records-file" % self.TEST_BUCKET
@@ -2660,10 +2660,10 @@ class GoogleCloudStorageRecordInputReaderTest(GoogleCloudStorageInputTestBase):
     reader = self.READER_CLS([filename])
 
     for record in data:
-      self.assertEqual(record, reader.next())
-    self.assertRaises(StopIteration, reader.next)
+      self.assertEqual(record, next(reader))
+    self.assertRaises(StopIteration, reader.__next__)
     # ensure StopIteration is still raised after its first encountered
-    self.assertRaises(StopIteration, reader.next)
+    self.assertRaises(StopIteration, reader.__next__)
 
   def testSingleFileManyKeyValuesRecords(self):
     filename = "/%s/many-key-values-records-file" % self.TEST_BUCKET
@@ -2684,10 +2684,10 @@ class GoogleCloudStorageRecordInputReaderTest(GoogleCloudStorageInputTestBase):
       proto.ParseFromString(record)
       output_data.append((proto.key(), proto.value_list()))
 
-    self.assertEquals(input_data, output_data)
-    self.assertRaises(StopIteration, reader.next)
+    self.assertEqual(input_data, output_data)
+    self.assertRaises(StopIteration, reader.__next__)
     # ensure StopIteration is still raised after its first encountered
-    self.assertRaises(StopIteration, reader.next)
+    self.assertRaises(StopIteration, reader.__next__)
 
   def testManyFilesManyRecords(self):
     filenames = []
@@ -2704,8 +2704,8 @@ class GoogleCloudStorageRecordInputReaderTest(GoogleCloudStorageInputTestBase):
 
     for data_set in all_data:
       for record in data_set:
-        self.assertEqual(record, reader.next())
-    self.assertRaises(StopIteration, reader.next)
+        self.assertEqual(record, next(reader))
+    self.assertRaises(StopIteration, reader.__next__)
 
   def testManyFilesSomeEmpty(self):
     filenames = []
@@ -2722,8 +2722,8 @@ class GoogleCloudStorageRecordInputReaderTest(GoogleCloudStorageInputTestBase):
 
     for data_set in all_data:
       for record in data_set:
-        self.assertEqual(record, reader.next())
-    self.assertRaises(StopIteration, reader.next)
+        self.assertEqual(record, next(reader))
+    self.assertRaises(StopIteration, reader.__next__)
 
   def testSerialization(self):
     filenames = []
@@ -2743,14 +2743,14 @@ class GoogleCloudStorageRecordInputReaderTest(GoogleCloudStorageInputTestBase):
 
     for data_set in all_data:
       for record in data_set:
-        self.assertEqual(record, reader.next())
+        self.assertEqual(record, next(reader))
         # Serialize after each read
         reader = self.READER_CLS.from_json(reader.to_json())
-    self.assertRaises(StopIteration, reader.next)
+    self.assertRaises(StopIteration, reader.__next__)
 
     # Serialize after StopIteration reached
     reader = self.READER_CLS.from_json(reader.to_json())
-    self.assertRaises(StopIteration, reader.next)
+    self.assertRaises(StopIteration, reader.__next__)
 
   def testCounters(self):
     filenames = []
@@ -2786,8 +2786,8 @@ class GoogleCloudStorageRecordInputReaderTest(GoogleCloudStorageInputTestBase):
 
     for data_set in all_data:
       for record in data_set:
-        self.assertEqual(record, reader.next())
-    self.assertRaises(StopIteration, reader.next)
+        self.assertEqual(record, next(reader))
+    self.assertRaises(StopIteration, reader.__next__)
 
     # Check counters.
     self.assertTrue(shard_state.counters_map.get(

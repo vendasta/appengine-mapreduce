@@ -348,7 +348,7 @@ class GCSInputReaderTest(GCSInputTestBase):
 
     found_content = []
     for _ in range(self.test_num_files):
-      reader_file = reader.next()
+      reader_file = next(reader)
       found_content.append(reader_file.read())
       # serialize/deserialize after each file is read
       reader = self.READER_CLS.from_json(reader.to_json())
@@ -359,7 +359,7 @@ class GCSInputReaderTest(GCSInputTestBase):
       self.assertTrue(content in found_content)
 
     # verify a reader at EOF still raises EOF after serialization
-    self.assertRaises(StopIteration, reader.next)
+    self.assertRaises(StopIteration, reader.__next__)
 
 
 class GCSInputReaderWithDelimiterTest(GCSInputTestBase):
@@ -451,14 +451,14 @@ class GCSRecordInputReaderTest(GCSInputTestBase):
     filename = "empty-file"
     reader = self.create_single_reader([filename], [[]])
 
-    self.assertRaises(StopIteration, reader.next)
+    self.assertRaises(StopIteration, reader.__next__)
 
   def testSingleFileOneRecord(self):
     filename = "single-record-file"
     reader = self.create_single_reader([filename], [["foobardata"]])
 
-    self.assertEqual("foobardata", reader.next())
-    self.assertRaises(StopIteration, reader.next)
+    self.assertEqual("foobardata", next(reader))
+    self.assertRaises(StopIteration, reader.__next__)
 
   def testSingleFileManyRecords(self):
     filename = "many-records-file"
@@ -468,10 +468,10 @@ class GCSRecordInputReaderTest(GCSInputTestBase):
     reader = self.create_single_reader([filename], [data])
 
     for record in data:
-      self.assertEqual(record, reader.next())
-    self.assertRaises(StopIteration, reader.next)
+      self.assertEqual(record, next(reader))
+    self.assertRaises(StopIteration, reader.__next__)
     # ensure StopIteration is still raised after its first encountered
-    self.assertRaises(StopIteration, reader.next)
+    self.assertRaises(StopIteration, reader.__next__)
 
   def testManyFilesManyRecords(self):
     filenames = []
@@ -489,8 +489,8 @@ class GCSRecordInputReaderTest(GCSInputTestBase):
 
     for data_set in all_data:
       for record in data_set:
-        self.assertEqual(record, reader.next())
-    self.assertRaises(StopIteration, reader.next)
+        self.assertEqual(record, next(reader))
+    self.assertRaises(StopIteration, reader.__next__)
 
   def testManyFilesSomeEmpty(self):
     filenames = []
@@ -508,8 +508,8 @@ class GCSRecordInputReaderTest(GCSInputTestBase):
 
     for data_set in all_data:
       for record in data_set:
-        self.assertEqual(record, reader.next())
-    self.assertRaises(StopIteration, reader.next)
+        self.assertEqual(record, next(reader))
+    self.assertRaises(StopIteration, reader.__next__)
 
   def testSerialization(self):
     filenames = []
@@ -531,17 +531,17 @@ class GCSRecordInputReaderTest(GCSInputTestBase):
 
     for data_set in all_data:
       for record in data_set:
-        self.assertEqual(record, reader.next())
+        self.assertEqual(record, next(reader))
         # Serialize after each read
         reader = self.READER_CLS.from_json_str(reader.to_json_str())
         reader.begin_slice(self.slice_ctx)
 
-    self.assertRaises(StopIteration, reader.next)
+    self.assertRaises(StopIteration, reader.__next__)
 
     # Serialize after StopIteration reached
     reader = self.READER_CLS.from_json_str(reader.to_json_str())
     reader.begin_slice(self.slice_ctx)
-    self.assertRaises(StopIteration, reader.next)
+    self.assertRaises(StopIteration, reader.__next__)
 
   def testCounters(self):
     filenames = []
@@ -565,8 +565,8 @@ class GCSRecordInputReaderTest(GCSInputTestBase):
 
     for data_set in all_data:
       for record in data_set:
-        self.assertEqual(record, reader.next())
-    self.assertRaises(StopIteration, reader.next)
+        self.assertEqual(record, next(reader))
+    self.assertRaises(StopIteration, reader.__next__)
 
     # Check counters.
     # Check for 10 files each with 10 records each 30 chars long.

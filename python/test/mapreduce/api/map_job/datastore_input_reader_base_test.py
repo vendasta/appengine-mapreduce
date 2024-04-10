@@ -25,11 +25,8 @@ class SkipTestsMeta(type):
       cls.__unittest_skip_why__ = None
 
 
-class DatastoreInputReaderBaseTest(unittest.TestCase):
+class DatastoreInputReaderBaseTest(unittest.TestCase, metaclass=SkipTestsMeta):
   """Base test class used by concrete DatastoreInputReaders."""
-
-  # Enable the meta class to skip all tests.
-  __metaclass__ = SkipTestsMeta
 
   TEST_JOB_NAME = "TestJobHandlerName"
 
@@ -66,13 +63,13 @@ class DatastoreInputReaderBaseTest(unittest.TestCase):
     results = []
     while True:
       try:
-        results.append(self._get_keyname(iter(itr).next()))
+        results.append(self._get_keyname(next(iter(itr))))
         itr = itr.__class__.from_json(itr.to_json())
       except StopIteration:
         break
     results.sort()
     keys.sort()
-    self.assertEquals(keys, results)
+    self.assertEqual(keys, results)
 
   # Subclass should override with its own assert equals.
   def _assertEqualsForAllShards_splitInput(self, keys, max_read, *itrs):
@@ -92,7 +89,7 @@ class DatastoreInputReaderBaseTest(unittest.TestCase):
     for itr in itrs:
       while True:
         try:
-          results.append(self._get_keyname(iter(itr).next()))
+          results.append(self._get_keyname(next(iter(itr))))
           itr = itr.__class__.from_json(itr.to_json())
           if max_read is not None and len(results) > max_read:
             self.fail("Too many results found")
@@ -100,7 +97,7 @@ class DatastoreInputReaderBaseTest(unittest.TestCase):
           break
     results.sort()
     keys.sort()
-    self.assertEquals(keys, results)
+    self.assertEqual(keys, results)
 
   def setUp(self):
     self.testbed = testbed.Testbed()
@@ -124,7 +121,7 @@ class DatastoreInputReaderBaseTest(unittest.TestCase):
     self.testbed.deactivate()
 
   def testSplitInput_withNs(self):
-    self._create_entities(range(3), {"1": 1}, "f")
+    self._create_entities(list(range(3)), {"1": 1}, "f")
     params = {
         "entity_kind": self.entity_kind,
         "namespace": "f",
@@ -136,11 +133,11 @@ class DatastoreInputReaderBaseTest(unittest.TestCase):
         input_reader_params=params,
         shard_count=2)
     results = self.reader_cls.split_input(conf)
-    self.assertEquals(2, len(results))
+    self.assertEqual(2, len(results))
     self._assertEqualsForAllShards_splitInput(["0", "1", "2"], None, *results)
 
   def testSplitInput_withNs_moreShardThanScatter(self):
-    self._create_entities(range(3), {"1": 1}, "f")
+    self._create_entities(list(range(3)), {"1": 1}, "f")
     params = {
         "entity_kind": self.entity_kind,
         "namespace": "f",
@@ -166,11 +163,11 @@ class DatastoreInputReaderBaseTest(unittest.TestCase):
         input_reader_params=params,
         shard_count=1)
     results = self.reader_cls.split_input(conf)
-    self.assertEquals(None, results)
+    self.assertEqual(None, results)
 
   def testSplitInput_moreThanOneNS(self):
-    self._create_entities(range(3), {"1": 1}, "1")
-    self._create_entities(range(10, 13), {"11": 11}, "2")
+    self._create_entities(list(range(3)), {"1": 1}, "1")
+    self._create_entities(list(range(10, 13)), {"11": 11}, "2")
     params = {
         "entity_kind": self.entity_kind,
         }
@@ -186,8 +183,8 @@ class DatastoreInputReaderBaseTest(unittest.TestCase):
         ["0", "1", "2", "10", "11", "12"], None, *results)
 
   def testSplitInput_moreThanOneUnevenNS(self):
-    self._create_entities(range(5), {"1": 1, "3": 3}, "1")
-    self._create_entities(range(10, 13), {"11": 11}, "2")
+    self._create_entities(list(range(5)), {"1": 1, "3": 3}, "1")
+    self._create_entities(list(range(10, 13)), {"11": 11}, "2")
     params = {
         "entity_kind": self.entity_kind,
         }
@@ -203,9 +200,9 @@ class DatastoreInputReaderBaseTest(unittest.TestCase):
         ["0", "1", "2", "3", "4", "10", "11", "12"], None, *results)
 
   def testSplitInput_lotsOfNS(self):
-    self._create_entities(range(3), {"1": 1}, "9")
-    self._create_entities(range(3, 6), {"4": 4}, "_")
-    self._create_entities(range(6, 9), {"7": 7}, "a")
+    self._create_entities(list(range(3)), {"1": 1}, "9")
+    self._create_entities(list(range(3, 6)), {"4": 4}, "_")
+    self._create_entities(list(range(6, 9)), {"7": 7}, "a")
     params = {
         "entity_kind": self.entity_kind,
         }
@@ -216,7 +213,7 @@ class DatastoreInputReaderBaseTest(unittest.TestCase):
         input_reader_params=params,
         shard_count=3)
     results = self.reader_cls.split_input(conf)
-    self.assertEquals(3, len(results))
+    self.assertEqual(3, len(results))
     self._assertEquals_splitInput(results[0], ["0", "1", "2"])
     self._assertEquals_splitInput(results[1], ["3", "4", "5"])
     self._assertEquals_splitInput(results[2], ["6", "7", "8"])

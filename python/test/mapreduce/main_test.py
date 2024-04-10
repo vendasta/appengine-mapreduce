@@ -49,7 +49,7 @@ class MainTest(unittest.TestCase):
 
   def staticMatchesExtensions(self, basepath, extensions):
     """Iterates over extensions to assert whether or not regex should match."""
-    for ext, should_match in extensions.iteritems():
+    for ext, should_match in extensions.items():
       if should_match:
         self.assertMatches(basepath+ext, main.STATIC_RE)
       else:

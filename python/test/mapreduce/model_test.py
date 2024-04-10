@@ -24,7 +24,7 @@ import datetime
 import os
 import types
 import unittest
-import urlparse
+import urllib.parse
 
 from google.appengine.ext import db
 from google.appengine.ext import testbed
@@ -111,7 +111,7 @@ class MapperSpecTest(unittest.TestCase):
         self.TEST_READER,
         {"entity_kind": self.ENTITY_KIND},
         8)
-    self.assertEquals(self.default_json,
+    self.assertEqual(self.default_json,
                       mapper_spec.to_json())
 
     mapper_spec = model.MapperSpec(
@@ -122,24 +122,24 @@ class MapperSpecTest(unittest.TestCase):
         output_writer_spec=self.TEST_WRITER)
     d = dict(self.default_json)
     d["mapper_output_writer"] = self.TEST_WRITER
-    self.assertEquals(d, mapper_spec.to_json())
+    self.assertEqual(d, mapper_spec.to_json())
 
   def testFromJson(self):
     ms = model.MapperSpec.from_json(self.default_json)
-    self.assertEquals(self.TEST_READER, ms.input_reader_spec)
-    self.assertEquals(TestReader, ms.input_reader_class())
-    self.assertEquals(self.default_json["mapper_input_reader"],
+    self.assertEqual(self.TEST_READER, ms.input_reader_spec)
+    self.assertEqual(TestReader, ms.input_reader_class())
+    self.assertEqual(self.default_json["mapper_input_reader"],
                       ms.input_reader_spec)
-    self.assertEquals(self.TEST_HANDLER, ms.handler_spec)
+    self.assertEqual(self.TEST_HANDLER, ms.handler_spec)
     self.assertTrue(isinstance(ms.get_handler(), TestHandler))
     self.assertTrue(isinstance(ms.handler, TestHandler))
-    self.assertEquals(8, ms.shard_count)
+    self.assertEqual(8, ms.shard_count)
 
     d = dict(self.default_json)
     d["mapper_output_writer"] = self.TEST_WRITER
     ms = model.MapperSpec.from_json(d)
-    self.assertEquals(self.TEST_WRITER, ms.output_writer_spec)
-    self.assertEquals(TestWriter, ms.output_writer_class())
+    self.assertEqual(self.TEST_WRITER, ms.output_writer_spec)
+    self.assertEqual(TestWriter, ms.output_writer_class())
 
   def specForHandler(self, handler_spec):
     self.default_json["mapper_handler_spec"] = handler_spec
@@ -156,7 +156,7 @@ class MapperSpecTest(unittest.TestCase):
     """Test instance method as handler spec."""
     mapper_spec = self.specForHandler(
         __name__ + "." + TestHandler.__name__ + ".process")
-    self.assertEquals(types.MethodType,
+    self.assertEqual(types.MethodType,
                       type(mapper_spec.handler))
     # call it
     mapper_spec.handler(0)
@@ -165,7 +165,7 @@ class MapperSpecTest(unittest.TestCase):
     """Test function name as handler spec."""
     mapper_spec = self.specForHandler(
         __name__ + "." + test_handler_function.__name__)
-    self.assertEquals(types.FunctionType,
+    self.assertEqual(types.FunctionType,
                       type(mapper_spec.handler))
     # call it
     mapper_spec.handler(0)
@@ -197,7 +197,7 @@ class MapreduceSpecTest(unittest.TestCase):
                                          mapper_spec_dict,
                                          {"extra": "value"},
                                          __name__+"."+TestHooks.__name__)
-    self.assertEquals(
+    self.assertEqual(
         {"name": "my job",
          "mapreduce_id": "mr0",
          "mapper_spec": mapper_spec_dict,
@@ -218,12 +218,12 @@ class MapreduceSpecTest(unittest.TestCase):
          "name": "my job",
         })
 
-    self.assertEquals("my job", mapreduce_spec.name)
-    self.assertEquals("mr0", mapreduce_spec.mapreduce_id)
-    self.assertEquals(mapper_spec_dict, mapreduce_spec.mapper.to_json())
-    self.assertEquals("TestHandler", mapreduce_spec.mapper.handler_spec)
-    self.assertEquals(None, mapreduce_spec.params)
-    self.assertEquals(None, mapreduce_spec.hooks_class_name)
+    self.assertEqual("my job", mapreduce_spec.name)
+    self.assertEqual("mr0", mapreduce_spec.mapreduce_id)
+    self.assertEqual(mapper_spec_dict, mapreduce_spec.mapper.to_json())
+    self.assertEqual("TestHandler", mapreduce_spec.mapper.handler_spec)
+    self.assertEqual(None, mapreduce_spec.params)
+    self.assertEqual(None, mapreduce_spec.hooks_class_name)
 
   def testFromJsonWithOptionalArgs(self):
     """Test from_json method with params and hooks_class_name present."""
@@ -239,14 +239,14 @@ class MapreduceSpecTest(unittest.TestCase):
          "hooks_class_name": __name__+"."+TestHooks.__name__
         })
 
-    self.assertEquals("my job", mapreduce_spec.name)
-    self.assertEquals("mr0", mapreduce_spec.mapreduce_id)
-    self.assertEquals(mapper_spec_dict, mapreduce_spec.mapper.to_json())
-    self.assertEquals("TestHandler", mapreduce_spec.mapper.handler_spec)
-    self.assertEquals({"extra": "value"}, mapreduce_spec.params)
-    self.assertEquals(__name__+"."+TestHooks.__name__,
+    self.assertEqual("my job", mapreduce_spec.name)
+    self.assertEqual("mr0", mapreduce_spec.mapreduce_id)
+    self.assertEqual(mapper_spec_dict, mapreduce_spec.mapper.to_json())
+    self.assertEqual("TestHandler", mapreduce_spec.mapper.handler_spec)
+    self.assertEqual({"extra": "value"}, mapreduce_spec.params)
+    self.assertEqual(__name__+"."+TestHooks.__name__,
                       mapreduce_spec.hooks_class_name)
-    self.assertEquals(mapreduce_spec, mapreduce_spec.get_hooks().mapreduce_spec)
+    self.assertEqual(mapreduce_spec, mapreduce_spec.get_hooks().mapreduce_spec)
 
 
 class MapreduceStateTest(unittest.TestCase):
@@ -258,16 +258,16 @@ class MapreduceStateTest(unittest.TestCase):
     mapreduce_state.set_processed_counts([1, 2], ['running', 'running'])
     self.assertTrue(mapreduce_state.chart_url.startswith(
         "https://www.google.com/chart?"))
-    self.assertEquals(
-        {u"cht": [u"bvs"],
-         u"chs": [u"300x200"],
-         u"chxr": [u"0,0,2.1"],
-         u"chxt": [u"y,x"],
-         u"chd": [u"s:AA,AA,d6,AA,AA"],
-         u"chbh": [u"a"],
-         u"chxl": [u"0:|0|2|1:|0|1"],
-         u"chco": [u'404040,00ac42,3636a9,e29e24,f6350f']},
-        urlparse.parse_qs(urlparse.urlparse(mapreduce_state.chart_url).query))
+    self.assertEqual(
+        {"cht": ["bvs"],
+         "chs": ["300x200"],
+         "chxr": ["0,0,2.1"],
+         "chxt": ["y,x"],
+         "chd": ["s:AA,AA,d6,AA,AA"],
+         "chbh": ["a"],
+         "chxl": ["0:|0|2|1:|0|1"],
+         "chco": ['404040,00ac42,3636a9,e29e24,f6350f']},
+        urllib.parse.parse_qs(urllib.parse.urlparse(mapreduce_state.chart_url).query))
 
 
 class ShardStateTest(unittest.TestCase):
@@ -286,7 +286,7 @@ class ShardStateTest(unittest.TestCase):
   def testAccessors(self):
     """Tests simple accessors."""
     shard = model.ShardState.create_new("my-map-job1", 14)
-    self.assertEquals(14, shard.shard_number)
+    self.assertEqual(14, shard.shard_number)
 
   def testCopyFrom(self):
     """Test copy_from method."""
@@ -301,13 +301,13 @@ class ShardStateTest(unittest.TestCase):
 
     another_state = model.ShardState.create_new("my-map-job1", 14)
     another_state.copy_from(state)
-    self.assertEquals(state.active, another_state.active)
-    self.assertEquals(state.counters_map, another_state.counters_map)
-    self.assertEquals(state.result_status, another_state.result_status)
-    self.assertEquals(state.mapreduce_id, another_state.mapreduce_id)
-    self.assertEquals(state.update_time, another_state.update_time)
-    self.assertEquals(state.shard_description, another_state.shard_description)
-    self.assertEquals(state.last_work_item, another_state.last_work_item)
+    self.assertEqual(state.active, another_state.active)
+    self.assertEqual(state.counters_map, another_state.counters_map)
+    self.assertEqual(state.result_status, another_state.result_status)
+    self.assertEqual(state.mapreduce_id, another_state.mapreduce_id)
+    self.assertEqual(state.update_time, another_state.update_time)
+    self.assertEqual(state.shard_description, another_state.shard_description)
+    self.assertEqual(state.last_work_item, another_state.last_work_item)
 
   def testFindAllByMapreduceState(self):
     mr_state = model.MapreduceState.create_new("mapreduce-id")
@@ -337,11 +337,11 @@ class CountersMapTest(unittest.TestCase):
     """Test increment_counter method."""
     countres_map = model.CountersMap()
 
-    self.assertEquals(0, countres_map.get("counter1"))
-    self.assertEquals(10, countres_map.increment("counter1", 10))
-    self.assertEquals(10, countres_map.get("counter1"))
-    self.assertEquals(20, countres_map.increment("counter1", 10))
-    self.assertEquals(20, countres_map.get("counter1"))
+    self.assertEqual(0, countres_map.get("counter1"))
+    self.assertEqual(10, countres_map.increment("counter1", 10))
+    self.assertEqual(10, countres_map.get("counter1"))
+    self.assertEqual(20, countres_map.increment("counter1", 10))
+    self.assertEqual(20, countres_map.get("counter1"))
 
   def testAddSubMap(self):
     """Test add_map and sub_map methods."""
@@ -355,15 +355,15 @@ class CountersMapTest(unittest.TestCase):
 
     map1.add_map(map2)
 
-    self.assertEquals(5, map1.get("1"))
-    self.assertEquals(15, map1.get("2"))
-    self.assertEquals(11, map1.get("3"))
+    self.assertEqual(5, map1.get("1"))
+    self.assertEqual(15, map1.get("2"))
+    self.assertEqual(11, map1.get("3"))
 
     map1.sub_map(map2)
 
-    self.assertEquals(5, map1.get("1"))
-    self.assertEquals(7, map1.get("2"))
-    self.assertEquals(0, map1.get("3"))
+    self.assertEqual(5, map1.get("1"))
+    self.assertEqual(7, map1.get("2"))
+    self.assertEqual(0, map1.get("3"))
 
   def testToJson(self):
     """Test to_json method."""
@@ -371,7 +371,7 @@ class CountersMapTest(unittest.TestCase):
     counters_map.increment("1", 5)
     counters_map.increment("2", 7)
 
-    self.assertEquals({"counters": {"1": 5, "2": 7}}, counters_map.to_json())
+    self.assertEqual({"counters": {"1": 5, "2": 7}}, counters_map.to_json())
 
   def testFromJson(self):
     """Test from_json method."""
@@ -381,8 +381,8 @@ class CountersMapTest(unittest.TestCase):
 
     counters_map = model.CountersMap.from_json(counters_map.to_json())
 
-    self.assertEquals(5, counters_map.get("1"))
-    self.assertEquals(7, counters_map.get("2"))
+    self.assertEqual(5, counters_map.get("1"))
+    self.assertEqual(7, counters_map.get("2"))
 
   def testClear(self):
     """Test clear method."""
@@ -390,7 +390,7 @@ class CountersMapTest(unittest.TestCase):
     counters_map.increment("1", 5)
     counters_map.clear()
 
-    self.assertEquals(0, counters_map.get("1"))
+    self.assertEqual(0, counters_map.get("1"))
 
 
 if __name__ == "__main__":

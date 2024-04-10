@@ -51,7 +51,7 @@ class DatastoreInputReaderTest(datastore_input_reader_base_test
                       conf)
 
   def testEntityKindWithDot(self):
-    self._create_entities(range(3), {"1": 1}, "", testutil.TestEntityWithDot)
+    self._create_entities(list(range(3)), {"1": 1}, "", testutil.TestEntityWithDot)
 
     params = {
         "entity_kind": testutil.TestEntityWithDot.kind(),
@@ -64,7 +64,7 @@ class DatastoreInputReaderTest(datastore_input_reader_base_test
         input_reader_params=params,
         shard_count=2)
     results = conf.input_reader_cls.split_input(conf)
-    self.assertEquals(2, len(results))
+    self.assertEqual(2, len(results))
     self._assertEqualsForAllShards_splitInput(["0", "1", "2"], None, *results)
 
   def testRawEntityTypeFromOtherApp(self):

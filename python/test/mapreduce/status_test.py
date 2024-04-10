@@ -53,7 +53,7 @@ class MapreduceYamlTest(unittest.TestCase):
 
   def set_up_directory_tree(self, dir_tree_contents):
     """Create directory tree from dict of path:contents entries."""
-    for full_path, contents in dir_tree_contents.iteritems():
+    for full_path, contents in dir_tree_contents.items():
       dir_name = os.path.dirname(full_path)
       if not os.path.isdir(dir_name):
         os.makedirs(dir_name)
@@ -126,24 +126,24 @@ class MapreduceYamlTest(unittest.TestCase):
         "    input_reader: Reader2\n")
 
     self.assertTrue(mr_yaml)
-    self.assertEquals(2, len(mr_yaml.mapreduce))
+    self.assertEqual(2, len(mr_yaml.mapreduce))
 
-    self.assertEquals("Mapreduce1", mr_yaml.mapreduce[0].name)
-    self.assertEquals("Handler1", mr_yaml.mapreduce[0].mapper.handler)
-    self.assertEquals("Reader1", mr_yaml.mapreduce[0].mapper.input_reader)
-    self.assertEquals("Validator1",
+    self.assertEqual("Mapreduce1", mr_yaml.mapreduce[0].name)
+    self.assertEqual("Handler1", mr_yaml.mapreduce[0].mapper.handler)
+    self.assertEqual("Reader1", mr_yaml.mapreduce[0].mapper.input_reader)
+    self.assertEqual("Validator1",
                       mr_yaml.mapreduce[0].mapper.params_validator)
-    self.assertEquals(3, len(mr_yaml.mapreduce[0].mapper.params))
-    self.assertEquals("entity_kind", mr_yaml.mapreduce[0].mapper.params[0].name)
-    self.assertEquals("Kind1", mr_yaml.mapreduce[0].mapper.params[0].default)
-    self.assertEquals("human_supplied1",
+    self.assertEqual(3, len(mr_yaml.mapreduce[0].mapper.params))
+    self.assertEqual("entity_kind", mr_yaml.mapreduce[0].mapper.params[0].name)
+    self.assertEqual("Kind1", mr_yaml.mapreduce[0].mapper.params[0].default)
+    self.assertEqual("human_supplied1",
                       mr_yaml.mapreduce[0].mapper.params[1].name)
-    self.assertEquals("human_supplied2",
+    self.assertEqual("human_supplied2",
                       mr_yaml.mapreduce[0].mapper.params[2].name)
 
-    self.assertEquals("Mapreduce2", mr_yaml.mapreduce[1].name)
-    self.assertEquals("Handler2", mr_yaml.mapreduce[1].mapper.handler)
-    self.assertEquals("Reader2", mr_yaml.mapreduce[1].mapper.input_reader)
+    self.assertEqual("Mapreduce2", mr_yaml.mapreduce[1].name)
+    self.assertEqual("Handler2", mr_yaml.mapreduce[1].mapper.handler)
+    self.assertEqual("Reader2", mr_yaml.mapreduce[1].mapper.input_reader)
 
   def testParseOutputWriter(self):
     """Parsing a single document in mapreduce.yaml with output writer."""
@@ -157,12 +157,12 @@ class MapreduceYamlTest(unittest.TestCase):
         )
 
     self.assertTrue(mr_yaml)
-    self.assertEquals(1, len(mr_yaml.mapreduce))
+    self.assertEqual(1, len(mr_yaml.mapreduce))
 
-    self.assertEquals("Mapreduce1", mr_yaml.mapreduce[0].name)
-    self.assertEquals("Handler1", mr_yaml.mapreduce[0].mapper.handler)
-    self.assertEquals("Reader1", mr_yaml.mapreduce[0].mapper.input_reader)
-    self.assertEquals("Writer1", mr_yaml.mapreduce[0].mapper.output_writer)
+    self.assertEqual("Mapreduce1", mr_yaml.mapreduce[0].name)
+    self.assertEqual("Handler1", mr_yaml.mapreduce[0].mapper.handler)
+    self.assertEqual("Reader1", mr_yaml.mapreduce[0].mapper.input_reader)
+    self.assertEqual("Writer1", mr_yaml.mapreduce[0].mapper.output_writer)
 
   def testParseMissingRequiredAttrs(self):
     """Test parsing with missing required attributes."""
@@ -235,7 +235,7 @@ class MapreduceYamlTest(unittest.TestCase):
         "    handler: Handler2\n"
         "    input_reader: Reader2\n")
     all_configs = status.MapReduceYaml.to_dict(mr_yaml)
-    self.assertEquals(
+    self.assertEqual(
         [
           {
             'name': 'Mapreduce1',
@@ -265,7 +265,7 @@ class MapreduceYamlTest(unittest.TestCase):
         "    output_writer: Writer1\n"
         )
     all_configs = status.MapReduceYaml.to_dict(mr_yaml)
-    self.assertEquals(
+    self.assertEqual(
         [
           {
             'name': 'Mapreduce1',
@@ -292,26 +292,26 @@ class ResourceTest(testutil.HandlerTestBase):
     self.handler.get("status")
     self.assertTrue(self.handler.response.out.getvalue().startswith(
                         "<!DOCTYPE html>"))
-    self.assertEquals("text/html",
+    self.assertEqual("text/html",
                       self.handler.response.headers["Content-Type"])
 
     self.handler.response.out.truncate(0)
     self.handler.get("jquery.js")
     self.assertTrue(self.handler.response.out.getvalue().startswith(
                         "/*!"))
-    self.assertEquals("text/javascript",
+    self.assertEqual("text/javascript",
                       self.handler.response.headers["Content-Type"])
 
   def testCachingHeaders(self):
     """Tests that caching headers are correct."""
     self.handler.get("status")
-    self.assertEquals("public; max-age=300",
+    self.assertEqual("public; max-age=300",
                       self.handler.response.headers["Cache-Control"])
 
   def testMissing(self):
     """Tests when a resource is requested that doesn't exist."""
     self.handler.get("unknown")
-    self.assertEquals(404, self.handler.response.status)
+    self.assertEqual(404, self.handler.response.status)
 
 
 class ListConfigsTest(testutil.HandlerTestBase):
@@ -330,7 +330,7 @@ class ListConfigsTest(testutil.HandlerTestBase):
     """Test that we check the X-Requested-With header."""
     del self.handler.request.headers["X-Requested-With"]
     self.handler.get()
-    self.assertEquals(403, self.handler.response.status)
+    self.assertEqual(403, self.handler.response.status)
 
   def testBasic(self):
     """Tests listing available configs."""
@@ -360,24 +360,24 @@ class ListConfigsTest(testutil.HandlerTestBase):
     finally:
       status.get_mapreduce_yaml = old_get_yaml
 
-    self.assertEquals(
-        {u'configs': [
-          {u'mapper_params_validator': u'Validator1',
-           u'mapper_params': {
-              u'entity_kind': u'Kind1',
-              u'human_supplied2': None,
-              u'human_supplied1': None},
-            u'mapper_input_reader': u'Reader1',
-            u'mapper_handler': u'Handler1',
-            u'name': u'Mapreduce1'},
-          {u'mapper_input_reader': u'Reader2',
-           u'mapper_handler': u'Handler2',
-           u'name': u'Mapreduce2',
-           u'params': {
-               u'foo': u'bar',},
+    self.assertEqual(
+        {'configs': [
+          {'mapper_params_validator': 'Validator1',
+           'mapper_params': {
+              'entity_kind': 'Kind1',
+              'human_supplied2': None,
+              'human_supplied1': None},
+            'mapper_input_reader': 'Reader1',
+            'mapper_handler': 'Handler1',
+            'name': 'Mapreduce1'},
+          {'mapper_input_reader': 'Reader2',
+           'mapper_handler': 'Handler2',
+           'name': 'Mapreduce2',
+           'params': {
+               'foo': 'bar',},
            }]},
         json.loads(self.handler.response.out.getvalue()))
-    self.assertEquals("text/javascript",
+    self.assertEqual("text/javascript",
                       self.handler.response.headers["Content-Type"])
 
 
@@ -411,11 +411,11 @@ class ListJobsTest(testutil.HandlerTestBase):
 
     del self.start.request.headers["X-Requested-With"]
     self.start.post()
-    self.assertEquals(403, self.start.response.status)
+    self.assertEqual(403, self.start.response.status)
 
     del self.handler.request.headers["X-Requested-With"]
     self.handler.get()
-    self.assertEquals(403, self.handler.response.status)
+    self.assertEqual(403, self.handler.response.status)
 
   def testBasic(self):
     """Tests when there are fewer than the max results to render."""
@@ -442,13 +442,13 @@ class ListJobsTest(testutil.HandlerTestBase):
         "start_timestamp_ms",
         "updated_timestamp_ms",
         ])
-    self.assertEquals(3, len(result["jobs"]))
-    self.assertEquals("my job 3", result["jobs"][0]["name"])
-    self.assertEquals("my job 2", result["jobs"][1]["name"])
-    self.assertEquals("my job 1", result["jobs"][2]["name"])
-    self.assertEquals(expected_args, set(result["jobs"][0].keys()))
-    self.assertEquals(expected_args, set(result["jobs"][1].keys()))
-    self.assertEquals(expected_args, set(result["jobs"][2].keys()))
+    self.assertEqual(3, len(result["jobs"]))
+    self.assertEqual("my job 3", result["jobs"][0]["name"])
+    self.assertEqual("my job 2", result["jobs"][1]["name"])
+    self.assertEqual("my job 1", result["jobs"][2]["name"])
+    self.assertEqual(expected_args, set(result["jobs"][0].keys()))
+    self.assertEqual(expected_args, set(result["jobs"][1].keys()))
+    self.assertEqual(expected_args, set(result["jobs"][2].keys()))
 
   def testCursor(self):
     """Tests when a job cursor is present."""
@@ -462,7 +462,7 @@ class ListJobsTest(testutil.HandlerTestBase):
     self.handler.request.set("count", "1")
     self.handler.get()
     result = json.loads(self.handler.response.out.getvalue())
-    self.assertEquals(1, len(result["jobs"]))
+    self.assertEqual(1, len(result["jobs"]))
     self.assertTrue("cursor" in result)
 
     self.handler.response.out.truncate(0)
@@ -470,14 +470,14 @@ class ListJobsTest(testutil.HandlerTestBase):
     self.handler.request.set("cursor", result['cursor'])
     self.handler.get()
     result2 = json.loads(self.handler.response.out.getvalue())
-    self.assertEquals(1, len(result2["jobs"]))
+    self.assertEqual(1, len(result2["jobs"]))
     self.assertFalse("cursor" in result2)
 
   def testNoJobs(self):
     """Tests when there are no jobs."""
     self.handler.get()
     result = json.loads(self.handler.response.out.getvalue())
-    self.assertEquals({'jobs': []}, result)
+    self.assertEqual({'jobs': []}, result)
 
 
 class GetJobDetailTest(testutil.HandlerTestBase):
@@ -521,7 +521,7 @@ class GetJobDetailTest(testutil.HandlerTestBase):
     """Test that we check the X-Requested-With header."""
     del self.handler.request.headers["X-Requested-With"]
     self.handler.get()
-    self.assertEquals(403, self.handler.response.status)
+    self.assertEqual(403, self.handler.response.status)
 
   def testBasic(self):
     """Tests getting the job details."""
@@ -539,9 +539,9 @@ class GetJobDetailTest(testutil.HandlerTestBase):
         "shard_description", "shard_id", "shard_number",
         "updated_timestamp_ms"])
 
-    self.assertEquals(expected_keys, set(result.keys()))
-    self.assertEquals(8, len(result["shards"]))
-    self.assertEquals(expected_shard_keys, set(result["shards"][0].keys()))
+    self.assertEqual(expected_keys, set(result.keys()))
+    self.assertEqual(8, len(result["shards"]))
+    self.assertEqual(expected_shard_keys, set(result["shards"][0].keys()))
 
   def testBeforeKickOff(self):
     """Tests getting the job details."""
@@ -554,14 +554,14 @@ class GetJobDetailTest(testutil.HandlerTestBase):
         "name", "result_status", "shards", "start_timestamp_ms",
         "updated_timestamp_ms", "params", "hooks_class_name", "chart_width"])
 
-    self.assertEquals(expected_keys, set(result.keys()))
+    self.assertEqual(expected_keys, set(result.keys()))
 
   def testBadJobId(self):
     """Tests when an invalid job ID is supplied."""
     self.handler.request.set("mapreduce_id", "does not exist")
     self.handler.get()
     result = json.loads(self.handler.response.out.getvalue())
-    self.assertEquals(
+    self.assertEqual(
         {"error_message": "\"Could not find job with ID 'does not exist'\"",
          "error_class": "KeyError"},
         result)

@@ -67,12 +67,12 @@ class HashEndToEndTest(testutil.HandlerTestBase):
             output_data.append((proto.key(), proto.value()))
 
     output_data.sort()
-    self.assertEquals(300, len(output_data))
+    self.assertEqual(300, len(output_data))
     for i in range(len(input_data)):
-      self.assertEquals(input_data[i], output_data[(3 * i)])
-      self.assertEquals(input_data[i], output_data[(3 * i) + 1])
-      self.assertEquals(input_data[i], output_data[(3 * i) + 2])
-    self.assertEquals(1, len(self.emails))
+      self.assertEqual(input_data[i], output_data[(3 * i)])
+      self.assertEqual(input_data[i], output_data[(3 * i) + 1])
+      self.assertEqual(input_data[i], output_data[(3 * i) + 2])
+    self.assertEqual(1, len(self.emails))
 
 
 class SortFileEndToEndTest(testutil.HandlerTestBase):
@@ -120,8 +120,8 @@ class SortFileEndToEndTest(testutil.HandlerTestBase):
           proto.ParseFromString(binary_record)
           output_data.append((proto.key(), proto.value()))
 
-    self.assertEquals(input_data, output_data)
-    self.assertEquals(1, len(self.emails))
+    self.assertEqual(input_data, output_data)
+    self.assertEqual(1, len(self.emails))
 
 
 # pylint: disable=invalid-name
@@ -207,8 +207,8 @@ class MergingReaderEndToEndTest(testutil.HandlerTestBase):
 
     expected_data = [
         str((k, [v, v, v], False)) for (k, v) in input_data]
-    self.assertEquals(expected_data, output_data)
-    self.assertEquals(1, len(self.emails))
+    self.assertEqual(expected_data, output_data)
+    self.assertEqual(1, len(self.emails))
 
   def testPartialRecords(self):
     """Test merging into partial key values."""
@@ -255,10 +255,10 @@ class MergingReaderEndToEndTest(testutil.HandlerTestBase):
           ("3", ["c"], True),
           ("3", ["c"], False),
           ]
-      self.assertEquals([str(e) for e in expected_data], output_data)
+      self.assertEqual([str(e) for e in expected_data], output_data)
     finally:
       shuffler._MergePipeline._MAX_VALUES_COUNT = self._prev_max_values_count
-    self.assertEquals(1, len(self.emails))
+    self.assertEqual(1, len(self.emails))
 
 
 class ShuffleEndToEndTest(testutil.HandlerTestBase):
@@ -290,7 +290,7 @@ class ShuffleEndToEndTest(testutil.HandlerTestBase):
     p = shuffler.ShufflePipeline.from_id(p.pipeline_id)
     for filename in p.outputs.default.value:
       self.assertEqual(0, cloudstorage.stat(filename).st_size)
-    self.assertEquals(1, len(self.emails))
+    self.assertEqual(1, len(self.emails))
 
   def testShuffleNoFile(self):
     bucket_name = "testbucket"
@@ -301,7 +301,7 @@ class ShuffleEndToEndTest(testutil.HandlerTestBase):
     p = shuffler.ShufflePipeline.from_id(p.pipeline_id)
     for filename in p.outputs.default.value:
       self.assertEqual(0, cloudstorage.stat(filename).st_size)
-    self.assertEquals(1, len(self.emails))
+    self.assertEqual(1, len(self.emails))
 
   def testShuffleFiles(self):
     """Test shuffling multiple files."""
@@ -338,8 +338,8 @@ class ShuffleEndToEndTest(testutil.HandlerTestBase):
 
     expected_data = sorted([
         (str(k), [str(v), str(v), str(v)]) for (k, v) in input_data])
-    self.assertEquals(expected_data, output_data)
-    self.assertEquals(1, len(self.emails))
+    self.assertEqual(expected_data, output_data)
+    self.assertEqual(1, len(self.emails))
 
 
 if __name__ == "__main__":

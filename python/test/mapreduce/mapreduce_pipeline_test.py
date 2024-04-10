@@ -91,7 +91,7 @@ class MapreducePipelineTest(testutil.HandlerTestBase):
       # Add some random data.
       entity_count = 200
 
-      print dir(pipeline.pipeline)
+      print(dir(pipeline.pipeline))
 
       for i in range(entity_count):
         TestEntity(data=str(i)).put()
@@ -153,7 +153,7 @@ class MapreducePipelineTest(testutil.HandlerTestBase):
     p.start()
     test_support.execute_until_empty(self.taskqueue)
 
-    self.assertEquals(1, len(self.emails))
+    self.assertEqual(1, len(self.emails))
     self.assertTrue(self.emails[0][1].startswith(
         "Pipeline successful:"))
 
@@ -171,7 +171,7 @@ class MapreducePipelineTest(testutil.HandlerTestBase):
         str((str(d), ["", ""])) for d in range(entity_count)]
     expected_data.sort()
     output_data.sort()
-    self.assertEquals(expected_data, output_data)
+    self.assertEqual(expected_data, output_data)
 
     # Verify that mapreduce doesn't leave intermediate files behind.
     temp_file_stats = cloudstorage.listbucket("/" + bucket_name)
@@ -213,7 +213,7 @@ class MapreducePipelineTest(testutil.HandlerTestBase):
     p.start()
     test_support.execute_until_empty(self.taskqueue)
 
-    self.assertEquals(1, len(self.emails))
+    self.assertEqual(1, len(self.emails))
     self.assertTrue(self.emails[0][1].startswith(
         "Pipeline successful:"))
 
@@ -231,12 +231,12 @@ class MapreducePipelineTest(testutil.HandlerTestBase):
           output_data.append(record)
 
     # Assert file names also suggest the right number of retries.
-    self.assertEquals(44, retries)
+    self.assertEqual(44, retries)
     expected_data = [
         str((str(d), ["", ""])) for d in range(entity_count)]
     expected_data.sort()
     output_data.sort()
-    self.assertEquals(expected_data, output_data)
+    self.assertEqual(expected_data, output_data)
 
 
 if __name__ == "__main__":

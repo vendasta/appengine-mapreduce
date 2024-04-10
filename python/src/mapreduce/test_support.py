@@ -24,9 +24,7 @@ import logging
 import os
 import re
 
-from mapreduce import main
 from mapreduce import model
-from google.appengine.ext.webapp import mock_webapp
 
 # TODO(user): Add tests for this file.
 

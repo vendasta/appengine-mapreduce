@@ -6,13 +6,16 @@
 
 # Using opensource naming conventions, pylint: disable=g-bad-name
 
+import os
+import sys
 import unittest
 
-
 import pipeline
-import cloudstorage
 from google.appengine.ext import db
-# pylint: disable=g-direct-third-party-import
+
+# Fix up paths for running tests.
+sys.path.append(os.path.join(os.path.dirname(__file__), "../../src"))
+
 from mapreduce import input_readers
 from mapreduce import mapreduce_pipeline
 from mapreduce import operation
@@ -107,7 +110,7 @@ class CombinerTest(testutil.HandlerTestBase):
     test_support.execute_until_empty(self.taskqueue)
 
     p = mapreduce_pipeline.MapreducePipeline.from_id(p.pipeline_id)
-    self.assertEquals(4, len(p.outputs.default.value))
+    self.assertEqual(4, len(p.outputs.default.value))
     file_content = []
     for input_file in p.outputs.default.value:
       with cloudstorage.open(input_file) as infile:
@@ -116,7 +119,7 @@ class CombinerTest(testutil.HandlerTestBase):
 
     file_content = sorted(file_content)
 
-    self.assertEquals(
+    self.assertEqual(
         ["('0', 9800)", "('1', 9900)", "('2', 10000)", "('3', 10100)"],
         file_content)
 
@@ -150,7 +153,7 @@ class CombinerTest(testutil.HandlerTestBase):
     test_support.execute_until_empty(self.taskqueue)
 
     p = mapreduce_pipeline.MapreducePipeline.from_id(p.pipeline_id)
-    self.assertEquals(4, len(p.outputs.default.value))
+    self.assertEqual(4, len(p.outputs.default.value))
     file_content = []
     for input_file in p.outputs.default.value:
       with cloudstorage.open(input_file) as infile:
@@ -159,7 +162,7 @@ class CombinerTest(testutil.HandlerTestBase):
 
     file_content = sorted(file_content)
 
-    self.assertEquals(
+    self.assertEqual(
         ["('0', 9800)", "('1', 9900)", "('2', 10000)", "('3', 10100)"],
         file_content)
 
@@ -170,7 +173,7 @@ class CombinerTest(testutil.HandlerTestBase):
       values = invocation[1]
       self.assertTrue(key)
       self.assertTrue(values)
-      self.assertEquals(1, len(values))
+      self.assertEqual(1, len(values))
       self.assertTrue(int(values[0]) % 4 == int(key))
 
 

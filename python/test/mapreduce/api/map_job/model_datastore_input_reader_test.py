@@ -110,7 +110,7 @@ class ModelDBDatastoreInputReaderTest(datastore_input_reader_base_test
       e.put()
 
   def testSplitInput_shardByFilters_withNs(self):
-    entities = self._create_entities(range(12), {}, "f")
+    entities = self._create_entities(list(range(12)), {}, "f")
     self._set_vals(entities, list(range(6)), list(range(2)))
     params = {
         "entity_kind": self.entity_kind,
@@ -126,7 +126,7 @@ class ModelDBDatastoreInputReaderTest(datastore_input_reader_base_test
         input_reader_params=params,
         shard_count=2)
     results = conf.input_reader_cls.split_input(conf)
-    self.assertEquals(2, len(results))
+    self.assertEqual(2, len(results))
     self._assertEquals_splitInput(results[0], ["3", "5"])
     self._assertEquals_splitInput(results[1], ["7"])
 
@@ -143,13 +143,13 @@ class ModelDBDatastoreInputReaderTest(datastore_input_reader_base_test
         input_reader_params=params,
         shard_count=100)
     results = conf.input_reader_cls.split_input(conf)
-    self.assertEquals(3, len(results))
+    self.assertEqual(3, len(results))
     self._assertEquals_splitInput(results[0], [])
     self._assertEquals_splitInput(results[1], [])
     self._assertEquals_splitInput(results[2], [])
 
   def testSplitInput_shardByFilters_bigShardNumber(self):
-    entities = self._create_entities(range(12), {}, "f")
+    entities = self._create_entities(list(range(12)), {}, "f")
     self._set_vals(entities, list(range(6)), list(range(2)))
     params = {
         "entity_kind": self.entity_kind,
@@ -163,20 +163,20 @@ class ModelDBDatastoreInputReaderTest(datastore_input_reader_base_test
         input_reader_params=params,
         shard_count=100)
     results = conf.input_reader_cls.split_input(conf)
-    self.assertEquals(3, len(results))
+    self.assertEqual(3, len(results))
     self._assertEquals_splitInput(results[0], ["3"])
     self._assertEquals_splitInput(results[1], ["5"])
     self._assertEquals_splitInput(results[2], ["7"])
 
   def testSplitInput_shardByFilters_lotsOfNS(self):
     """Lots means more than 2 in test cases."""
-    entities = self._create_entities(range(12), {}, "f")
+    entities = self._create_entities(list(range(12)), {}, "f")
     self._set_vals(entities, list(range(6)), list(range(2)))
-    entities = self._create_entities(range(12, 24), {}, "g")
+    entities = self._create_entities(list(range(12, 24)), {}, "g")
     self._set_vals(entities, list(range(6)), list(range(2)))
-    entities = self._create_entities(range(24, 36), {}, "h")
+    entities = self._create_entities(list(range(24, 36)), {}, "h")
     self._set_vals(entities, list(range(6)), list(range(2)))
-    entities = self._create_entities(range(36, 48), {}, "h")
+    entities = self._create_entities(list(range(36, 48)), {}, "h")
     self._set_vals(entities, [0]*6, list(range(2)))
 
     params = {
@@ -190,7 +190,7 @@ class ModelDBDatastoreInputReaderTest(datastore_input_reader_base_test
         input_reader_params=params,
         shard_count=100)
     results = conf.input_reader_cls.split_input(conf)
-    self.assertEquals(3, len(results))
+    self.assertEqual(3, len(results))
     self._assertEquals_splitInput(results[0], ["3", "5", "7"])
     self._assertEquals_splitInput(results[1], ["15", "17", "19"])
     self._assertEquals_splitInput(results[2], ["27", "29", "31"])

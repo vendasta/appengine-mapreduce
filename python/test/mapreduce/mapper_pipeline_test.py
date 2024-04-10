@@ -121,7 +121,7 @@ class MapperPipelineTest(testutil.HandlerTestBase):
     p.start()
     test_support.execute_until_empty(self.taskqueue)
 
-    self.assertEquals(1, len(self.emails))
+    self.assertEqual(1, len(self.emails))
     self.assertTrue(self.emails[0][1].startswith(
         "Pipeline successful:"))
 
@@ -169,7 +169,7 @@ class MapperPipelineTest(testutil.HandlerTestBase):
     self.assertFalse(p.outputs.result_status.filled)
     self.assertFalse(p.outputs.default.filled)
 
-    self.assertEquals(1, len(self.emails))
+    self.assertEqual(1, len(self.emails))
     self.assertTrue(self.emails[0][1].startswith(
         "Pipeline aborted:"))
 
@@ -191,7 +191,7 @@ class MapperPipelineTest(testutil.HandlerTestBase):
     p.start()
     test_support.execute_until_empty(self.taskqueue)
 
-    self.assertEquals(1, len(self.emails))
+    self.assertEqual(1, len(self.emails))
     self.assertTrue(self.emails[0][1].startswith(
         "Pipeline successful:"))
 
@@ -201,7 +201,7 @@ class MapperPipelineTest(testutil.HandlerTestBase):
     counters = p.outputs.counters.value
     self.assertTrue(counters)
     self.assertTrue(context.COUNTER_MAPPER_WALLTIME_MS in counters)
-    self.assertEquals(100, counters[context.COUNTER_MAPPER_CALLS])
+    self.assertEqual(100, counters[context.COUNTER_MAPPER_CALLS])
     self.assertEqual(model.MapreduceState.RESULT_SUCCESS,
                      p.outputs.result_status.value)
     self.assertEqual([], p.outputs.default.value)
@@ -227,7 +227,7 @@ class MapperPipelineTest(testutil.HandlerTestBase):
     p.start()
     test_support.execute_until_empty(self.taskqueue)
 
-    self.assertEquals(1, len(self.emails))
+    self.assertEqual(1, len(self.emails))
     self.assertTrue(self.emails[0][1].startswith(
         "Pipeline successful:"))
 
@@ -239,7 +239,7 @@ class MapperPipelineTest(testutil.HandlerTestBase):
 
     expected_outputs = [i for i in range(entity_count)]
     expected_outputs.sort()
-    self.assertEquals(expected_outputs, outputs)
+    self.assertEqual(expected_outputs, outputs)
 
   def testShardRetry(self):
     entity_count = 200
@@ -262,7 +262,7 @@ class MapperPipelineTest(testutil.HandlerTestBase):
     p.start()
     test_support.execute_until_empty(self.taskqueue)
 
-    self.assertEquals(1, len(self.emails))
+    self.assertEqual(1, len(self.emails))
     self.assertTrue(self.emails[0][1].startswith(
         "Pipeline successful:"))
 
@@ -274,7 +274,7 @@ class MapperPipelineTest(testutil.HandlerTestBase):
 
     expected_outputs = [i for i in range(entity_count)]
     expected_outputs.sort()
-    self.assertEquals(expected_outputs, outputs)
+    self.assertEqual(expected_outputs, outputs)
 
   def testShardRetryTooMany(self):
     entity_count = 200
@@ -301,7 +301,7 @@ class MapperPipelineTest(testutil.HandlerTestBase):
     state = model.MapreduceState.all().get()
     self.assertEqual(model.MapreduceState.RESULT_FAILED, state.result_status)
 
-    self.assertEquals(1, len(self.emails))
+    self.assertEqual(1, len(self.emails))
     self.assertTrue(self.emails[0][1].startswith(
         "Pipeline aborted:"))
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Tests for records.py."""
 
-from __future__ import with_statement
+
 
 import array
 import unittest
@@ -57,8 +57,8 @@ class RecordsTest(unittest.TestCase):
   def testMaskUnmaskCrc(self):
     """Test masking and unmasking crc."""
     crc = crc32c.crc('foo')
-    self.assertNotEquals(crc, records._mask_crc(crc))
-    self.assertNotEquals(crc, records._mask_crc(records._mask_crc(crc)))
+    self.assertNotEqual(crc, records._mask_crc(crc))
+    self.assertNotEqual(crc, records._mask_crc(records._mask_crc(crc)))
     self.assertEqual(crc, records._unmask_crc(records._mask_crc(crc)))
     self.assertEqual(
         crc,
@@ -67,7 +67,7 @@ class RecordsTest(unittest.TestCase):
 
     # This value gave me troubles.
     crc = 2685849682
-    self.assertEquals(crc, records._unmask_crc(records._mask_crc(crc)))
+    self.assertEqual(crc, records._unmask_crc(records._mask_crc(crc)))
 
   def testWriteEmptyRecordWithPadding(self):
     """Test writing empty record."""

@@ -48,26 +48,26 @@ class TestOrdinalization(unittest.TestCase):
 
   def testWithSmallRange(self):
     namespace_range._setup_constants('ab', 2)
-    self.assertEquals('', namespace_range._ord_to_namespace(0))
-    self.assertEquals(0, namespace_range._namespace_to_ord(''))
+    self.assertEqual('', namespace_range._ord_to_namespace(0))
+    self.assertEqual(0, namespace_range._namespace_to_ord(''))
 
-    self.assertEquals('a', namespace_range._ord_to_namespace(1))
-    self.assertEquals(1, namespace_range._namespace_to_ord('a'))
+    self.assertEqual('a', namespace_range._ord_to_namespace(1))
+    self.assertEqual(1, namespace_range._namespace_to_ord('a'))
 
-    self.assertEquals('aa', namespace_range._ord_to_namespace(2))
-    self.assertEquals(2, namespace_range._namespace_to_ord('aa'))
+    self.assertEqual('aa', namespace_range._ord_to_namespace(2))
+    self.assertEqual(2, namespace_range._namespace_to_ord('aa'))
 
-    self.assertEquals('ab', namespace_range._ord_to_namespace(3))
-    self.assertEquals(3, namespace_range._namespace_to_ord('ab'))
+    self.assertEqual('ab', namespace_range._ord_to_namespace(3))
+    self.assertEqual(3, namespace_range._namespace_to_ord('ab'))
 
-    self.assertEquals('b', namespace_range._ord_to_namespace(4))
-    self.assertEquals(4, namespace_range._namespace_to_ord('b'))
+    self.assertEqual('b', namespace_range._ord_to_namespace(4))
+    self.assertEqual(4, namespace_range._namespace_to_ord('b'))
 
-    self.assertEquals('ba', namespace_range._ord_to_namespace(5))
-    self.assertEquals(5, namespace_range._namespace_to_ord('ba'))
+    self.assertEqual('ba', namespace_range._ord_to_namespace(5))
+    self.assertEqual(5, namespace_range._namespace_to_ord('ba'))
 
-    self.assertEquals('bb', namespace_range._ord_to_namespace(6))
-    self.assertEquals(6, namespace_range._namespace_to_ord('bb'))
+    self.assertEqual('bb', namespace_range._ord_to_namespace(6))
+    self.assertEqual(6, namespace_range._namespace_to_ord('bb'))
 
 
 class JsonTest(unittest.TestCase):

@@ -144,18 +144,18 @@ class AbstractDatastoreInputReaderTest(unittest.TestCase):
 
   def testChooseSplitPoints(self):
     """Tests Abstract Datastore Input Reader._choose_split_points."""
-    self.assertEquals(
+    self.assertEqual(
         [5],
         self.reader_cls._choose_split_points(
             sorted([0, 9, 8, 7, 1, 2, 3, 4, 5, 6]), 2))
 
-    self.assertEquals(
+    self.assertEqual(
         [3, 7],
         self.reader_cls._choose_split_points(
             sorted([0, 1, 7, 8, 9, 3, 2, 4, 6, 5]), 3))
 
-    self.assertEquals(
-        range(1, 10),
+    self.assertEqual(
+        list(range(1, 10)),
         self.reader_cls._choose_split_points(
             sorted([0, 1, 7, 8, 9, 3, 2, 4, 6, 5]), 10))
 
@@ -168,11 +168,11 @@ class AbstractDatastoreInputReaderTest(unittest.TestCase):
   def _assertEquals_splitNSByScatter(self, shards, expected, ns=""):
     results = self.reader_cls._split_ns_by_scatter(
         shards, ns, "TestEntity", self.appid)
-    self.assertEquals(expected, results)
+    self.assertEqual(expected, results)
 
   def testSplitNSByScatter_NotEnoughData(self):
     """Splits should not intersect, if there's not enough data for each."""
-    testutil._create_entities(range(2), {"1": 1})
+    testutil._create_entities(list(range(2)), {"1": 1})
 
     expected = [key_range.KeyRange(key_start=None,
                                    key_end=testutil.key("1"),
@@ -193,7 +193,7 @@ class AbstractDatastoreInputReaderTest(unittest.TestCase):
 
   def testSplitNSByScatter_NotEnoughData2(self):
     """Splits should not intersect, if there's not enough data for each."""
-    testutil._create_entities(range(10), {"2": 2, "4": 4})
+    testutil._create_entities(list(range(10)), {"2": 2, "4": 4})
     expected = [key_range.KeyRange(key_start=None,
                                    key_end=testutil.key("2"),
                                    direction="ASC",
@@ -220,7 +220,7 @@ class AbstractDatastoreInputReaderTest(unittest.TestCase):
 
   def testSplitNSByScatter_LotsOfData(self):
     """Split lots of data for each shard."""
-    testutil._create_entities(range(100),
+    testutil._create_entities(list(range(100)),
                               {"80": 80, "50": 50, "30": 30, "10": 10},
                               ns="google")
     expected = [key_range.KeyRange(key_start=None,
@@ -254,7 +254,7 @@ class AbstractDatastoreInputReaderTest(unittest.TestCase):
   def testToKeyRangesByShard(self):
     namespaces = [str(i) for i in range(3)]
     for ns in namespaces:
-      testutil._create_entities(range(10), {"5": 5}, ns)
+      testutil._create_entities(list(range(10)), {"5": 5}, ns)
     shards = 2
 
     expected = [
@@ -307,20 +307,20 @@ class AbstractDatastoreInputReaderTest(unittest.TestCase):
         self.reader_cls._to_key_ranges_by_shard(
             self.appid, namespaces, shards,
             model.QuerySpec(entity_kind="TestEntity")))
-    self.assertEquals(shards, len(kranges_by_shard))
+    self.assertEqual(shards, len(kranges_by_shard))
 
     expected.sort()
     results = []
     for kranges in kranges_by_shard:
       results.extend(list(kranges))
     results.sort()
-    self.assertEquals(expected, results)
+    self.assertEqual(expected, results)
 
   def testToKeyRangesByShard_UnevenNamespaces(self):
     namespaces = [str(i) for i in range(3)]
-    testutil._create_entities(range(10), {"5": 5}, namespaces[0])
-    testutil._create_entities(range(10), {"5": 5, "6": 6}, namespaces[1])
-    testutil._create_entities(range(10), {"5": 5, "6": 6, "7": 7},
+    testutil._create_entities(list(range(10)), {"5": 5}, namespaces[0])
+    testutil._create_entities(list(range(10)), {"5": 5, "6": 6}, namespaces[1])
+    testutil._create_entities(list(range(10)), {"5": 5, "6": 6, "7": 7},
                               namespaces[2])
     shards = 3
 
@@ -388,14 +388,14 @@ class AbstractDatastoreInputReaderTest(unittest.TestCase):
     kranges_by_shard = (self.reader_cls._to_key_ranges_by_shard(
         self.appid, namespaces, shards,
         model.QuerySpec(entity_kind="TestEntity")))
-    self.assertEquals(shards, len(kranges_by_shard))
+    self.assertEqual(shards, len(kranges_by_shard))
 
     expected.sort()
     results = []
     for kranges in kranges_by_shard:
       results.extend(list(kranges))
     results.sort()
-    self.assertEquals(expected, results)
+    self.assertEqual(expected, results)
 
 
 if __name__ == "__main__":

@@ -78,7 +78,7 @@ class ControlTest(testutil.HandlerTestBase):
 
     # Note: only a kickoff job is pending at this stage, shards come later.
     tasks = self.taskqueue.GetTasks(queue_name)
-    self.assertEquals(1, len(tasks))
+    self.assertEqual(1, len(tasks))
     # Checks that tasks are scheduled into the future.
     task = tasks[0]
     self.assertEqual("/mapreduce_base_path/kickoffjob_callback/" + mapreduce_id,
@@ -129,7 +129,7 @@ class ControlTest(testutil.HandlerTestBase):
     TestEntity().put()
 
     # MR should be scheduled into the future.
-    now_sec = long(time.time())
+    now_sec = int(time.time())
 
     shard_count = 4
     mapreduce_id = control.start_map(
@@ -175,7 +175,7 @@ class ControlTest(testutil.HandlerTestBase):
         eta=eta)
 
     task_eta = self.validate_map_started(mapreduce_id)
-    self.assertEquals(eta.strftime("%Y/%m/%d %H:%M:%S"), task_eta)
+    self.assertEqual(eta.strftime("%Y/%m/%d %H:%M:%S"), task_eta)
 
   def testStartMap_QueueEnvironment(self):
     """Test that the start_map inherits its queue from the enviornment."""

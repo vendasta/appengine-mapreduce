@@ -52,7 +52,7 @@ class JsonSerializationTest(unittest.TestCase):
     obj = {"a": 1, "b": [{"c": "d"}], "e": now}
     new_obj = json_util.json.loads(json_util.json.dumps(
         obj, cls=json_util.JsonEncoder), cls=json_util.JsonDecoder)
-    self.assertEquals(obj, new_obj)
+    self.assertEqual(obj, new_obj)
 
 
 class JsonPropertyTest(unittest.TestCase):
@@ -61,20 +61,20 @@ class JsonPropertyTest(unittest.TestCase):
   def testGetValueForDatastore(self):
     """Test get_value_for_datastore method."""
     e = TestEntity()
-    self.assertEquals(None, TestEntity.json_property.get_value_for_datastore(e))
+    self.assertEqual(None, TestEntity.json_property.get_value_for_datastore(e))
     e.json_property = TestJsonType(5)
-    self.assertEquals(
-        u'{"size": 5}', TestEntity.json_property.get_value_for_datastore(e))
+    self.assertEqual(
+        '{"size": 5}', TestEntity.json_property.get_value_for_datastore(e))
 
     e.empty_json_property = EmptyDictJsonType()
-    self.assertEquals(
+    self.assertEqual(
         None, TestEntity.empty_json_property.get_value_for_datastore(e))
 
   def testMakeValueFromDatastore(self):
     """Test make_value_from_datastore method."""
-    self.assertEquals(
+    self.assertEqual(
         None, TestEntity.json_property.make_value_from_datastore(None))
-    self.assertEquals(
+    self.assertEqual(
         TestJsonType,
         type(TestEntity.json_property.make_value_from_datastore('{"size":4}')))
     self.assertTrue(
@@ -95,7 +95,7 @@ class JsonPropertyTest(unittest.TestCase):
   def testDefaultValue(self):
     """Test default value."""
     e = TestEntity()
-    self.assertEquals(None, e.json_property)
+    self.assertEqual(None, e.json_property)
     self.assertTrue(e.json_property_default_value is not None)
 
 

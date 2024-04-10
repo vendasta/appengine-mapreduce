@@ -32,7 +32,7 @@ from testlib import testutil
 import base64
 import collections
 import datetime
-import httplib
+import http.client
 import math
 import os
 import time
@@ -472,16 +472,16 @@ class MapreduceHandlerTestBase(testutil.HandlerTestBase):
         particular property is not specified.
     """
     self.assertTrue(mapreduce_spec)
-    self.assertEquals(kwargs.get("mapper_handler_spec", MAPPER_HANDLER_SPEC),
+    self.assertEqual(kwargs.get("mapper_handler_spec", MAPPER_HANDLER_SPEC),
                       mapreduce_spec.mapper.handler_spec)
-    self.assertEquals(kwargs.get("output_writer_spec", None),
+    self.assertEqual(kwargs.get("output_writer_spec", None),
                       mapreduce_spec.mapper.output_writer_spec)
-    self.assertEquals(
+    self.assertEqual(
         ENTITY_KIND,
         mapreduce_spec.mapper.params["input_reader"]["entity_kind"])
-    self.assertEquals(kwargs.get("shard_count", 8),
+    self.assertEqual(kwargs.get("shard_count", 8),
                       mapreduce_spec.mapper.shard_count)
-    self.assertEquals(kwargs.get("hooks_class_name"),
+    self.assertEqual(kwargs.get("hooks_class_name"),
                       mapreduce_spec.hooks_class_name)
 
   def verify_shard_state(self, shard_state, **kwargs):
@@ -519,10 +519,10 @@ class MapreduceHandlerTestBase(testutil.HandlerTestBase):
         mapreduce_state.chart_url.startswith("https://www.google.com/"),
         "Wrong chart url: " + mapreduce_state.chart_url)
 
-    self.assertEquals(kwargs.get("active", True), mapreduce_state.active)
-    self.assertEquals(kwargs.get("processed", 0),
+    self.assertEqual(kwargs.get("active", True), mapreduce_state.active)
+    self.assertEqual(kwargs.get("processed", 0),
                       mapreduce_state.counters_map.get(COUNTER_MAPPER_CALLS))
-    self.assertEquals(kwargs.get("result_status", None),
+    self.assertEqual(kwargs.get("result_status", None),
                       mapreduce_state.result_status)
 
     mapreduce_spec = mapreduce_state.mapreduce_spec
@@ -688,7 +688,7 @@ class StartJobHandlerTest(testutil.HandlerTestBase):
     """Tests that that handler only accepts AJAX requests."""
     del self.handler.request.headers["X-Requested-With"]
     self.handler.post()
-    self.assertEquals(httplib.FORBIDDEN, self.handler.response.status)
+    self.assertEqual(http.client.FORBIDDEN, self.handler.response.status)
 
   def testSmoke(self):
     """Verifies main execution path of starting scan over several entities."""
@@ -698,7 +698,7 @@ class StartJobHandlerTest(testutil.HandlerTestBase):
 
     tasks = self.taskqueue.GetTasks(self.QUEUE)
     # Only kickoff task should be there.
-    self.assertEquals(1, len(tasks))
+    self.assertEqual(1, len(tasks))
     task_mr_id = test_support.decode_task_payload(tasks[0]).get("mapreduce_id")
 
     # Verify mr id is generated.
@@ -779,11 +779,11 @@ class StartJobHandlerTest(testutil.HandlerTestBase):
         self.handler.json_response["mapreduce_id"])
     params = state.mapreduce_spec.mapper.params
 
-    self.assertEquals(["red", "blue"], params["one"])
-    self.assertEquals("green", params["two"])
+    self.assertEqual(["red", "blue"], params["one"])
+    self.assertEqual("green", params["two"])
 
     # From the validator function
-    self.assertEquals("good", params["test"])
+    self.assertEqual("good", params["test"])
 
   def testMapreduceParameters(self):
     """Tests propagation of user-supplied mapreduce parameters."""
@@ -797,11 +797,11 @@ class StartJobHandlerTest(testutil.HandlerTestBase):
     state = model.MapreduceState.get_by_job_id(
         self.handler.json_response["mapreduce_id"])
     params = state.mapreduce_spec.params
-    self.assertEquals(["red", "blue"], params["one"])
-    self.assertEquals("green", params["two"])
+    self.assertEqual(["red", "blue"], params["one"])
+    self.assertEqual("green", params["two"])
 
     # From the validator function
-    self.assertEquals("good", params["test"])
+    self.assertEqual("good", params["test"])
 
   def testParameterValidationFailure(self):
     """Tests when validating user-supplied parameters fails."""
@@ -810,8 +810,8 @@ class StartJobHandlerTest(testutil.HandlerTestBase):
     try:
       self.handler.handle()
       self.fail()
-    except Exception, e:
-      self.assertEquals("These params are bad", str(e))
+    except Exception as e:
+      self.assertEqual("These params are bad", str(e))
 
   def testParameterValidationUnknown(self):
     """Tests the user-supplied parameter validation function cannot be found."""
@@ -875,7 +875,7 @@ class StartJobHandlerFunctionalTest(testutil.HandlerTestBase):
 
     # Verify task.
     tasks = self.taskqueue.GetTasks(self.QUEUE)
-    self.assertEquals(1, len(tasks))
+    self.assertEqual(1, len(tasks))
     task = tasks[0]
     task_mr_id = test_support.decode_task_payload(task).get("mapreduce_id")
     self.assertEqual(mr_id, task_mr_id)
@@ -1330,7 +1330,7 @@ class MapperWorkerCallbackHandlerLeaseTest(testutil.HandlerTestBase):
   def testFutureTask(self):
     handler, _ = self._create_handler(slice_id=self.CURRENT_SLICE_ID + 1)
     handler.post()
-    self.assertEqual(httplib.SERVICE_UNAVAILABLE, handler.response.status)
+    self.assertEqual(http.client.SERVICE_UNAVAILABLE, handler.response.status)
 
   def testLeaseHasNotEnd(self):
     self.shard_state.slice_start_time = datetime.datetime.now()
@@ -1346,7 +1346,7 @@ class MapperWorkerCallbackHandlerLeaseTest(testutil.HandlerTestBase):
           handler._wait_time(self.shard_state,
                              parameters._LEASE_DURATION_SEC))
       handler.post()
-      self.assertEqual(httplib.SERVICE_UNAVAILABLE, handler.response.status)
+      self.assertEqual(http.client.SERVICE_UNAVAILABLE, handler.response.status)
 
   def testRequestHasNotEnd(self):
     # Previous request's lease has timed out but the request has not.
@@ -1370,7 +1370,7 @@ class MapperWorkerCallbackHandlerLeaseTest(testutil.HandlerTestBase):
         parameters._MAX_LEASE_DURATION_SEC,
         lambda: now))
     handler.post()
-    self.assertEqual(httplib.SERVICE_UNAVAILABLE, handler.response.status)
+    self.assertEqual(http.client.SERVICE_UNAVAILABLE, handler.response.status)
 
   def testRequestHasTimedOut(self):
     slice_start_time = datetime.datetime(2000, 1, 1)
@@ -1446,7 +1446,7 @@ class MapperWorkerCallbackHandlerLeaseTest(testutil.HandlerTestBase):
     shard_state = model.ShardState.get_by_shard_id(self.shard_id)
     self.assertTrue(shard_state.active)
     # Slice moved on.
-    self.assertEquals(self.CURRENT_SLICE_ID + 1, shard_state.slice_id)
+    self.assertEqual(self.CURRENT_SLICE_ID + 1, shard_state.slice_id)
     # Lease is freed.
     self.assertFalse(shard_state.slice_start_time)
     self.assertFalse(shard_state.slice_request_id)
@@ -1459,12 +1459,12 @@ class MapperWorkerCallbackHandlerLeaseTest(testutil.HandlerTestBase):
     self._init_shard()
     handler, _ = self._create_handler()
     handler.post()
-    self.assertEqual(httplib.SERVICE_UNAVAILABLE, handler.response.status)
+    self.assertEqual(http.client.SERVICE_UNAVAILABLE, handler.response.status)
 
     shard_state = model.ShardState.get_by_shard_id(self.shard_id)
     self.assertTrue(shard_state.active)
     # Slice stays the same.
-    self.assertEquals(self.CURRENT_SLICE_ID, shard_state.slice_id)
+    self.assertEqual(self.CURRENT_SLICE_ID, shard_state.slice_id)
     # Lease is freed.
     self.assertFalse(shard_state.slice_start_time)
     self.assertFalse(shard_state.slice_request_id)
@@ -1594,10 +1594,10 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
 
   def _handle_request(self, expect_finalize=True):
     """Handles request and optionally finalizes the output stream."""
-    self.assertEquals(0, len(self.taskqueue.GetTasks("default")))
+    self.assertEqual(0, len(self.taskqueue.GetTasks("default")))
     self.handler.post()
     if not expect_finalize:
-      self.assertEquals(0, len(self.taskqueue.GetTasks("default")))
+      self.assertEqual(0, len(self.taskqueue.GetTasks("default")))
       return
 
     # We processed all the input but we still need to finalize (on a separate
@@ -1608,7 +1608,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.assertTrue(shard_state.active)
 
     tasks = self.taskqueue.GetTasks("default")
-    self.assertEquals(1, len(tasks))
+    self.assertEqual(1, len(tasks))
     self.verify_shard_task(
         tasks[0], self.shard_id, slice_id=1, verify_spec=False)
     self.taskqueue.FlushQueue("default")
@@ -1642,7 +1642,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
 
     self._handle_request()
 
-    self.assertEquals([str(e1.key()), str(e2.key())],
+    self.assertEqual([str(e1.key()), str(e2.key())],
                       TestHandler.processed_keys)
 
     # we should have finished
@@ -1652,7 +1652,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
         result_status=model.ShardState.RESULT_SUCCESS)
 
     tasks = self.taskqueue.GetTasks("default")
-    self.assertEquals(0, len(tasks))
+    self.assertEqual(0, len(tasks))
 
   def testMaintainLCNoOp(self):
     shard_ctx = mock.MagicMock()
@@ -1744,14 +1744,14 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     self._handle_request(expect_finalize=False)
 
     # completed state => no data processed
-    self.assertEquals([], TestHandler.processed_keys)
+    self.assertEqual([], TestHandler.processed_keys)
 
     self.verify_shard_state(
         model.ShardState.get_by_shard_id(self.shard_id),
         active=False,
         input_finished=True)
 
-    self.assertEquals(0, len(self.taskqueue.GetTasks("default")))
+    self.assertEqual(0, len(self.taskqueue.GetTasks("default")))
 
   def testAllInputProcessedStopsProcessing(self):
     self.shard_state.input_finished = True
@@ -1763,7 +1763,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.handler.post()
 
     # completed state => no data processed
-    self.assertEquals([], TestHandler.processed_keys)
+    self.assertEqual([], TestHandler.processed_keys)
 
     # but shard is done now
     self.verify_shard_state(
@@ -1782,11 +1782,11 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     self._handle_request(expect_finalize=False)
 
     # Data will still be processed
-    self.assertEquals([str(e1.key())], TestHandler.processed_keys)
+    self.assertEqual([str(e1.key())], TestHandler.processed_keys)
     # Shard state should not be overriden, i.e. left active.
     self.verify_shard_state(
         model.ShardState.get_by_shard_id(self.shard_id), active=True)
-    self.assertEquals(0, len(self.taskqueue.GetTasks("default")))
+    self.assertEqual(0, len(self.taskqueue.GetTasks("default")))
 
   def testNoShardState(self):
     """Correct handling of missing shard state."""
@@ -1797,8 +1797,8 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     self._handle_request(expect_finalize=False)
 
     # no state => no data processed
-    self.assertEquals([], TestHandler.processed_keys)
-    self.assertEquals(0, len(self.taskqueue.GetTasks("default")))
+    self.assertEqual([], TestHandler.processed_keys)
+    self.assertEqual(0, len(self.taskqueue.GetTasks("default")))
 
   def testNoData(self):
     """Test no data to scan case."""
@@ -1807,7 +1807,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
 
     self._handle_request()
 
-    self.assertEquals([], TestHandler.processed_keys)
+    self.assertEqual([], TestHandler.processed_keys)
 
     self.verify_shard_state(
         model.ShardState.get_by_shard_id(self.shard_id),
@@ -1848,7 +1848,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
         "end_shard-mapreduce0-1",
         "finalize-1"
     ]
-    self.assertEquals(expected_events, ShardLifeCycleOutputWriter.events)
+    self.assertEqual(expected_events, ShardLifeCycleOutputWriter.events)
 
   def testLongProcessingShouldStartAnotherSlice(self):
     """Long scan.
@@ -1867,7 +1867,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.handler.post()
 
     # only first entity should be processed
-    self.assertEquals([str(e1.key())], TestHandler.processed_keys)
+    self.assertEqual([str(e1.key())], TestHandler.processed_keys)
 
     # slice should be still active
     self.verify_shard_state(
@@ -1876,9 +1876,9 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
 
     # new task should be spawned
     tasks = self.taskqueue.GetTasks("default")
-    self.assertEquals(1, len(tasks))
+    self.assertEqual(1, len(tasks))
     self.verify_shard_task(tasks[0], self.shard_id, self.slice_id + 1)
-    self.assertEquals(tasks[0]["eta_delta"], "0:00:00 ago")
+    self.assertEqual(tasks[0]["eta_delta"], "0:00:00 ago")
 
   def testLimitingRate(self):
     """Test not enough quota to process everything in this slice."""
@@ -1900,15 +1900,15 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
 
     self.handler.post()
 
-    self.assertEquals(2, len(TestHandler.processed_keys))
+    self.assertEqual(2, len(TestHandler.processed_keys))
     self.verify_shard_state(
         model.ShardState.get_by_shard_id(self.shard_id),
         active=True, processed=2,
         result_status=None)
 
     tasks = self.taskqueue.GetTasks("default")
-    self.assertEquals(1, len(tasks))
-    self.assertEquals(tasks[0]["eta_delta"], "0:00:02 from now")
+    self.assertEqual(1, len(tasks))
+    self.assertEqual(tasks[0]["eta_delta"], "0:00:02 from now")
 
   def testLongProcessDataWithAllowCheckpoint(self):
     """Tests that process_datum works with input_readers.ALLOW_CHECKPOINT."""
@@ -1927,7 +1927,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
             self.shard_id, 123, mock.Mock(), mock.Mock()))
 
     tasks = self.taskqueue.GetTasks("default")
-    self.assertEquals(1, len(tasks))
+    self.assertEqual(1, len(tasks))
     # Verify task headers.
     headers = dict(tasks[0]["headers"])
     self.assertEqual(self.mapreduce_id, headers[util._MR_ID_TASK_HEADER])
@@ -1947,7 +1947,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
         eta=eta)
 
     tasks = self.taskqueue.GetTasks("default")
-    self.assertEquals(1, len(tasks))
+    self.assertEqual(1, len(tasks))
     self.verify_shard_task(tasks[0], self.shard_id, 123, eta=eta)
 
   def testScheduleSlice_Countdown(self):
@@ -1961,7 +1961,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
         countdown=countdown)
 
     tasks = self.taskqueue.GetTasks("default")
-    self.assertEquals(1, len(tasks))
+    self.assertEqual(1, len(tasks))
     self.verify_shard_task(tasks[0], self.shard_id, 123, countdown=countdown)
 
   def testScheduleSlice_QueuePreserved(self):
@@ -1975,7 +1975,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
               self.shard_id, 123, mock.Mock(), mock.Mock()))
 
       tasks = self.taskqueue.GetTasks("crazy-queue")
-      self.assertEquals(1, len(tasks))
+      self.assertEqual(1, len(tasks))
       self.verify_shard_task(tasks[0], self.shard_id, 123)
     finally:
       del os.environ["HTTP_X_APPENGINE_QUEUENAME"]
@@ -1989,7 +1989,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
 
     # The task won't re-enqueue because it has the same name.
     tasks = self.taskqueue.GetTasks("default")
-    self.assertEquals(1, len(tasks))
+    self.assertEqual(1, len(tasks))
 
   def testScheduleSlice_Hooks(self):
     """Test _schedule_slice method with a hooks class installed."""
@@ -1998,12 +1998,12 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
 
     self.handler._schedule_slice(self.shard_state, self.transient_state)
 
-    self.assertEquals(1, len(self.taskqueue.GetTasks("default")))
-    self.assertEquals(1, len(TestHooks.enqueue_worker_task_calls))
+    self.assertEqual(1, len(self.taskqueue.GetTasks("default")))
+    self.assertEqual(1, len(TestHooks.enqueue_worker_task_calls))
     task, queue_name = TestHooks.enqueue_worker_task_calls[0]
-    self.assertEquals("/mapreduce/worker_callback/" + self.shard_state.shard_id,
+    self.assertEqual("/mapreduce/worker_callback/" + self.shard_state.shard_id,
                       task.url)
-    self.assertEquals("default", queue_name)
+    self.assertEqual("default", queue_name)
 
   def testScheduleSlice_RaisingHooks(self):
     """Test _schedule_slice method with an empty hooks class installed.
@@ -2021,7 +2021,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
             self.shard_id, 123, mock.Mock(), mock.Mock()))
 
     tasks = self.taskqueue.GetTasks("default")
-    self.assertEquals(1, len(tasks))
+    self.assertEqual(1, len(tasks))
     self.verify_shard_task(tasks[0], self.shard_id, 123,
                            hooks_class_name=hooks_class_name)
 
@@ -2152,7 +2152,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
 
     self.handler.post()
     # Slice gets retried.
-    self.assertEqual(httplib.SERVICE_UNAVAILABLE, self.handler.response.status)
+    self.assertEqual(http.client.SERVICE_UNAVAILABLE, self.handler.response.status)
     self.verify_shard_state(
         model.ShardState.get_by_shard_id(self.shard_id),
         active=True,
@@ -2166,7 +2166,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
 
     # First time, the task gets retried.
     self._handle_request(expect_finalize=False)
-    self.assertEqual(httplib.SERVICE_UNAVAILABLE, self.handler.response.status)
+    self.assertEqual(http.client.SERVICE_UNAVAILABLE, self.handler.response.status)
     self.verify_shard_state(
         model.ShardState.get_by_shard_id(self.shard_id),
         active=True,
@@ -2269,19 +2269,19 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     m.ReplayAll()
     try: # test, verify
       self.handler.post()
-      self.assertEqual(httplib.SERVICE_UNAVAILABLE,
+      self.assertEqual(http.client.SERVICE_UNAVAILABLE,
                        self.handler.response.status)
 
       # slice should be still active
       shard_state = model.ShardState.get_by_shard_id(self.shard_id)
       self.verify_shard_state(shard_state, processed=0, slice_retries=1)
       # mapper calls counter should not be incremented
-      self.assertEquals(0, shard_state.counters_map.get(
+      self.assertEqual(0, shard_state.counters_map.get(
           context.COUNTER_MAPPER_CALLS))
 
       # new task should not be spawned
       tasks = self.taskqueue.GetTasks("default")
-      self.assertEquals(0, len(tasks))
+      self.assertEqual(0, len(tasks))
 
       m.VerifyAll()
     finally:
@@ -2311,12 +2311,12 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
           processed=1,
           active=False,
           result_status = model.ShardState.RESULT_FAILED)
-      self.assertEquals(1, shard_state.counters_map.get(
+      self.assertEqual(1, shard_state.counters_map.get(
           context.COUNTER_MAPPER_CALLS))
 
       # new task should not be spawned
       tasks = self.taskqueue.GetTasks("default")
-      self.assertEquals(0, len(tasks))
+      self.assertEqual(0, len(tasks))
 
       m.VerifyAll()
     finally:
@@ -2359,7 +2359,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
       self.handler.post()
 
       #  1 entity should be processed
-      self.assertEquals(1, len(TestHandler.processed_keys))
+      self.assertEqual(1, len(TestHandler.processed_keys))
 
       m.VerifyAll()
     finally:
@@ -2372,7 +2372,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     e2 = TestEntity().put()
 
     self._handle_request()
-    self.assertEquals([str(e1), str(e1), str(e2), str(e2)],
+    self.assertEqual([str(e1), str(e1), str(e2), str(e2)],
                       TestOperation.processed_keys)
 
   def testOutputWriter(self):
@@ -2383,7 +2383,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
 
     self._handle_request()
 
-    self.assertEquals(
+    self.assertEqual(
         ["create-1",
          "write-" + str(e1),
          "write-" + str(e2),
@@ -2433,14 +2433,14 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
 
   def verify_done_task(self):
     tasks = self.taskqueue.GetTasks("crazy-queue")
-    self.assertEquals(1, len(tasks))
+    self.assertEqual(1, len(tasks))
     task = tasks[0]
     self.assertTrue(task)
 
-    self.assertEquals("/fin", task["url"])
-    self.assertEquals("POST", task["method"])
+    self.assertEqual("/fin", task["url"])
+    self.assertEqual("POST", task["method"])
     headers = dict(task["headers"])
-    self.assertEquals(self.mapreduce_id, headers["Mapreduce-Id"])
+    self.assertEqual(self.mapreduce_id, headers["Mapreduce-Id"])
     self.assertEqual(self.host, headers["Host"])
 
   def testStateUpdateIsCmpAndSet(self):
@@ -2551,12 +2551,12 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     mapreduce_state = model.MapreduceState.get_by_key_name(self.mapreduce_id)
     # we should have 1 + 3 + 5 = 9 elements processed
     self.verify_mapreduce_state(mapreduce_state, processed=9, shard_count=3)
-    self.assertEquals(0, mapreduce_state.failed_shards)
-    self.assertEquals(0, mapreduce_state.aborted_shards)
+    self.assertEqual(0, mapreduce_state.failed_shards)
+    self.assertEqual(0, mapreduce_state.aborted_shards)
 
     # new task should be spawned
     tasks = self.taskqueue.GetTasks("default")
-    self.assertEquals(1, len(tasks))
+    self.assertEqual(1, len(tasks))
     for task in tasks:
       headers = dict(task["headers"])
       self.assertEqual(self.mapreduce_id, headers[util._MR_ID_TASK_HEADER])
@@ -2570,19 +2570,19 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     mapreduce_state = model.MapreduceState.get_by_key_name(self.mapreduce_id)
     self.verify_mapreduce_state(mapreduce_state, active=False, shard_count=3,
                                 result_status=model.ShardState.RESULT_FAILED)
-    self.assertEquals(0, mapreduce_state.failed_shards)
-    self.assertEquals(0, mapreduce_state.aborted_shards)
+    self.assertEqual(0, mapreduce_state.failed_shards)
+    self.assertEqual(0, mapreduce_state.aborted_shards)
 
     # Abort signal should be present.
-    self.assertEquals(
+    self.assertEqual(
         model.MapreduceControl.ABORT,
         db.get(model.MapreduceControl.get_key_by_job_id(
             self.mapreduce_id)).command)
 
     tasks = self.taskqueue.GetTasks("default")
     # Finalize task should be spawned.
-    self.assertEquals(1, len(tasks))
-    self.assertEquals("/mapreduce/finalizejob_callback/" + self.mapreduce_id,
+    self.assertEqual(1, len(tasks))
+    self.assertEqual("/mapreduce/finalizejob_callback/" + self.mapreduce_id,
                       tasks[0]["url"])
 
     # Done Callback task should be spawned
@@ -2604,13 +2604,13 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.verify_mapreduce_state(
         mapreduce_state, processed=9, active=False, shard_count=3,
         result_status=model.MapreduceState.RESULT_SUCCESS)
-    self.assertEquals(0, mapreduce_state.failed_shards)
-    self.assertEquals(0, mapreduce_state.aborted_shards)
+    self.assertEqual(0, mapreduce_state.failed_shards)
+    self.assertEqual(0, mapreduce_state.aborted_shards)
 
     tasks = self.taskqueue.GetTasks("default")
     # Finalize task should be spawned.
-    self.assertEquals(1, len(tasks))
-    self.assertEquals("/mapreduce/finalizejob_callback/" + self.mapreduce_id,
+    self.assertEqual(1, len(tasks))
+    self.assertEqual("/mapreduce/finalizejob_callback/" + self.mapreduce_id,
                       tasks[0]["url"])
     headers = dict(tasks[0]["headers"])
     self.assertEqual(self.mapreduce_id, headers[util._MR_ID_TASK_HEADER])
@@ -2619,7 +2619,7 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     # Done Callback task should be spawned
     self.verify_done_task()
 
-    self.assertEquals(3, len(list(
+    self.assertEqual(3, len(list(
         model.ShardState.find_all_by_mapreduce_state(mapreduce_state))))
 
   def testShardsDoneFinalizeOutputWriter(self):
@@ -2639,7 +2639,7 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
 
     self.handler.post()
 
-    self.assertEquals(["finalize_job"], TestOutputWriter.events)
+    self.assertEqual(["finalize_job"], TestOutputWriter.events)
 
 
   def testShardsDoneWithHooks(self):
@@ -2656,10 +2656,10 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
       shard_state.put()
 
     self.handler.post()
-    self.assertEquals(1, len(TestHooks.enqueue_done_task_calls))
+    self.assertEqual(1, len(TestHooks.enqueue_done_task_calls))
     task, queue_name = TestHooks.enqueue_done_task_calls[0]
-    self.assertEquals('crazy-queue', queue_name)
-    self.assertEquals('/fin', task.url)
+    self.assertEqual('crazy-queue', queue_name)
+    self.assertEqual('/fin', task.url)
 
   def testShardFailure(self):
     """Tests that when one shard fails the job will be aborted."""
@@ -2678,16 +2678,16 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     mapreduce_state = model.MapreduceState.get_by_key_name(self.mapreduce_id)
     self.verify_mapreduce_state(
         mapreduce_state, active=True, shard_count=3)
-    self.assertEquals(1, mapreduce_state.failed_shards)
-    self.assertEquals(0, mapreduce_state.aborted_shards)
+    self.assertEqual(1, mapreduce_state.failed_shards)
+    self.assertEqual(0, mapreduce_state.aborted_shards)
 
     # new task should be spawned
     tasks = self.taskqueue.GetTasks("default")
-    self.assertEquals(1, len(tasks))
+    self.assertEqual(1, len(tasks))
     self.verify_controller_task(tasks[0], shard_count=3)
 
     # Abort signal should be present.
-    self.assertEquals(
+    self.assertEqual(
         model.MapreduceControl.ABORT,
         db.get(model.MapreduceControl.get_key_by_job_id(
             self.mapreduce_id)).command)
@@ -2711,19 +2711,19 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.verify_mapreduce_state(
         mapreduce_state, active=False, shard_count=3,
         result_status=model.ShardState.RESULT_FAILED)
-    self.assertEquals(1, mapreduce_state.failed_shards)
-    self.assertEquals(1, mapreduce_state.aborted_shards)
+    self.assertEqual(1, mapreduce_state.failed_shards)
+    self.assertEqual(1, mapreduce_state.aborted_shards)
 
     tasks = self.taskqueue.GetTasks("default")
     # Finalize task should be spawned.
-    self.assertEquals(1, len(tasks))
-    self.assertEquals("/mapreduce/finalizejob_callback/" + self.mapreduce_id,
+    self.assertEqual(1, len(tasks))
+    self.assertEqual("/mapreduce/finalizejob_callback/" + self.mapreduce_id,
                       tasks[0]["url"])
 
     # Done Callback task should be spawned
     self.verify_done_task()
 
-    self.assertEquals(3, len(list(
+    self.assertEqual(3, len(list(
         model.ShardState.find_all_by_mapreduce_state(mapreduce_state))))
 
   def testUserAbort(self):
@@ -2738,12 +2738,12 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     mapreduce_state = model.MapreduceState.get_by_key_name(self.mapreduce_id)
     self.verify_mapreduce_state(
         mapreduce_state, active=True, shard_count=3)
-    self.assertEquals(0, mapreduce_state.failed_shards)
-    self.assertEquals(0, mapreduce_state.aborted_shards)
+    self.assertEqual(0, mapreduce_state.failed_shards)
+    self.assertEqual(0, mapreduce_state.aborted_shards)
 
     # new task should be spawned
     tasks = self.taskqueue.GetTasks("default")
-    self.assertEquals(1, len(tasks))
+    self.assertEqual(1, len(tasks))
     self.verify_controller_task(tasks[0], shard_count=3)
     self.taskqueue.FlushQueue("default")
 
@@ -2753,18 +2753,18 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     mapreduce_state = model.MapreduceState.get_by_key_name(self.mapreduce_id)
     self.verify_mapreduce_state(
         mapreduce_state, active=True, shard_count=3)
-    self.assertEquals(0, mapreduce_state.failed_shards)
-    self.assertEquals(0, mapreduce_state.aborted_shards)
+    self.assertEqual(0, mapreduce_state.failed_shards)
+    self.assertEqual(0, mapreduce_state.aborted_shards)
 
     tasks = self.taskqueue.GetTasks("default")
-    self.assertEquals(1, len(tasks))
+    self.assertEqual(1, len(tasks))
     self.verify_controller_task(tasks[0], shard_count=3)
     self.taskqueue.FlushQueue("default")
 
     # Force all shards to completion state (success, success, or abort).
     shard_state_list = list(
         model.ShardState.find_all_by_mapreduce_state(mapreduce_state))
-    self.assertEquals(3, len(shard_state_list))
+    self.assertEqual(3, len(shard_state_list))
     shard_state_list[0].active = False
     shard_state_list[0].result_status = model.ShardState.RESULT_SUCCESS
     shard_state_list[1].active = False
@@ -2778,12 +2778,12 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.verify_mapreduce_state(
         mapreduce_state, active=False, shard_count=3,
         result_status=model.MapreduceState.RESULT_ABORTED)
-    self.assertEquals(1, mapreduce_state.aborted_shards)
+    self.assertEqual(1, mapreduce_state.aborted_shards)
 
     tasks = self.taskqueue.GetTasks("default")
     # Finalize task should be spawned.
-    self.assertEquals(1, len(tasks))
-    self.assertEquals("/mapreduce/finalizejob_callback/" + self.mapreduce_id,
+    self.assertEqual(1, len(tasks))
+    self.assertEqual("/mapreduce/finalizejob_callback/" + self.mapreduce_id,
                       tasks[0]["url"])
 
     # Done Callback task should be spawned
@@ -2802,7 +2802,7 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
 
       # new task should be spawned on the calling queue
       tasks = self.taskqueue.GetTasks("crazy-queue")
-      self.assertEquals(1, len(tasks))
+      self.assertEqual(1, len(tasks))
       self.verify_controller_task(tasks[0], shard_count=3)
     finally:
       del os.environ["HTTP_X_APPENGINE_QUEUENAME"]
@@ -2838,7 +2838,7 @@ class CleanUpJobTest(testutil.HandlerTestBase):
     """Test that we check the X-Requested-With header."""
     del self.handler.request.headers["X-Requested-With"]
     self.handler.post()
-    self.assertEquals(httplib.FORBIDDEN, self.handler.response.status)
+    self.assertEqual(http.client.FORBIDDEN, self.handler.response.status)
 
   def testBasic(self):
     """Tests cleaning up the job.
@@ -2852,7 +2852,7 @@ class CleanUpJobTest(testutil.HandlerTestBase):
     self.handler.request.set("mapreduce_id", self.mapreduce_id)
     self.handler.post()
     result = json.loads(self.handler.response.out.getvalue())
-    self.assertEquals({"status": ("Job %s successfully cleaned up." %
+    self.assertEqual({"status": ("Job %s successfully cleaned up." %
                                   self.mapreduce_id) },
                       result)
 
