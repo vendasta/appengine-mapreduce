@@ -72,25 +72,6 @@ from mapreduce import property_range
 from mapreduce import records
 from mapreduce import util
 
-# pylint: disable=g-import-not-at-top
-# TODO(user): Cleanup imports if/when cloudstorage becomes part of runtime.
-try:
-  # Check if the full cloudstorage package exists. The stub part is in runtime.
-  cloudstorage = None
-  import cloudstorage
-  if hasattr(cloudstorage, "_STUB"):
-    cloudstorage = None
-except ImportError:
-  pass  # CloudStorage library not available
-
-# Attempt to load cloudstorage from the bundle (availble in some tests)
-if cloudstorage is None:
-  try:
-    import cloudstorage
-  except ImportError:
-    pass  # CloudStorage library really not available
-
-
 # Classes moved to errors module. Copied here for compatibility.
 Error = errors.Error
 BadReaderParamsError = errors.BadReaderParamsError

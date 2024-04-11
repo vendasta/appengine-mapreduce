@@ -12,7 +12,7 @@ handlers:
   static_files: static/js/custom.js
   upload: static/js/custom.js
 
-- url: /mapreduce/pipeline(/.*)?
+- url: /mapreduce(/.*)?
   script: main.py
 
 - url: .*

@@ -24,6 +24,9 @@ import logging
 import os
 import re
 
+from flask import Flask
+
+import mapreduce
 from mapreduce import model
 
 # TODO(user): Add tests for this file.
@@ -53,121 +56,113 @@ def decode_task_payload(task):
   # pylint: disable=protected-access
   return model.HugeTask._decode_payload(body)
 
-
 def execute_task(task, retries=0, handlers_map=None):
-  """Execute mapper's executor task.
-
-  This will try to determine the correct mapper handler for the task, will set
-  up all mock environment necessary for task execution, and execute the task
-  itself.
-
-  This function can be used for functional-style testing of functionality
-  depending on mapper framework.
-
-  Args:
-    task: a taskqueue task.
-    retries: the current retry of this task.
-    handlers_map: a dict from url regex to handler.
-
-  Returns:
-    the handler instance used for this task.
-
-  Raises:
-    Exception: whatever the task raises.
-  """
-  # Find the handler class
   if not handlers_map:
-    handlers_map = main.create_handlers_map()
+    handlers_map = mapreduce.create_handlers_map()
+  
+  app = Flask(__name__)
+  for pattern, handler_class in handlers_map:
+    app.add_url_rule(pattern, view_func=handler_class.as_view(pattern.lstrip("/")))
 
-  url = task["url"]
-  handler = None
+  name = task['name']
+  method = task['method']
+  url = task['url']
+  headers = dict(task['headers'])
+  data = base64.b64decode(task['body'])
 
-  params = []
+  headers.update({
+    'X-AppEngine-TaskName': name,
+    'X-AppEngine-QueueName': task.get("queue_name", "default"),
+  })
 
-  for (re_str, handler_class) in handlers_map:
-    re_str = "^" + re_str + "($|\\?)"
-    m = re.match(re_str, url)
-    if m:
-      params = m.groups()[:-1]  # last groups was added by ($|\\?) above
-      break
-  else:
-    raise Exception("Can't determine handler for %s" % task)
+  logging.debug('Executing "%s %s" name="%s"', method, url, name)
+  client = app.test_client()
+  client.open(url, method=method, headers=headers, data=data)
 
-  request = mock_webapp.MockRequest()
-  request.set_url(url)
+  # url = task["url"]
+  # handler = None
 
-  # Set dependent env vars if test hasn't set them.
-  version = "mr-test-support-version.1"
-  module = "mr-test-support-module"
-  default_version_hostname = "mr-test-support.appspot.com"
-  host = "{}.{}.{}".format(version.split(".")[0],
-                       module,
-                       default_version_hostname)
+  # params = []
 
-  if "CURRENT_VERSION_ID" not in os.environ:
-    request.environ["CURRENT_VERSION_ID"] = version
-  if "DEFAULT_VERSION_HOSTNAME" not in os.environ:
-    request.environ["DEFAULT_VERSION_HOSTNAME"] = (
-        default_version_hostname)
-  if "CURRENT_MODULE_ID" not in os.environ:
-    request.environ["CURRENT_MODULE_ID"] = module
-  if "HTTP_HOST" not in os.environ:
-    request.environ["HTTP_HOST"] = host
+  # for (re_str, handler_class) in handlers_map:
+  #   re_str = "^" + re_str + "($|\\?)"
+  #   m = re.match(re_str, url)
+  #   if m:
+  #     params = m.groups()[:-1]
+  #     break
+  # else:
+  #   raise Exception("Can't determine handler for %s" % task)
 
-  # Set taskqueue specific headers and env vars.
-  for k, v in task.get("headers", []):
-    request.headers[k] = v
-    environ_key = "HTTP_" + k.replace("-", "_").upper()
-    request.environ[environ_key] = v
-  request.headers["X-AppEngine-TaskExecutionCount"] = retries
-  request.environ["HTTP_X_APPENGINE_TASKNAME"] = (
-      task.get("name", "default_task_name"))
-  request.environ["HTTP_X_APPENGINE_QUEUENAME"] = (
-      task.get("queue_name", "default"))
-  request.environ["PATH_INFO"] = request.path
+  # version = "mr-test-support-version.1"
+  # module = "mr-test-support-module"
+  # default_version_hostname = "mr-test-support.appspot.com"
+  # host = "{}.{}.{}".format(version.split(".")[0],
+  #              module,
+  #              default_version_hostname)
 
-  if task["method"] == "POST":
-    # taskqueue_stub base64 encodes body when it returns the task to us.
-    request.body = base64.b64decode(task["body"])
-    for k, v in decode_task_payload(task).items():
-      request.set(k, v)
+  # os.environ.setdefault("CURRENT_VERSION_ID", version)
+  # os.environ.setdefault("DEFAULT_VERSION_HOSTNAME", default_version_hostname)
+  # os.environ.setdefault("CURRENT_MODULE_ID", module)
+  # os.environ.setdefault("HTTP_HOST", host)
 
-  response = mock_webapp.MockResponse()
-  saved_os_environ = os.environ
-  copy_os_environ = dict(os.environ)
-  copy_os_environ.update(request.environ)
+  # for k, v in task.get("headers", []):
+  #   environ_key = "HTTP_" + k.replace("-", "_").upper()
+  #   os.environ[environ_key] = v
 
-  try:
-    os.environ = copy_os_environ
-    # Webapp2 expects request/response in the handler instantiation, and calls
-    # initialize automatically.
-    handler = handler_class(request, response)
-  except TypeError:
-    # For webapp, setup request before calling initialize.
-    handler = handler_class()
-    handler.initialize(request, response)
-  finally:
-    os.environ = saved_os_environ
+  # os.environ["HTTP_X_APPENGINE_TASKEXECUTIONCOUNT"] = str(retries)
+  # os.environ["HTTP_X_APPENGINE_TASKNAME"] = task.get("name", "default_task_name")
+  # os.environ["HTTP_X_APPENGINE_QUEUENAME"] = task.get("queue_name", "default")
+  # os.environ["PATH_INFO"] = task.get("path", "/") # TODO: check this
 
-  try:
-    os.environ = copy_os_environ
+  # response = mock_webapp.MockResponse()
+  # saved_os_environ = os.environ
+  # copy_os_environ = dict(os.environ)
+  # copy_os_environ.update(request.environ)
 
-    if task["method"] == "POST":
-      handler.post(*params)
-    elif task["method"] == "GET":
-      handler.get(*params)
-    else:
-      raise Exception("Unsupported method: %s" % task.method)
-  finally:
-    os.environ = saved_os_environ
+  # try:
+  #   os.environ = copy_os_environ
+  #   # Webapp2 expects request/response in the handler instantiation, and calls
+  #   # initialize automatically.
+  #   handler = handler_class(request, response)
+  # except TypeError:
+  #   # For webapp, setup request before calling initialize.
+  #   handler = handler_class()
+  #   handler.initialize(request, response)
+  # finally:
+  #   os.environ = saved_os_environ
 
-  if handler.response.status != 200:
-    raise Exception("Handler failure: %s (%s). \nTask: %s\nHandler: %s" %
-                    (handler.response.status,
-                     handler.response.status_message,
-                     task,
-                     handler))
-  return handler
+  # try:
+  #   os.environ = copy_os_environ
+
+
+
+
+  # if task["method"] == "POST":
+  #   request.data = base64.b64decode(task["body"])
+  #   for k, v in decode_task_payload(task).items():
+  #     request.form[k] = v
+
+  # response = make_response()
+
+  # try:
+  #   if task["method"] == "POST":
+  #     handler_func(*params)
+  #   elif task["method"] == "GET":
+  #     handler_func(*params)
+  #   else:
+  #     raise Exception("Unsupported method: %s" % task.method)
+  # except Exception as e:
+  #   response.status_code = 500
+  #   response.data = str(e)
+  # else:
+  #   response.status_code = 200
+
+  # if response.status_code != 200:
+  #   raise Exception("Handler failure: %s. \nTask: %s\nHandler: %s" %
+  #           (response.status_code,
+  #            task,
+  #            handler_func))
+  # return handler_func
 
 
 def execute_all_tasks(taskqueue, queue="default", handlers_map=None):

@@ -65,7 +65,7 @@ class TaskQueueHandler(MethodView):
       self._preprocess_success = False
       super().__init__(*args, **kwargs)
 
-  def dispatch_request(self):
+  def dispatch_request(self, *args, **kwargs):
     # Check request is from taskqueue.
       if "X-AppEngine-QueueName" not in request.headers:
           logging.error(request.headers)
@@ -96,7 +96,8 @@ class TaskQueueHandler(MethodView):
 
   def post(self):
     if self._preprocess_success:
-      return self.handle()
+      self.handle()
+      return make_response("Task completed", 200)
     return make_response("Preprocessing failed", 200)
 
   def handle(self):
@@ -205,14 +206,14 @@ class PostJsonHandler(JsonHandler):
   """JSON handler that accepts POST requests."""
 
   def post(self):
-    self._handle_wrapper()
+    return self._handle_wrapper()
 
 
 class GetJsonHandler(JsonHandler):
   """JSON handler that accepts GET posts."""
 
   def get(self):
-    self._handle_wrapper()
+    return self._handle_wrapper()
 
 
 class HugeTaskHandler(TaskQueueHandler):

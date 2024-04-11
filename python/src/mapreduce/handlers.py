@@ -1359,7 +1359,7 @@ class KickOffJobHandler(base_handler.TaskQueueHandler):
   def handle(self):
     """Handles kick off request."""
     # Get and verify mr state.
-    mr_id = request.args.get("mapreduce_id")
+    mr_id = request.form.get("mapreduce_id", request.args.get("mapreduce_id"))
     # Log the mr_id since this is started in an unnamed task
     logging.info("Processing kickoff for job %s", mr_id)
     state = model.MapreduceState.get_by_job_id(mr_id)
@@ -1458,8 +1458,7 @@ class KickOffJobHandler(base_handler.TaskQueueHandler):
       serialized_input_readers = model._HugeTaskPayload(
           key_name=serialized_input_readers_key, parent=state)
       readers_json_str = [i.to_json_str() for i in readers]
-      serialized_input_readers.payload = zlib.compress(json.dumps(
-                                                       readers_json_str))
+      serialized_input_readers.payload = zlib.compress(json.dumps(readers_json_str).encode('utf-8'))
     return readers, serialized_input_readers
 
   def _setup_output_writer(self, state):
@@ -1645,12 +1644,20 @@ class StartJobHandler(base_handler.PostJsonHandler):
     Returns:
       The user parameters.
     """
-    params_validator = request.args.get(validator_parameter)
+    params_validator = request.form.get(validator_parameter, request.args.get(validator_parameter))
 
     user_params = {}
-    for key in self.request.arguments():
+    for key in request.args:
       if key.startswith(name_prefix):
-        values = self.request.get_all(key)
+        values = request.args.getlist(key)
+        adjusted_key = key[len(name_prefix):]
+        if len(values) == 1:
+          user_params[adjusted_key] = values[0]
+        else:
+          user_params[adjusted_key] = values
+    for key in request.form:
+      if key.startswith(name_prefix):
+        values = request.form.getlist(key)
         adjusted_key = key[len(name_prefix):]
         if len(values) == 1:
           user_params[adjusted_key] = values[0]
@@ -1675,7 +1682,7 @@ class StartJobHandler(base_handler.PostJsonHandler):
     Raises:
       errors.NotEnoughArgumentsError: if parameter is not specified.
     """
-    value = request.args.get(param_name)
+    value = request.form.get(param_name, request.args.get(param_name))
     if not value:
       raise errors.NotEnoughArgumentsError(param_name + " not specified")
     return value

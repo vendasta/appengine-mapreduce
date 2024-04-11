@@ -15,26 +15,25 @@
 # limitations under the License.
 
 
-
-
 import os
 import shutil
+import sys
 import tempfile
 import time
 import unittest
-
-try:
-  import json
-except ImportError:
-  import simplejson as json
+import json
 from google.appengine.api import yaml_errors
 from google.appengine.ext import db
+
+# Fix up paths for running tests.
+sys.path.append(os.path.join(os.path.dirname(__file__), "../../src"))
+sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+
 from mapreduce import errors
 from mapreduce import handlers
 from mapreduce import status
 from testlib import testutil
 from mapreduce import test_support
-from google.appengine.ext.webapp import mock_webapp
 
 
 class TestKind(db.Model):
@@ -279,58 +278,37 @@ class MapreduceYamlTest(unittest.TestCase):
 class ResourceTest(testutil.HandlerTestBase):
   """Tests for the resource handler."""
 
-  def setUp(self):
-    """Sets up the test harness."""
-    testutil.HandlerTestBase.setUp(self)
-    self.handler = status.ResourceHandler()
-    self.handler.initialize(mock_webapp.MockRequest(),
-                            mock_webapp.MockResponse())
-    self.handler.request.path = "/mapreduce/path"
-
   def testPaths(self):
     """Tests that paths are accessible."""
-    self.handler.get("status")
-    self.assertTrue(self.handler.response.out.getvalue().startswith(
-                        "<!DOCTYPE html>"))
-    self.assertEqual("text/html",
-                      self.handler.response.headers["Content-Type"])
+    response = self.client.get("/mapreduce/status")
+    self.assertEqual(200, response.status_code)
+    self.assertTrue(response.data.startswith(b"<!DOCTYPE html>"))
+    self.assertEqual("text/html", response.headers["Content-Type"])
 
-    self.handler.response.out.truncate(0)
-    self.handler.get("jquery.js")
-    self.assertTrue(self.handler.response.out.getvalue().startswith(
-                        "/*!"))
-    self.assertEqual("text/javascript",
-                      self.handler.response.headers["Content-Type"])
+    response = self.client.get("/mapreduce/jquery.js")
+    self.assertEqual(200, response.status_code)
+    self.assertTrue(response.data.startswith(b"/*!"))
+    self.assertEqual("text/javascript", response.headers["Content-Type"])
 
   def testCachingHeaders(self):
     """Tests that caching headers are correct."""
-    self.handler.get("status")
+    response = self.client.get("/mapreduce/status")
     self.assertEqual("public; max-age=300",
-                      self.handler.response.headers["Cache-Control"])
+                      response.headers["Cache-Control"])
 
   def testMissing(self):
     """Tests when a resource is requested that doesn't exist."""
-    self.handler.get("unknown")
-    self.assertEqual(404, self.handler.response.status)
+    response = self.client.get("/mapreduce/missing")
+    self.assertEqual(404, response.status_code)
 
 
 class ListConfigsTest(testutil.HandlerTestBase):
   """Tests for the ListConfigsHandler."""
 
-  def setUp(self):
-    """Sets up the test harness."""
-    testutil.HandlerTestBase.setUp(self)
-    self.handler = status.ListConfigsHandler()
-    self.handler.initialize(mock_webapp.MockRequest(),
-                            mock_webapp.MockResponse())
-    self.handler.request.path = "/mapreduce/command/path"
-    self.handler.request.headers["X-Requested-With"] = "XMLHttpRequest"
-
   def testCSRF(self):
     """Test that we check the X-Requested-With header."""
-    del self.handler.request.headers["X-Requested-With"]
-    self.handler.get()
-    self.assertEqual(403, self.handler.response.status)
+    response = self.client.get("/mapreduce/command/list_configs")
+    self.assertEqual(403, response.status_code)
 
   def testBasic(self):
     """Tests listing available configs."""
@@ -356,9 +334,13 @@ class ListConfigsTest(testutil.HandlerTestBase):
         "  - name: foo\n"
         "    value: bar\n")
     try:
-      self.handler.get()
+      response = self.client.get("/mapreduce/command/list_configs", headers={
+          "X-Requested-With": "XMLHttpRequest",
+      })
     finally:
       status.get_mapreduce_yaml = old_get_yaml
+
+    self.assertEqual("text/javascript", response.headers["Content-Type"])
 
     self.assertEqual(
         {'configs': [
@@ -376,108 +358,117 @@ class ListConfigsTest(testutil.HandlerTestBase):
            'params': {
                'foo': 'bar',},
            }]},
-        json.loads(self.handler.response.out.getvalue()))
-    self.assertEqual("text/javascript",
-                      self.handler.response.headers["Content-Type"])
+        json.loads(response.data))
 
 
 class ListJobsTest(testutil.HandlerTestBase):
-  """Tests listing active and inactive jobs."""
+    """Tests listing active and inactive jobs."""
 
-  def setUp(self):
-    """Sets up the test harness."""
-    testutil.HandlerTestBase.setUp(self)
-    self.start = handlers.StartJobHandler()
-    self.start.initialize(mock_webapp.MockRequest(),
-                          mock_webapp.MockResponse())
-    self.start.request.path = "/mapreduce/command/start"
-    self.start.request.set(
-        "mapper_input_reader",
-        "mapreduce.input_readers.DatastoreInputReader")
-    self.start.request.set("mapper_handler", "__main__.TestMap")
-    self.start.request.set("mapper_params.entity_kind", "__main__.TestKind")
-    self.start.request.headers["X-Requested-With"] = "XMLHttpRequest"
+    def testCSRF(self):
+        """Test that we check the X-Requested-With header."""
+        TestKind().put()
 
-    self.handler = status.ListJobsHandler()
-    self.handler.initialize(mock_webapp.MockRequest(),
-                            mock_webapp.MockResponse())
-    self.handler.request.path = "/mapreduce/command/list"
+        response = self.client.post("/mapreduce/command/start_job")
+        self.assertEqual(403, response.status_code)
 
-    self.handler.request.headers["X-Requested-With"] = "XMLHttpRequest"
+        response = self.client.get("/mapreduce/command/list_jobs")
+        self.assertEqual(403, response.status_code)
 
-  def testCSRF(self):
-    """Test that we check the X-Requested-With header."""
-    TestKind().put()
+    def testBasic(self):
+        """Tests when there are fewer than the max results to render."""
+        TestKind().put()
 
-    del self.start.request.headers["X-Requested-With"]
-    self.start.post()
-    self.assertEqual(403, self.start.response.status)
+        for job_name in ["my job 1", "my job 2", "my job 3"]:
+          self.client.post(
+            "/mapreduce/command/start_job",
+            data={
+              "name": job_name,
+              "mapper_input_reader": "mapreduce.input_readers.DatastoreInputReader",
+              "mapper_handler": f"{TestMap.__module__}.{TestMap.__name__}",
+              "mapper_params.entity_kind": f"{TestKind.__module__}.{TestKind.__name__}",
+            },
+            headers={
+              "X-Requested-With": "XMLHttpRequest",
+            },
+          )
+          time.sleep(0.1)
 
-    del self.handler.request.headers["X-Requested-With"]
-    self.handler.get()
-    self.assertEqual(403, self.handler.response.status)
+        response = self.client.get(
+            "/mapreduce/command/list_jobs",
+            headers={
+                "X-Requested-With": "XMLHttpRequest",
+            },
+        )
+        result = json.loads(response.data)
+        expected_args = set(
+            [
+                "active",
+                "active_shards",
+                "chart_url",
+                "chart_width",
+                "mapreduce_id",
+                "name",
+                "shards",
+                "start_timestamp_ms",
+                "updated_timestamp_ms",
+            ]
+        )
+        self.assertEqual(3, len(result["jobs"]))
+        self.assertEqual("my job 3", result["jobs"][0]["name"])
+        self.assertEqual("my job 2", result["jobs"][1]["name"])
+        self.assertEqual("my job 1", result["jobs"][2]["name"])
+        self.assertEqual(expected_args, set(result["jobs"][0].keys()))
+        self.assertEqual(expected_args, set(result["jobs"][1].keys()))
+        self.assertEqual(expected_args, set(result["jobs"][2].keys()))
 
-  def testBasic(self):
-    """Tests when there are fewer than the max results to render."""
-    TestKind().put()
-    self.start.request.set("name", "my job 1")
-    self.start.post()
-    time.sleep(.1)
-    self.start.request.set("name", "my job 2")
-    self.start.post()
-    time.sleep(.1)
-    self.start.request.set("name", "my job 3")
-    self.start.post()
+    def testCursor(self):
+        """Tests when a job cursor is present."""
+        TestKind().put()
+        for job_name in ["my job 1", "my job 2"]:
+          self.client.post(
+            "/mapreduce/command/start_job",
+            data={
+              "name": job_name,
+              "mapper_input_reader": "mapreduce.input_readers.DatastoreInputReader",
+              "mapper_handler": f"{TestMap.__module__}.{TestMap.__name__}",
+              "mapper_params.entity_kind": f"{TestKind.__module__}.{TestKind.__name__}",
+            },
+            headers={
+              "X-Requested-With": "XMLHttpRequest",
+            },
+          )
+          time.sleep(0.1)
 
-    self.handler.get()
-    result = json.loads(self.handler.response.out.getvalue())
-    expected_args = set([
-        "active",
-        "active_shards",
-        "chart_url",
-        "chart_width",
-        "mapreduce_id",
-        "name",
-        "shards",
-        "start_timestamp_ms",
-        "updated_timestamp_ms",
-        ])
-    self.assertEqual(3, len(result["jobs"]))
-    self.assertEqual("my job 3", result["jobs"][0]["name"])
-    self.assertEqual("my job 2", result["jobs"][1]["name"])
-    self.assertEqual("my job 1", result["jobs"][2]["name"])
-    self.assertEqual(expected_args, set(result["jobs"][0].keys()))
-    self.assertEqual(expected_args, set(result["jobs"][1].keys()))
-    self.assertEqual(expected_args, set(result["jobs"][2].keys()))
+        response = self.client.get(
+            "/mapreduce/command/list_jobs?count=1",
+            headers={
+                "X-Requested-With": "XMLHttpRequest",
+            },
+        )
+        result = json.loads(response.data)
+        self.assertEqual(1, len(result["jobs"]))
+        self.assertTrue("cursor" in result)
 
-  def testCursor(self):
-    """Tests when a job cursor is present."""
-    TestKind().put()
-    self.start.request.set("name", "my job 1")
-    self.start.post()
-    time.sleep(.1)  # Can not start two jobs before time advances
-    self.start.request.set("name", "my job 2")
-    self.start.post()
+        response2 = self.client.get(
+            "/mapreduce/command/list_jobs?count=1&cursor=" + result["cursor"],
+            headers={
+                "X-Requested-With": "XMLHttpRequest",
+            },
+        )
+        result2 = json.loads(response2.data)
+        self.assertEqual(1, len(result2["jobs"]))
+        self.assertFalse("cursor" in result2)
 
-    self.handler.request.set("count", "1")
-    self.handler.get()
-    result = json.loads(self.handler.response.out.getvalue())
-    self.assertEqual(1, len(result["jobs"]))
-    self.assertTrue("cursor" in result)
-
-    self.handler.response.out.truncate(0)
-    self.handler.request.set("count", "1")
-    self.handler.request.set("cursor", result['cursor'])
-    self.handler.get()
-    result2 = json.loads(self.handler.response.out.getvalue())
-    self.assertEqual(1, len(result2["jobs"]))
-    self.assertFalse("cursor" in result2)
-
-  def testNoJobs(self):
-    """Tests when there are no jobs."""
-    self.handler.get()
-    result = json.loads(self.handler.response.out.getvalue())
-    self.assertEqual({'jobs': []}, result)
+    def testNoJobs(self):
+        """Tests when there are no jobs."""
+        response = self.client.get(
+            "/mapreduce/command/list_jobs",
+            headers={
+                "X-Requested-With": "XMLHttpRequest",
+            },
+        )
+        result = json.loads(response.data)
+        self.assertEqual({'jobs': []}, result)
 
 
 class GetJobDetailTest(testutil.HandlerTestBase):
@@ -489,29 +480,20 @@ class GetJobDetailTest(testutil.HandlerTestBase):
 
     for _ in range(100):
       TestKind().put()
-    self.start = handlers.StartJobHandler()
-    self.start.initialize(mock_webapp.MockRequest(),
-                          mock_webapp.MockResponse())
-    self.start.request.path = "/mapreduce/command/start"
-    self.start.request.set("name", "my job 1")
-    self.start.request.set(
-        "mapper_input_reader",
-        "mapreduce.input_readers.DatastoreInputReader")
-    self.start.request.set("mapper_handler", "__main__.TestMap")
-    self.start.request.set("mapper_params.entity_kind", "__main__.TestKind")
 
-    self.start.request.headers["X-Requested-With"] = "XMLHttpRequest"
-
-    self.start.post()
-    result = json.loads(self.start.response.out.getvalue())
-    self.mapreduce_id = result["mapreduce_id"]
-
-    self.handler = status.GetJobDetailHandler()
-    self.handler.initialize(mock_webapp.MockRequest(),
-                            mock_webapp.MockResponse())
-    self.handler.request.path = "/mapreduce/command/list"
-
-    self.handler.request.headers["X-Requested-With"] = "XMLHttpRequest"
+    response = self.client.post(
+      "/mapreduce/command/start_job",
+      data={
+        "name": "my job 1",
+        "mapper_input_reader": "mapreduce.input_readers.DatastoreInputReader",
+        "mapper_handler": f"{TestMap.__module__}.{TestMap.__name__}",
+        "mapper_params.entity_kind": f"{TestKind.__module__}.{TestKind.__name__}",
+      },
+      headers={
+        "X-Requested-With": "XMLHttpRequest",
+      },
+    )
+    self.mapreduce_id = json.loads(response.data)["mapreduce_id"]
 
   def KickOffMapreduce(self):
     """Executes pending kickoff task."""
@@ -519,16 +501,20 @@ class GetJobDetailTest(testutil.HandlerTestBase):
 
   def testCSRF(self):
     """Test that we check the X-Requested-With header."""
-    del self.handler.request.headers["X-Requested-With"]
-    self.handler.get()
-    self.assertEqual(403, self.handler.response.status)
+    response = self.client.get("/mapreduce/command/get_job_detail")
+    self.assertEqual(403, response.status_code)
 
   def testBasic(self):
     """Tests getting the job details."""
     self.KickOffMapreduce()
-    self.handler.request.set("mapreduce_id", self.mapreduce_id)
-    self.handler.get()
-    result = json.loads(self.handler.response.out.getvalue())
+
+    response = self.client.get(
+        "/mapreduce/command/get_job_detail?mapreduce_id=" + self.mapreduce_id,
+        headers={
+            "X-Requested-With": "XMLHttpRequest",
+        },
+    )
+    result = json.loads(response.data)
 
     expected_keys = set([
         "active", "chart_url", "counters", "mapper_spec", "mapreduce_id",
@@ -545,10 +531,14 @@ class GetJobDetailTest(testutil.HandlerTestBase):
 
   def testBeforeKickOff(self):
     """Tests getting the job details."""
-    self.handler.request.set("mapreduce_id", self.mapreduce_id)
-    self.handler.get()
-    result = json.loads(self.handler.response.out.getvalue())
-
+    response = self.client.get(
+        "/mapreduce/command/get_job_detail?mapreduce_id=" + self.mapreduce_id,
+        headers={
+            "X-Requested-With": "XMLHttpRequest",
+        },
+    )
+    result = json.loads(response.data)
+    
     expected_keys = set([
         "active", "chart_url", "counters", "mapper_spec", "mapreduce_id",
         "name", "result_status", "shards", "start_timestamp_ms",
@@ -558,13 +548,18 @@ class GetJobDetailTest(testutil.HandlerTestBase):
 
   def testBadJobId(self):
     """Tests when an invalid job ID is supplied."""
-    self.handler.request.set("mapreduce_id", "does not exist")
-    self.handler.get()
-    result = json.loads(self.handler.response.out.getvalue())
+    response = self.client.get(
+        "/mapreduce/command/get_job_detail?mapreduce_id=does_not_exist",
+        headers={
+            "X-Requested-With": "XMLHttpRequest",
+        },
+    )
+    result = json.loads(response.data)
     self.assertEqual(
-        {"error_message": "\"Could not find job with ID 'does not exist'\"",
+        {"error_message": "\"Could not find job with ID 'does_not_exist'\"",
          "error_class": "KeyError"},
         result)
+
 
 
 # TODO(user): Add tests for abort

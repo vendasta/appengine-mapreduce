@@ -96,10 +96,12 @@ def _get_task_host():
   version. If "default" version doesn't exist, the url is routed to the
   default version.
   """
-  version = os.environ["CURRENT_VERSION_ID"].split(".")[0]
+  version = os.environ.get("CURRENT_VERSION_ID", ".").split(".")[0]
   default_host = os.environ["DEFAULT_VERSION_HOSTNAME"]
-  module = os.environ["CURRENT_MODULE_ID"]
-  if os.environ["CURRENT_MODULE_ID"] == "default":
+  if not version:
+    return default_host
+  module = os.environ.get("CURRENT_MODULE_ID", "default")
+  if module == "default":
     return "{}.{}".format(version, default_host)
   return "{}.{}.{}".format(version, module, default_host)
 
@@ -281,11 +283,10 @@ def try_serialize_handler(handler):
   Returns:
     serialized handler string or None.
   """
-  if (isinstance(handler, types.InstanceType) or  # old style class
-      (isinstance(handler, object) and  # new style class
-       not inspect.isfunction(handler) and
-       not inspect.ismethod(handler)) and
-      hasattr(handler, "__call__")):
+  if ((isinstance(handler, object) and
+    not inspect.isfunction(handler) and
+    not inspect.ismethod(handler)) and
+    hasattr(handler, "__call__")):
     return pickle.dumps(handler)
   return None
 

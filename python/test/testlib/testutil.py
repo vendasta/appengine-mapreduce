@@ -27,12 +27,9 @@
 from google.appengine.tools import os_compat
 # pylint: enable=unused-import,g-bad-import-order
 
-import imp
 import os
-import sys
 import unittest
 
-from google.appengine.datastore import entity_pb
 from google.appengine.ext import ndb
 from google.appengine.api import datastore_types
 from google.appengine.api import namespace_manager
@@ -42,17 +39,10 @@ from google.appengine.ext import db
 from google.appengine.ext import testbed
 from mapreduce import json_util
 from mapreduce import model
+import mapreduce
 
-# pylint: disable=unused-import
-try:
-  import mock
-except ImportError as e:
-  _NAME = os.environ.get("ROOT_PACKAGE_NAME")
-  if not _NAME:
-    raise e
-  mod = sys.modules.setdefault(_NAME, imp.new_module(_NAME))
-  mod.__path__ = [os.environ["ROOT_PACKAGE_PATH"]]
-  import mock
+from flask import Flask
+import mock
 
 
 class TestJsonType(object):
@@ -166,10 +156,11 @@ def _create_entities(keys_itr,
   return entities
 
 
-class MatchesUserRPC(mock.Base):
+class MatchesUserRPC(mock.Mock):
   """Mox comparator for UserRPC objects."""
 
   def __init__(self, **kwargs):
+    super().__init__()
     self.kwargs = kwargs
 
   def matches(self, rpc):
@@ -189,7 +180,6 @@ class HandlerTestBase(unittest.TestCase):
 
   def setUp(self):
     unittest.TestCase.setUp(self)
-    self.mox = mock.MagicMock()
 
     self.appid = "testapp"
     self.major_version_id = "1"
@@ -212,11 +202,10 @@ class HandlerTestBase(unittest.TestCase):
     # HRD with no eventual consistency.
     policy = datastore_stub_util.PseudoRandomHRConsistencyPolicy(probability=1)
     self.testbed.init_datastore_v3_stub(consistency_policy=policy)
-    self.testbed.init_logservice_stub()
-    self.testbed.init_files_stub()
     self.testbed.init_memcache_stub()
     self.testbed.init_taskqueue_stub()
     self.testbed.init_urlfetch_stub()
+    self.testbed.init_user_stub()
 
     # For backwards compatibility, maintain easy references to some stubs
     self.taskqueue = self.testbed.get_stub(testbed.TASKQUEUE_SERVICE_NAME)
@@ -230,13 +219,14 @@ class HandlerTestBase(unittest.TestCase):
             "- name: crazy-queue\n"
             "  rate: 2000/d\n"
             "  bucket_size: 10\n"))
+    
+    handlers_map = mapreduce.create_handlers_map()
+    self.app = Flask(__name__)
+    for pattern, handler_class in handlers_map:
+      self.app.add_url_rule(pattern, view_func=handler_class.as_view(pattern.lstrip("/")))
+    self.client = self.app.test_client()
 
   def tearDown(self):
-    try:
-      self.mox.assert_called_with()
-    finally:
-      self.mox.reset_mock()
-
     del os.environ["APPLICATION_ID"]
     del os.environ["CURRENT_VERSION_ID"]
     del os.environ["CURRENT_MODULE_ID"]

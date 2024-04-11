@@ -15,6 +15,7 @@ from google.appengine.ext import db
 
 # Fix up paths for running tests.
 sys.path.append(os.path.join(os.path.dirname(__file__), "../../src"))
+sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from mapreduce import input_readers
 from mapreduce import mapreduce_pipeline

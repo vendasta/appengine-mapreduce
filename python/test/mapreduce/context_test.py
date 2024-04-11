@@ -17,17 +17,22 @@
 
 
 
+import os
 import random
+import sys
 import unittest
-
-import mox
 
 from google.appengine.ext import ndb
 from google.appengine.api import datastore
 from google.appengine.ext import db
-from mapreduce import context
-from testlib import testutil
 from google.appengine.runtime import apiproxy_errors
+
+# Fix up paths for running tests.
+sys.path.append(os.path.join(os.path.dirname(__file__), "../../src"))
+sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+
+from testlib import testutil
+from mapreduce import context
 
 # pylint: disable=g-bad-name
 
