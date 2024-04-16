@@ -330,7 +330,7 @@ def _split_byte_string_property(start, end, n, include_start, include_end):
     end_ord += 1
 
   # Do split.
-  stride = (end_ord - start_ord) / float(n)
+  stride = (end_ord - start_ord) // float(n)
   if stride <= 0:
     raise ValueError("Range too small to split: start %s end %s", start, end)
   splitpoints = [_ord_to_str(start_ord, weights)]

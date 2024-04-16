@@ -167,6 +167,8 @@ class RecordsWriter:
 
     self.__writer.write(
         struct.pack(_HEADER_FORMAT, _mask_crc(crc), length, record_type))
+    if isinstance(data, str):
+      data = data.encode('utf-8')
     self.__writer.write(data)
     self.__position += _HEADER_LENGTH + length
 
@@ -180,7 +182,7 @@ class RecordsWriter:
 
     if block_remaining < _HEADER_LENGTH:
       # Header won't fit into remainder
-      self.__writer.write('\x00' * block_remaining)
+      self.__writer.write(b'\x00' * block_remaining)
       self.__position += block_remaining
       block_remaining = _BLOCK_SIZE
 
@@ -220,7 +222,7 @@ class RecordsWriter:
     """
     pad_length = _BLOCK_SIZE - self.__position % _BLOCK_SIZE
     if pad_length and pad_length != _BLOCK_SIZE:
-      self.__writer.write('\x00' * pad_length)
+      self.__writer.write(b'\x00' * pad_length)
       self.__position += pad_length
 
 

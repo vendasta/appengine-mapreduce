@@ -102,7 +102,9 @@ def crc_update(crc, data):
     32-bit updated CRC-32C as long.
   """
   # Convert data to byte array if needed
-  if type(data) != array.array or data.itemsize != 1:
+  if isinstance(data, str):
+    buf = array.array("B", bytes(data, 'utf-8'))
+  elif not isinstance(data, array.array) or data.itemsize != 1:
     buf = array.array("B", data)
   else:
     buf = data

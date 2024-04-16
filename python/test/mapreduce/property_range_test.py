@@ -8,6 +8,7 @@
 import datetime
 import os
 import string
+import sys
 import unittest
 
 from google.appengine.ext import ndb
@@ -15,6 +16,11 @@ from google.appengine.ext import ndb
 from google.appengine.api import namespace_manager
 from google.appengine.ext import db
 from google.appengine.ext import testbed
+
+# Fix up paths for running tests.
+sys.path.append(os.path.join(os.path.dirname(__file__), "../../src"))
+sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+
 from mapreduce import property_range
 
 

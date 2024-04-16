@@ -4,7 +4,13 @@
 
 
 import array
+import os
+import sys
 import unittest
+
+# Fix up paths for running tests.
+sys.path.append(os.path.join(os.path.dirname(__file__), "../../src"))
+sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from mapreduce.third_party import crc32c
 from mapreduce import records
@@ -14,14 +20,14 @@ class StringWriter(object):
   """records.FileWriter compliant writer to string."""
 
   def __init__(self):
-    self.data = ''
+    self.data = b''
 
   def write(self, bytes):
     self.data += bytes
 
   def toarray(self):
     a = array.array('B')
-    a.fromstring(self.data)
+    a.frombytes(self.data)
     return a
 
   def tolist(self):
@@ -277,7 +283,7 @@ class RecordsTest(unittest.TestCase):
       w._pad_block()
 
     reader = records.RecordsReader(StringReader(writer.data))
-    self.assertEqual('', reader.read())
+    self.assertEqual(b'', reader.read())
     self.assertEqual(records._BLOCK_SIZE, len(writer.data))
 
   def testReadEmptyRecord(self):
@@ -293,9 +299,9 @@ class RecordsTest(unittest.TestCase):
 
     reader = records.RecordsReader(StringReader(writer.data))
 
-    self.assertEqual('', reader.read())
+    self.assertEqual(b'', reader.read())
     # Should correctly skip padding.
-    self.assertEqual('', reader.read())
+    self.assertEqual(b'', reader.read())
     self.assertRaises(EOFError, reader.read)
 
   def testReadWholeBlocks(self):
@@ -311,8 +317,8 @@ class RecordsTest(unittest.TestCase):
 
     reader = records.RecordsReader(StringReader(writer.data))
 
-    self.assertEqual('1' * 13, reader.read())
-    self.assertEqual('1' * 13, reader.read())
+    self.assertEqual(b'1' * 13, reader.read())
+    self.assertEqual(b'1' * 13, reader.read())
     self.assertRaises(EOFError, reader.read)
 
   def testReadNoRoomForHeader(self):
@@ -325,8 +331,8 @@ class RecordsTest(unittest.TestCase):
 
     reader = records.RecordsReader(StringReader(writer.data))
 
-    self.assertEqual('1' * 10, reader.read())
-    self.assertEqual('1' * 10, reader.read())
+    self.assertEqual(b'1' * 10, reader.read())
+    self.assertEqual(b'1' * 10, reader.read())
     self.assertRaises(EOFError, reader.read)
 
   def testReadLargeRecords(self):
@@ -334,23 +340,23 @@ class RecordsTest(unittest.TestCase):
     writer = StringWriter()
 
     with records.RecordsWriter(writer) as w:
-      w.write('1' * 10)
-      w.write('1' * 20)
-      w.write('1' * 30)
-      w.write('1' * 40)
-      w.write('1' * 50)
-      w.write('1' * 60)
-      w.write('1' * 70)
+      w.write(b'1' * 10)
+      w.write(b'1' * 20)
+      w.write(b'1' * 30)
+      w.write(b'1' * 40)
+      w.write(b'1' * 50)
+      w.write(b'1' * 60)
+      w.write(b'1' * 70)
 
     reader = records.RecordsReader(StringReader(writer.data))
 
-    self.assertEqual('1' * 10, reader.read())
-    self.assertEqual('1' * 20, reader.read())
-    self.assertEqual('1' * 30, reader.read())
-    self.assertEqual('1' * 40, reader.read())
-    self.assertEqual('1' * 50, reader.read())
-    self.assertEqual('1' * 60, reader.read())
-    self.assertEqual('1' * 70, reader.read())
+    self.assertEqual(b'1' * 10, reader.read())
+    self.assertEqual(b'1' * 20, reader.read())
+    self.assertEqual(b'1' * 30, reader.read())
+    self.assertEqual(b'1' * 40, reader.read())
+    self.assertEqual(b'1' * 50, reader.read())
+    self.assertEqual(b'1' * 60, reader.read())
+    self.assertEqual(b'1' * 70, reader.read())
     self.assertRaises(EOFError, reader.read)
 
   def testReadHeaderAtTheEndOfTheBlock(self):
@@ -363,8 +369,8 @@ class RecordsTest(unittest.TestCase):
 
     reader = records.RecordsReader(StringReader(writer.data))
 
-    self.assertEqual('1' * 6, reader.read())
-    self.assertEqual('1' * 10, reader.read())
+    self.assertEqual(b'1' * 6, reader.read())
+    self.assertEqual(b'1' * 10, reader.read())
     self.assertRaises(EOFError, reader.read)
 
   def testReadCorruptedCrcSmallRecord(self):
@@ -380,12 +386,12 @@ class RecordsTest(unittest.TestCase):
       w.write('1' * 2)
 
     data = writer.data
-    data = '_' + data[1:]
+    data = b'_' + data[1:]
     reader = records.RecordsReader(StringReader(data))
 
     # First  block should be completely skipped.
-    self.assertEqual('1' * 2, reader.read())
-    self.assertEqual('1' * 2, reader.read())
+    self.assertEqual(b'1' * 2, reader.read())
+    self.assertEqual(b'1' * 2, reader.read())
     self.assertRaises(EOFError, reader.read)
 
   def testReadCorruptedCrcLargeRecord(self):
@@ -399,11 +405,11 @@ class RecordsTest(unittest.TestCase):
       w.write('1' * 2)
 
     data = writer.data
-    data = '_' + data[1:]
+    data = b'_' + data[1:]
     reader = records.RecordsReader(StringReader(data))
 
     # First record should be completely skipped.
-    self.assertEqual('1' * 2, reader.read())
+    self.assertEqual(b'1' * 2, reader.read())
     self.assertRaises(EOFError, reader.read)
 
   def testReadCorruptedLength(self):
@@ -420,12 +426,12 @@ class RecordsTest(unittest.TestCase):
 
     data = writer.data
     # replace length by 65535
-    data = data[:4] + '\xff\xff' + data[6:]
+    data = data[:4] + b'\xff\xff' + data[6:]
     reader = records.RecordsReader(StringReader(data))
 
     # First  block should be completely skipped.
-    self.assertEqual('1' * 2, reader.read())
-    self.assertEqual('1' * 2, reader.read())
+    self.assertEqual(b'1' * 2, reader.read())
+    self.assertEqual(b'1' * 2, reader.read())
     self.assertRaises(EOFError, reader.read)
 
   def testReadCorruptedRecordOrder_FirstThenFirst(self):
@@ -435,7 +441,7 @@ class RecordsTest(unittest.TestCase):
     with records.RecordsWriter(writer) as w:
       # Fake first record that should be ignored
       w._RecordsWriter__write_record(
-          records._RECORD_TYPE_FIRST, 'A' * (records._BLOCK_SIZE / 2))
+          records._RECORD_TYPE_FIRST, 'A' * (records._BLOCK_SIZE // 2))
 
       # Multi-block record. This will cause 'A' to be ignored because
       # of a repeated first record.
@@ -443,7 +449,7 @@ class RecordsTest(unittest.TestCase):
 
     data = writer.data
     reader = records.RecordsReader(StringReader(data))
-    self.assertEqual('B' * 2 * records._BLOCK_SIZE, reader.read())
+    self.assertEqual(b'B' * 2 * records._BLOCK_SIZE, reader.read())
     self.assertRaises(EOFError, reader.read)
 
   def testReadCorruptedRecordOrder_FirstThenFull(self):
@@ -453,14 +459,14 @@ class RecordsTest(unittest.TestCase):
     with records.RecordsWriter(writer) as w:
       # Fake first record that should be ignored
       w._RecordsWriter__write_record(
-          records._RECORD_TYPE_FIRST, 'A' * (records._BLOCK_SIZE / 2))
+          records._RECORD_TYPE_FIRST, 'A' * (records._BLOCK_SIZE // 2))
 
       # Single-block, "full" record.
-      w.write('B' * (records._BLOCK_SIZE / 4))
+      w.write('B' * (records._BLOCK_SIZE // 4))
 
     data = writer.data
     reader = records.RecordsReader(StringReader(data))
-    self.assertEqual('B' * (records._BLOCK_SIZE / 4), reader.read())
+    self.assertEqual(b'B' * (records._BLOCK_SIZE // 4), reader.read())
     self.assertRaises(EOFError, reader.read)
 
   def testReadCorruptedRecordOrder_MiddleThenFull(self):
@@ -470,14 +476,14 @@ class RecordsTest(unittest.TestCase):
     with records.RecordsWriter(writer) as w:
       # Fake middle record that should be ignored
       w._RecordsWriter__write_record(
-          records._RECORD_TYPE_MIDDLE, 'A' * (records._BLOCK_SIZE / 2))
+        records._RECORD_TYPE_MIDDLE, 'A' * (records._BLOCK_SIZE // 2))
 
       # Single-block, "full" record.
-      w.write('B' * (records._BLOCK_SIZE / 4))
+      w.write('B' * (records._BLOCK_SIZE // 4))
 
     data = writer.data
     reader = records.RecordsReader(StringReader(data))
-    self.assertEqual('B' * (records._BLOCK_SIZE / 4), reader.read())
+    self.assertEqual(b'B' * (records._BLOCK_SIZE // 4), reader.read())
     self.assertRaises(EOFError, reader.read)
 
   def testReadCorruptedRecordOrder_LastThenFull(self):
@@ -487,14 +493,14 @@ class RecordsTest(unittest.TestCase):
     with records.RecordsWriter(writer) as w:
       # Fake last record that should be ignored
       w._RecordsWriter__write_record(
-          records._RECORD_TYPE_LAST, 'A' * (records._BLOCK_SIZE / 2))
+          records._RECORD_TYPE_LAST, 'A' * (records._BLOCK_SIZE // 2))
 
       # Single-block, "full" record.
-      w.write('B' * (records._BLOCK_SIZE / 4))
+      w.write('B' * (records._BLOCK_SIZE // 4))
 
     data = writer.data
     reader = records.RecordsReader(StringReader(data))
-    self.assertEqual('B' * (records._BLOCK_SIZE / 4), reader.read())
+    self.assertEqual(b'B' * (records._BLOCK_SIZE // 4), reader.read())
     self.assertRaises(EOFError, reader.read)
 
   def testIter(self):
@@ -508,7 +514,7 @@ class RecordsTest(unittest.TestCase):
       w.write('4' * 4)
 
     reader = records.RecordsReader(StringReader(writer.data))
-    self.assertEqual(['1', '22', '333', '4444'], list(reader))
+    self.assertEqual([b'1', b'22', b'333', b'4444'], list(reader))
 
   def testReadTruncatedBuffer(self):
     """Test reading records from truncated file."""
@@ -548,7 +554,7 @@ class RecordsTest(unittest.TestCase):
     # Try many input sizes!
     while input_size < records._BLOCK_SIZE * 3:
       writer = StringWriter()
-      inputs = '1' * input_size
+      inputs = b'1' * input_size
       with records.RecordsWriter(writer) as w:
         # Make sure even the smallest input covers more than one block.
         for _ in range(records._BLOCK_SIZE):

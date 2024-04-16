@@ -117,8 +117,11 @@ def _get_task_headers(map_job_id,
   Returns:
     A dictionary of all headers.
   """
-  return {mr_id_header_key: map_job_id,
-          "Host": _get_task_host()}
+  return {
+    mr_id_header_key: map_job_id,
+    "Host": _get_task_host(),
+    "Content-Type": "application/x-www-form-urlencoded",
+  }
 
 
 def _enum(**enums):

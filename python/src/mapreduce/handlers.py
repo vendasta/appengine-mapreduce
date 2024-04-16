@@ -220,12 +220,11 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
       else:
         if self._wait_time(shard_state,
                            parameters._MAX_LEASE_DURATION_SEC):
-          if not self._has_old_request_ended(shard_state):
-            logging.warning(
-                "Last retry of slice %s-%s is still in flight with request_id "
-                "%s. Will try again later.", tstate.shard_id, tstate.slice_id,
-                shard_state.slice_request_id)
-            return self._TASK_DIRECTIVE.RETRY_TASK
+          logging.warning(
+              "Last retry of slice %s-%s is still in flight with request_id "
+              "%s. Will try again later.", tstate.shard_id, tstate.slice_id,
+              shard_state.slice_request_id)
+          return self._TASK_DIRECTIVE.RETRY_TASK
         else:
           logging.warning(
               "Last retry of slice %s-%s has no log entry and has"
@@ -269,32 +268,6 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
         return self._TASK_DIRECTIVE.RETRY_TASK
 
     return _tx()
-
-  def _has_old_request_ended(self, shard_state):
-    """Whether previous slice retry has ended according to Logs API.
-
-    Args:
-      shard_state: shard state.
-
-    Returns:
-      True if the request of previous slice retry has ended. False if it has
-    not or unknown.
-    """
-    assert shard_state.slice_start_time is not None
-    assert shard_state.slice_request_id is not None
-    request_ids = [shard_state.slice_request_id]
-    logs = None
-    try:
-      logs = list(logservice.fetch(request_ids=request_ids))
-    except (apiproxy_errors.FeatureNotEnabledError,
-        apiproxy_errors.CapabilityDisabledError) as e:
-      # Managed VMs do not have access to the logservice API
-      # See https://groups.google.com/forum/#!topic/app-engine-managed-vms/r8i65uiFW0w
-      logging.warning("Ignoring exception: %s", e)
-
-    if not logs or not logs[0].finished:
-      return False
-    return True
 
   def _wait_time(self, shard_state, secs, now=datetime.datetime.now):
     """Time to wait until slice_start_time is secs ago from now.
@@ -426,7 +399,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
     context.Context._set(ctx)
 
     # Unmarshall input reader, output writer, and other transient states.
-    tstate = model.TransientShardState.from_request(self.request)
+    tstate = model.TransientShardState.from_request(request)
 
     # Try acquire a lease on the shard.
     if shard_state:
@@ -871,10 +844,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
           parameters.config.TASK_MAX_DATA_PROCESSING_ATTEMPTS,
           self.task_retry_count() + 1,
           parameters.config.TASK_MAX_ATTEMPTS)
-      # Clear info related to current exception. Otherwise, the real
-      # callstack that includes a frame for this method will show up
-      # in log.
-      sys.exc_clear()
+
       self._try_free_lease(shard_state, slice_retry=True)
       return self._TASK_DIRECTIVE.RETRY_SLICE
 
@@ -1082,8 +1052,8 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
 
   def handle(self):
     """Handle request."""
-    spec = model.MapreduceSpec.from_json_str(
-        request.args.get("mapreduce_spec"))
+    spec_str = request.form.get("mapreduce_spec", request.args.get("mapreduce_spec"))
+    spec = model.MapreduceSpec.from_json_str(spec_str)
     state, control = db.get([
         model.MapreduceState.get_key_by_job_id(spec.mapreduce_id),
         model.MapreduceControl.get_key_by_job_id(spec.mapreduce_id),
@@ -1198,7 +1168,7 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
     Returns:
       serial identifier as int.
     """
-    return int(request.args.get("serial_id"))
+    return int(request.form.get("serial_id", request.args.get("serial_id")))
 
   @classmethod
   def _finalize_outputs(cls, mapreduce_spec, mapreduce_state):
@@ -1399,7 +1369,7 @@ class KickOffJobHandler(base_handler.TaskQueueHandler):
 
   def _drop_gracefully(self):
     """See parent."""
-    mr_id = request.args.get("mapreduce_id")
+    mr_id = request.form.get("mapreduce_id", request.args.get("mapreduce_id"))
     logging.error("Failed to kick off job %s", mr_id)
 
     state = model.MapreduceState.get_by_job_id(mr_id)
@@ -1597,7 +1567,7 @@ class StartJobHandler(base_handler.PostJsonHandler):
     mapreduce_name = self._get_required_param("name")
     mapper_input_reader_spec = self._get_required_param("mapper_input_reader")
     mapper_handler_spec = self._get_required_param("mapper_handler")
-    mapper_output_writer_spec = request.args.get("mapper_output_writer")
+    mapper_output_writer_spec = request.form.get("mapper_output_writer", request.args.get("mapper_output_writer"))
     mapper_params = self._get_params(
         "mapper_params_validator", "mapper_params.")
     params = self._get_params(
@@ -1805,7 +1775,7 @@ class FinalizeJobHandler(base_handler.TaskQueueHandler):
   """Finalize map job by deleting all temporary entities."""
 
   def handle(self):
-    mapreduce_id = request.args.get("mapreduce_id")
+    mapreduce_id = request.form.get("mapreduce_id", request.args.get("mapreduce_id"))
     mapreduce_state = model.MapreduceState.get_by_job_id(mapreduce_id)
     if mapreduce_state:
       config = (
@@ -1849,7 +1819,7 @@ class CleanUpJobHandler(base_handler.PostJsonHandler):
   """Command to kick off tasks to clean up a job's data."""
 
   def handle(self):
-    mapreduce_id = request.args.get("mapreduce_id")
+    mapreduce_id = request.form.get("mapreduce_id", request.args.get("mapreduce_id"))
 
     mapreduce_state = model.MapreduceState.get_by_job_id(mapreduce_id)
     if mapreduce_state:
@@ -1865,5 +1835,6 @@ class AbortJobHandler(base_handler.PostJsonHandler):
   """Command to abort a running job."""
 
   def handle(self):
-    model.MapreduceControl.abort(request.args.get("mapreduce_id"))
+    mapreduce_id = request.form.get("mapreduce_id", request.args.get("mapreduce_id"))
+    model.MapreduceControl.abort(mapreduce_id)
     self.json_response["status"] = "Abort signal sent."

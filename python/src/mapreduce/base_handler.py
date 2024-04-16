@@ -31,7 +31,6 @@ pipeline_base = None
 if pkgutil.find_loader('mapreduce.pipeline_base') is not None:
   pipeline_base = importlib.import_module('mapreduce.pipeline_base')
 
-from google.cloud import storage
 from flask import abort, make_response, request
 from flask.views import MethodView
 from mapreduce import errors
@@ -84,9 +83,9 @@ class TaskQueueHandler(MethodView):
       try:
           self._preprocess()
           self._preprocess_success = True
-      except Exception as e:
+      except Exception:
           self._preprocess_success = False
-          logging.error(
+          logging.exception(
               "Preprocess task %s failed. Dropping it permanently.",
               request.headers["X-AppEngine-TaskName"])
           self._drop_gracefully()
@@ -239,7 +238,7 @@ class HugeTaskHandler(TaskQueueHandler):
     super().__init__(*args, **kwargs)
 
   def _preprocess(self):
-    self.request = self._RequestWrapper(self.request)
+    self.request = self._RequestWrapper(request)
 
 
 if pipeline_base:
