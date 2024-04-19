@@ -58,7 +58,7 @@ class TestHooks(hooks.Hooks):
     TestHooks.enqueue_kickoff_task_calls.append((task, queue_name))
 
 
-def test_handler(entity):
+def fake_handler(entity):
   """Test handler function."""
   pass
 

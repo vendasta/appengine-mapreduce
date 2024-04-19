@@ -390,7 +390,7 @@ class MatchesContext(mox.Comparator):
     return "MatchesContext(%s)" % self.kwargs
 
 
-ENTITY_KIND = "__main__.TestEntity"
+ENTITY_KIND = f"{TestEntity.__module__}.TestEntity"
 MAPPER_HANDLER_SPEC = __name__ + "." + TestHandler.__name__
 
 COUNTER_MAPPER_CALLS = context.COUNTER_MAPPER_CALLS
@@ -2818,9 +2818,9 @@ class CleanUpJobTest(testutil.HandlerTestBase):
     TestKind().put()
     self.mapreduce_id = control.start_map(
         "my job 1",
-        "__main__.TestMap",
+        f"{TestMap.__module__}.TestMap",
         "mapreduce.input_readers.DatastoreInputReader",
-        {"entity_kind": "__main__.TestKind"},
+        {"entity_kind": f"{TestKind.__module__}.TestKind"},
         4)
 
     self.handler = handlers.CleanUpJobHandler()

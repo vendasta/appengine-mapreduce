@@ -143,9 +143,9 @@ class PropertyRangeIteratorTest(IteratorTest):
     expected = [e.key() for e in entities if e.bar in [3, 4]]
     expected.sort()
 
-    itr = self._create_iter("__main__.TestEntity")
+    itr = self._create_iter(f"{TestEntity.__module__}.TestEntity")
     self._serializeAndAssertEquals(itr, expected, lambda e: e.key())
-    itr = self._create_iter("__main__.TestEntity")
+    itr = self._create_iter(f"{TestEntity.__module__}.TestEntity")
     self._AssertEquals(itr, expected, lambda e: e.key())
 
   def testE2eNdb(self):
@@ -153,9 +153,9 @@ class PropertyRangeIteratorTest(IteratorTest):
     expected = [e.key for e in entities if e.bar in [3, 4]]
     expected.sort()
 
-    itr = self._create_iter("__main__.NdbTestEntity")
+    itr = self._create_iter(f"{NdbTestEntity.__module__}.NdbTestEntity")
     self._serializeAndAssertEquals(itr, expected, lambda e: e.key)
-    itr = self._create_iter("__main__.NdbTestEntity")
+    itr = self._create_iter(f"{NdbTestEntity.__module}.NdbTestEntity")
     self._AssertEquals(itr, expected, lambda e: e.key)
 
 
@@ -179,10 +179,10 @@ class KeyRangesIteratorTest(IteratorTest):
     expected.sort()
 
     itr = self._create_iter(db_iters.KeyRangeModelIterator,
-                            "__main__.TestEntity")
+                            f"{TestEntity.__module__}.TestEntity")
     self._serializeAndAssertEquals(itr, expected, lambda e: e.key())
     itr = self._create_iter(db_iters.KeyRangeModelIterator,
-                            "__main__.TestEntity")
+                            f"{TestEntity.__module__}.TestEntity")
     self._AssertEquals(itr, expected, lambda e: e.key())
 
     itr = self._create_iter(db_iters.KeyRangeEntityIterator,
@@ -205,11 +205,11 @@ class KeyRangesIteratorTest(IteratorTest):
     expected.sort()
 
     itr = self._create_iter(db_iters.KeyRangeModelIterator,
-                            "__main__.NdbTestEntity")
+                            f"{NdbTestEntity.__module__}.NdbTestEntity")
     self._serializeAndAssertEquals(itr, expected, lambda e: e.key)
 
     itr = self._create_iter(db_iters.KeyRangeModelIterator,
-                            "__main__.NdbTestEntity")
+                            f"{NdbTestEntity.__module__}.NdbTestEntity")
     self._AssertEquals(itr, expected, lambda e: e.key)
 
 
@@ -250,10 +250,10 @@ class KeyRangeModelIteratorTest(KeyRangeIteratorTestBase):
     expected.sort()
 
     itr = self._create_iter(db_iters.KeyRangeModelIterator,
-                            "__main__.TestEntity")
+                            f"{TestEntity.__module__}.TestEntity")
     self._serializeAndAssertEquals(itr, expected, lambda e: e.key())
     itr = self._create_iter(db_iters.KeyRangeModelIterator,
-                            "__main__.TestEntity")
+                            f"{TestEntity.__module__}.TestEntity")
     self._AssertEquals(itr, expected, lambda e: e.key())
 
   def testE2eNdb(self):
@@ -262,10 +262,10 @@ class KeyRangeModelIteratorTest(KeyRangeIteratorTestBase):
     expected.sort()
 
     itr = self._create_iter(db_iters.KeyRangeModelIterator,
-                            "__main__.NdbTestEntity")
+                            f"{NdbTestEntity.__module__}.NdbTestEntity")
     self._serializeAndAssertEquals(itr, expected, lambda e: e.key)
     itr = self._create_iter(db_iters.KeyRangeModelIterator,
-                            "__main__.NdbTestEntity")
+                            f"{NdbTestEntity.__module__}.NdbTestEntity")
     self._AssertEquals(itr, expected, lambda e: e.key)
 
 

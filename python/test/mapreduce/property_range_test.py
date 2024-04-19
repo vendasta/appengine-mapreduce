@@ -107,7 +107,7 @@ class PropertyRangeTest(unittest.TestCase):
   def testSplit(self):
     r = property_range.PropertyRange(
         [("a", ">=", 1), ("a", "<=", 4), ("b", "=", 1)],
-        "__main__.TestEntity")
+        f"{TestEntity.__module__}.TestEntity")
     results = r.split(10)
     self.assertEqual(4, len(results))
     for r in results:
@@ -123,7 +123,7 @@ class PropertyRangeTest(unittest.TestCase):
 
     r = property_range.PropertyRange(
         [("c", ">=", 1), ("c", "<=", 4), ("b", "=", 1)],
-        "__main__.TestEntity")
+        f"{TestEntity.__module__}.TestEntity")
     results = r.split(4)
     self.assertEqual(4, len(results))
     for r in results:
@@ -140,7 +140,7 @@ class PropertyRangeTest(unittest.TestCase):
   def testSplit_reallyBigN(self):
     r = property_range.PropertyRange(
         [("a", ">", 1), ("a", "<=", 4), ("b", "=", 1)],
-        "__main__.TestEntity")
+        f"{TestEntity.__module__}.TestEntity")
     results = r.split(100)
     self.assertEqual(3, len(results))
     for r in results:
@@ -165,7 +165,7 @@ class PropertyRangeTest(unittest.TestCase):
     namespace_manager.set_namespace(None)
 
     r = property_range.PropertyRange(
-        [("a", ">", 2), ("a", "<", 4), ("b", "=", 1)], "__main__.TestEntity")
+        [("a", ">", 2), ("a", "<", 4), ("b", "=", 1)], f"{TestEntity.__module__}.TestEntity")
     query = r.make_query(ns)
     results = set()
     for i in query.run():
@@ -186,7 +186,7 @@ class PropertyRangeTest(unittest.TestCase):
           NdbTestEntity(key=key, a=a, b=b).put()
 
     r = property_range.PropertyRange(
-        [("a", ">", 2), ("a", "<", 4), ("b", "=", 1)], "__main__.NdbTestEntity")
+        [("a", ">", 2), ("a", "<", 4), ("b", "=", 1)], f"{NdbTestEntity.__module__}.NdbTestEntity")
     query = r.make_query(ns)
     results = set()
     for i in query.iter():
