@@ -9,10 +9,6 @@ import unittest
 _TEST_DATA_PATH = os.path.join(os.path.dirname(__file__), 'test_data')
 sys.path.insert(0, _TEST_DATA_PATH)
 
-# Fix up paths for running tests.
-sys.path.append(os.path.join(os.path.dirname(__file__), "../../src"))
-sys.path.append(os.path.join(os.path.dirname(__file__), "../"))
-
 # pylint: disable=g-import-not-at-top
 from mapreduce import parameters
 
@@ -25,7 +21,7 @@ class Bar(Foo):
   pass
 
 
-class TestConfig(parameters._Config):
+class FakeConfig(parameters._Config):
   a = parameters._Option(str, required=True)
   b = parameters._Option(bool, default_factory=lambda: True)
   c = parameters._Option(Foo, can_be_none=True)
@@ -33,16 +29,16 @@ class TestConfig(parameters._Config):
   e = parameters._Option(str, default_factory=lambda: 'data')
 
 
-class TestConfig2(parameters._Config):
+class FakeConfig2(parameters._Config):
   b = parameters._Option(str, required=True)
   z = parameters._Option(int, required=True)
 
 
-class TestConfig3(TestConfig2, TestConfig):
+class FakeConfig3(FakeConfig2, FakeConfig):
   pass
 
 
-class TestConfig4(parameters._Config):
+class FakeConfig4(parameters._Config):
   # Default factory returns None while the option can not have None value.
   a = parameters._Option(str, can_be_none=False, default_factory=lambda: None)
 
@@ -50,10 +46,10 @@ class TestConfig4(parameters._Config):
 class JobConfigTest(unittest.TestCase):
 
   def testRequiredField(self):
-    self.assertRaises(ValueError, TestConfig)
+    self.assertRaises(ValueError, FakeConfig)
 
   def testSmoke(self):
-    config = TestConfig(a='foo', d=Bar)
+    config = FakeConfig(a='foo', d=Bar)
     self.assertEqual('foo', config.a)
     self.assertEqual(True, config.b)
     self.assertEqual(None, config.c)
@@ -61,37 +57,37 @@ class JobConfigTest(unittest.TestCase):
     self.assertEqual('data', config.e)
 
   def testInstanceTypeCheck(self):
-    self.assertRaises(TypeError, TestConfig, a='foo', d=Bar,
+    self.assertRaises(TypeError, FakeConfig, a='foo', d=Bar,
                       # b has wrong type.
                       b='bar')
 
   def testSubclassTypeCheckFails(self):
-    self.assertRaises(TypeError, TestConfig, a='foo',
+    self.assertRaises(TypeError, FakeConfig, a='foo',
                       # d has wrong type.
                       d=object)
 
   def testSubclassTypeCheckPasses(self):
-    config = TestConfig(a='foo', d=Bar)
+    config = FakeConfig(a='foo', d=Bar)
     self.assertEqual(Bar, config.d)
 
   def testTestMode(self):
-    TestConfig(_lenient=True)
+    FakeConfig(_lenient=True)
 
   def testToFromJson(self):
-    config = TestConfig(a='foo', b=True, c=Foo, d=Bar)
-    config2 = TestConfig.from_json(config.to_json())
+    config = FakeConfig(a='foo', b=True, c=Foo, d=Bar)
+    config2 = FakeConfig.from_json(config.to_json())
     self.assertTrue(config == config2)
 
   def testConfigInheritance(self):
     # Should inherit b from TestConfig2 instead of TestConfig
-    config = TestConfig3(a='foo', b='bar', d=Bar, z=2)
+    config = FakeConfig3(a='foo', b='bar', d=Bar, z=2)
     self.assertEqual('foo', config.a)
     self.assertEqual('bar', config.b)
     self.assertEqual(2, config.z)
 
   def testNoneValue(self):
-    _ = TestConfig4(a='1')
-    self.assertRaises(TypeError, TestConfig4)
+    _ = FakeConfig4(a='1')
+    self.assertRaises(TypeError, FakeConfig4)
 
 
 class OptionTest(unittest.TestCase):

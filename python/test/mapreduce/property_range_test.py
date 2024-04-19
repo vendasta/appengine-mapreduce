@@ -8,23 +8,17 @@
 import datetime
 import os
 import string
-import sys
 import unittest
 
 from google.appengine.ext import ndb
-
 from google.appengine.api import namespace_manager
 from google.appengine.ext import db
 from google.appengine.ext import testbed
 
-# Fix up paths for running tests.
-sys.path.append(os.path.join(os.path.dirname(__file__), "../../src"))
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-
 from mapreduce import property_range
 
 
-class TestEntity(db.Model):
+class FakeEntity(db.Model):
   """Test entity class."""
 
   datetime_property = db.DateTimeProperty(auto_now=True)
@@ -62,15 +56,15 @@ class PropertyRangeTest(unittest.TestCase):
     old = new.replace(year=new.year-1)
     filters = [("a", "=", 1), ("b", "=", 2)]
     prop, start, end = property_range.PropertyRange._get_range_from_filters(
-        filters, TestEntity)
+        filters, FakeEntity)
     self.assertEqual(prop, None)
     self.assertEqual(start, None)
     self.assertEqual(end, None)
 
     filters = [["a", ">", 1], ["a", "<", 2]]
     prop, start, end = property_range.PropertyRange._get_range_from_filters(
-        filters, TestEntity)
-    self.assertEqual(prop, TestEntity.a)
+        filters, FakeEntity)
+    self.assertEqual(prop, FakeEntity.a)
     self.assertEqual(start, ["a", ">", 1])
     self.assertEqual(end, ["a", "<", 2])
 
@@ -78,8 +72,8 @@ class PropertyRangeTest(unittest.TestCase):
                ["datetime_property", "<=", new],
                ["a", "=", 1]]
     prop, start, end = property_range.PropertyRange._get_range_from_filters(
-        filters, TestEntity)
-    self.assertEqual(prop, TestEntity.datetime_property)
+        filters, FakeEntity)
+    self.assertEqual(prop, FakeEntity.datetime_property)
     self.assertEqual(start, ["datetime_property", ">", old])
     self.assertEqual(end, ["datetime_property", "<=", new])
 
@@ -88,7 +82,7 @@ class PropertyRangeTest(unittest.TestCase):
     self.assertRaises(property_range.errors.BadReaderParamsError,
                       property_range.PropertyRange._get_range_from_filters,
                       filters,
-                      TestEntity)
+                      FakeEntity)
 
     # Expect a closed range.
     filters = [["datetime_property", ">", new],
@@ -96,7 +90,7 @@ class PropertyRangeTest(unittest.TestCase):
     self.assertRaises(property_range.errors.BadReaderParamsError,
                       property_range.PropertyRange._get_range_from_filters,
                       filters,
-                      TestEntity)
+                      FakeEntity)
 
   def testShouldShardByPropertyRange(self):
     filters = [("a", "=", 1)]
@@ -107,11 +101,11 @@ class PropertyRangeTest(unittest.TestCase):
   def testSplit(self):
     r = property_range.PropertyRange(
         [("a", ">=", 1), ("a", "<=", 4), ("b", "=", 1)],
-        f"{TestEntity.__module__}.TestEntity")
+        f"{FakeEntity.__module__}.TestEntity")
     results = r.split(10)
     self.assertEqual(4, len(results))
     for r in results:
-      self.assertEqual(TestEntity, r.model_class)
+      self.assertEqual(FakeEntity, r.model_class)
     self.assertEqual([("a", ">=", 1), ("a", "<", 2), ("b", "=", 1)],
                       results[0].filters)
     self.assertEqual([("a", ">=", 2), ("a", "<", 3), ("b", "=", 1)],
@@ -123,11 +117,11 @@ class PropertyRangeTest(unittest.TestCase):
 
     r = property_range.PropertyRange(
         [("c", ">=", 1), ("c", "<=", 4), ("b", "=", 1)],
-        f"{TestEntity.__module__}.TestEntity")
+        f"{FakeEntity.__module__}.TestEntity")
     results = r.split(4)
     self.assertEqual(4, len(results))
     for r in results:
-      self.assertEqual(TestEntity, r.model_class)
+      self.assertEqual(FakeEntity, r.model_class)
     self.assertEqual([("c", ">=", 1), ("c", "<", 1.75), ("b", "=", 1)],
                       results[0].filters)
     self.assertEqual([("c", ">=", 1.75), ("c", "<", 2.5), ("b", "=", 1)],
@@ -140,11 +134,11 @@ class PropertyRangeTest(unittest.TestCase):
   def testSplit_reallyBigN(self):
     r = property_range.PropertyRange(
         [("a", ">", 1), ("a", "<=", 4), ("b", "=", 1)],
-        f"{TestEntity.__module__}.TestEntity")
+        f"{FakeEntity.__module__}.TestEntity")
     results = r.split(100)
     self.assertEqual(3, len(results))
     for r in results:
-      self.assertEqual(TestEntity, r.model_class)
+      self.assertEqual(FakeEntity, r.model_class)
     self.assertEqual([("a", ">=", 2), ("a", "<", 3), ("b", "=", 1)],
                       results[0].filters)
     self.assertEqual([("a", ">=", 3), ("a", "<", 4), ("b", "=", 1)],
@@ -161,11 +155,11 @@ class PropertyRangeTest(unittest.TestCase):
     for k in keys:
       for a in a_vals:
         for b in b_vals:
-          TestEntity(key_name=k, a=a, b=b).put()
+          FakeEntity(key_name=k, a=a, b=b).put()
     namespace_manager.set_namespace(None)
 
     r = property_range.PropertyRange(
-        [("a", ">", 2), ("a", "<", 4), ("b", "=", 1)], f"{TestEntity.__module__}.TestEntity")
+        [("a", ">", 2), ("a", "<", 4), ("b", "=", 1)], f"{FakeEntity.__module__}.TestEntity")
     query = r.make_query(ns)
     results = set()
     for i in query.run():
@@ -453,5 +447,3 @@ class PropertyRangeTest(unittest.TestCase):
                       start, end, 1, True, True)
 
 
-if __name__ == "__main__":
-  unittest.main()

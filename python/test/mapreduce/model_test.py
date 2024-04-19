@@ -30,7 +30,6 @@ from google.appengine.ext import db
 from google.appengine.ext import testbed
 from mapreduce import hooks
 from mapreduce import model
-from google.appengine.ext.webapp import mock_webapp
 
 
 class TestHandler(object):
@@ -393,5 +392,3 @@ class CountersMapTest(unittest.TestCase):
     self.assertEqual(0, counters_map.get("1"))
 
 
-if __name__ == "__main__":
-  unittest.main()

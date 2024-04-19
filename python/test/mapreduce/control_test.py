@@ -14,22 +14,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
-
-
 import datetime
 import os
 import random
 import string
-import sys
 import time
 import unittest
 
 from google.appengine.ext import db
-
-# Fix up paths for running tests.
-sys.path.append(os.path.join(os.path.dirname(__file__), "../../src"))
-sys.path.append(os.path.join(os.path.dirname(__file__), "../"))
 
 from mapreduce import control
 from mapreduce import hooks
@@ -45,17 +37,17 @@ def random_string(length):
       random.choice(string.letters + string.digits) for _ in range(length))
 
 
-class TestEntity(db.Model):
+class FakeEntity(db.Model):
   """Test entity class."""
 
 
-class TestHooks(hooks.Hooks):
+class FakeHooks(hooks.Hooks):
   """Test hooks class."""
 
   enqueue_kickoff_task_calls = []
 
   def enqueue_kickoff_task(self, task, queue_name):
-    TestHooks.enqueue_kickoff_task_calls.append((task, queue_name))
+    FakeHooks.enqueue_kickoff_task_calls.append((task, queue_name))
 
 
 def fake_handler(entity):
@@ -70,7 +62,7 @@ class ControlTest(testutil.HandlerTestBase):
 
   def setUp(self):
     testutil.HandlerTestBase.setUp(self)
-    TestHooks.enqueue_kickoff_task_calls = []
+    FakeHooks.enqueue_kickoff_task_calls = []
 
   def get_mapreduce_spec(self, task):
     """Get mapreduce spec form kickoff task payload."""
@@ -109,7 +101,7 @@ class ControlTest(testutil.HandlerTestBase):
     Most of start_map functionality is already tested by handlers_test.
     Just a smoke test is enough.
     """
-    TestEntity().put()
+    FakeEntity().put()
 
     shard_count = 4
     mapreduce_id = control.start_map(
@@ -117,7 +109,7 @@ class ControlTest(testutil.HandlerTestBase):
         __name__ + ".test_handler",
         "mapreduce.input_readers.DatastoreInputReader",
         {
-            "entity_kind": __name__ + "." + TestEntity.__name__,
+            "entity_kind": __name__ + "." + FakeEntity.__name__,
         },
         shard_count,
         mapreduce_parameters={"foo": "bar"},
@@ -132,7 +124,7 @@ class ControlTest(testutil.HandlerTestBase):
     Most of start_map functionality is already tested by handlers_test.
     Just a smoke test is enough.
     """
-    TestEntity().put()
+    FakeEntity().put()
 
     # MR should be scheduled into the future.
     now_sec = int(time.time())
@@ -143,7 +135,7 @@ class ControlTest(testutil.HandlerTestBase):
         __name__ + ".test_handler",
         "mapreduce.input_readers.DatastoreInputReader",
         {
-            "entity_kind": __name__ + "." + TestEntity.__name__,
+            "entity_kind": __name__ + "." + FakeEntity.__name__,
         },
         shard_count,
         mapreduce_parameters={"foo": "bar"},
@@ -161,7 +153,7 @@ class ControlTest(testutil.HandlerTestBase):
     Most of start_map functionality is already tested by handlers_test.
     Just a smoke test is enough.
     """
-    TestEntity().put()
+    FakeEntity().put()
 
     # MR should be scheduled into the future.
     eta = datetime.datetime.utcnow() + datetime.timedelta(hours=1)
@@ -172,7 +164,7 @@ class ControlTest(testutil.HandlerTestBase):
         __name__ + ".test_handler",
         "mapreduce.input_readers.DatastoreInputReader",
         {
-            "entity_kind": __name__ + "." + TestEntity.__name__,
+            "entity_kind": __name__ + "." + FakeEntity.__name__,
         },
         shard_count,
         mapreduce_parameters={"foo": "bar"},
@@ -185,7 +177,7 @@ class ControlTest(testutil.HandlerTestBase):
 
   def testStartMap_QueueEnvironment(self):
     """Test that the start_map inherits its queue from the enviornment."""
-    TestEntity().put()
+    FakeEntity().put()
 
     shard_count = 4
     os.environ["HTTP_X_APPENGINE_QUEUENAME"] = self.QUEUE_NAME
@@ -195,7 +187,7 @@ class ControlTest(testutil.HandlerTestBase):
           __name__ + ".test_handler",
           "mapreduce.input_readers.DatastoreInputReader",
           {
-              "entity_kind": __name__ + "." + TestEntity.__name__,
+              "entity_kind": __name__ + "." + FakeEntity.__name__,
           },
           shard_count,
           mapreduce_parameters={"foo": "bar"},
@@ -211,7 +203,7 @@ class ControlTest(testutil.HandlerTestBase):
     Most of start_map functionality is already tested by handlers_test.
     Just a smoke test is enough.
     """
-    TestEntity().put()
+    FakeEntity().put()
 
     shard_count = 4
     mapreduce_id = control.start_map(
@@ -219,16 +211,16 @@ class ControlTest(testutil.HandlerTestBase):
         __name__ + ".test_handler",
         "mapreduce.input_readers.DatastoreInputReader",
         {
-            "entity_kind": __name__ + "." + TestEntity.__name__,
+            "entity_kind": __name__ + "." + FakeEntity.__name__,
         },
         shard_count,
         mapreduce_parameters={"foo": "bar"},
         base_path="/mapreduce_base_path",
         queue_name="crazy-queue",
-        hooks_class_name=__name__+"."+TestHooks.__name__)
+        hooks_class_name=__name__+"."+FakeHooks.__name__)
 
     self.assertTrue(mapreduce_id)
-    task, queue_name = TestHooks.enqueue_kickoff_task_calls[0]
+    task, queue_name = FakeHooks.enqueue_kickoff_task_calls[0]
     self.assertEqual("/mapreduce_base_path/kickoffjob_callback/" + mapreduce_id,
                      task.url)
     self.assertEqual("crazy-queue", queue_name)
@@ -242,7 +234,7 @@ class ControlTest(testutil.HandlerTestBase):
     Most of start_map functionality is already tested by handlers_test.
     Just a smoke test is enough.
     """
-    TestEntity().put()
+    FakeEntity().put()
 
     shard_count = 4
     mapreduce_id = control.start_map(
@@ -250,7 +242,7 @@ class ControlTest(testutil.HandlerTestBase):
         __name__ + ".test_handler",
         "mapreduce.input_readers.DatastoreInputReader",
         {
-            "entity_kind": __name__ + "." + TestEntity.__name__,
+            "entity_kind": __name__ + "." + FakeEntity.__name__,
         },
         shard_count,
         mapreduce_parameters={"foo": "bar"},
@@ -266,7 +258,7 @@ class ControlTest(testutil.HandlerTestBase):
     Most of start_map functionality is already tested by handlers_test.
     Just a smoke test is enough.
     """
-    TestEntity().put()
+    FakeEntity().put()
 
     shard_count = 4
     mapreduce_id = ""
@@ -276,7 +268,7 @@ class ControlTest(testutil.HandlerTestBase):
         __name__ + ".test_handler",
         "mapreduce.input_readers.DatastoreInputReader",
         {
-            "entity_kind": __name__ + "." + TestEntity.__name__,
+            "entity_kind": __name__ + "." + FakeEntity.__name__,
             "huge_parameter": random_string(900000)
         },
         shard_count,
@@ -291,21 +283,21 @@ class ControlTest(testutil.HandlerTestBase):
     Most of start_map functionality is already tested by handlers_test.
     Just a smoke test is enough.
     """
-    TestEntity().put()
+    FakeEntity().put()
 
     shard_count = 4
     mapreduce_id = ""
 
     @db.transactional(xg=True)
     def tx():
-      some_entity = TestEntity()
+      some_entity = FakeEntity()
       some_entity.put()
       return control.start_map(
           "test_map",
           __name__ + ".test_handler",
           "mapreduce.input_readers.DatastoreInputReader",
           {
-              "entity_kind": __name__ + "." + TestEntity.__name__,
+              "entity_kind": __name__ + "." + FakeEntity.__name__,
           },
           shard_count,
           mapreduce_parameters={"foo": "bar"},
@@ -321,21 +313,21 @@ class ControlTest(testutil.HandlerTestBase):
     Most of start_map functionality is already tested by handlers_test.
     Just a smoke test is enough.
     """
-    TestEntity().put()
+    FakeEntity().put()
 
     shard_count = 4
     mapreduce_id = ""
 
     @db.transactional(xg=True)
     def tx():
-      some_entity = TestEntity()
+      some_entity = FakeEntity()
       some_entity.put()
       return control.start_map(
           "test_map",
           __name__ + ".test_handler",
           "mapreduce.input_readers.DatastoreInputReader",
           {
-              "entity_kind": __name__ + "." + TestEntity.__name__,
+              "entity_kind": __name__ + "." + FakeEntity.__name__,
               "huge_parameter": random_string(900000)
           },
           shard_count,
@@ -347,5 +339,3 @@ class ControlTest(testutil.HandlerTestBase):
     self.validate_map_started(mapreduce_id)
 
 
-if __name__ == "__main__":
-  unittest.main()

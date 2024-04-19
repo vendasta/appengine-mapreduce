@@ -5,13 +5,7 @@
 
 # Using opensource naming conventions, pylint: disable=g-bad-name
 
-import os
-import sys
 import unittest
-
-# Fix up paths for running tests.
-sys.path.append(os.path.join(os.path.dirname(__file__), "../../src"))
-sys.path.append(os.path.join(os.path.dirname(__file__), "../"))
 
 from mapreduce import control
 from mapreduce import input_readers
@@ -154,5 +148,3 @@ class GoogleCloudStorageInputReaderEndToEndTest(testutil.CloudStorageTestBase):
                       model.MapreduceState.RESULT_FAILED)
 
 
-if __name__ == "__main__":
-  unittest.main()

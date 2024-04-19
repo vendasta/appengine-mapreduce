@@ -14,12 +14,7 @@ import string
 import unittest
 
 from google.appengine.ext import db
-
 from google.appengine.ext import ndb
-
-# Fix up paths for running tests.
-sys.path.append(os.path.join(os.path.dirname(__file__), "../../src"))
-sys.path.append(os.path.join(os.path.dirname(__file__), "../"))
 
 from mapreduce import context
 from mapreduce import control
@@ -40,7 +35,7 @@ def random_string(length):
       random.choice(string.letters + string.digits) for _ in range(length))
 
 
-class TestEntity(db.Model):
+class FakeEntity(db.Model):
   """Test entity class."""
   int_property = db.IntegerProperty()
   dt = db.DateTimeProperty(default=datetime.datetime(2000, 1, 1))
@@ -101,17 +96,17 @@ class SerializableHandler(object):
     cls._next_instance_id = 0
 
 
-def test_handler_yield_key(entity):
+def fake_handler_yield_key(entity):
   """Test handler which yields entity key."""
   yield entity.key()
 
 
-def test_handler_yield_ndb_key(entity):
+def fake_handler_yield_ndb_key(entity):
   """Test handler which yields entity key (NDB version)."""
   yield entity.key
 
 
-class TestOutputWriter(output_writers.OutputWriter):
+class FakeOutputWriter(output_writers.OutputWriter):
   """Test output writer."""
 
   file_contents = {}
@@ -159,7 +154,7 @@ class EndToEndTest(testutil.HandlerTestBase):
   def setUp(self):
     testutil.HandlerTestBase.setUp(self)
     TestHandler.reset()
-    TestOutputWriter.reset()
+    FakeOutputWriter.reset()
     self.original_slice_duration = parameters.config._SLICE_DURATION_SEC
     SerializableHandler.reset()
 
@@ -171,7 +166,7 @@ class EndToEndTest(testutil.HandlerTestBase):
     entity_count = 10
 
     for _ in range(entity_count):
-      TestEntity(int_property=-1).put()
+      FakeEntity(int_property=-1).put()
 
     # Force handler to serialize on every call.
     parameters.config._SLICE_DURATION_SEC = 0
@@ -181,7 +176,7 @@ class EndToEndTest(testutil.HandlerTestBase):
         __name__ + ".SerializableHandler",
         input_readers.__name__ + ".DatastoreInputReader",
         {
-            "entity_kind": __name__ + "." + TestEntity.__name__,
+            "entity_kind": __name__ + "." + FakeEntity.__name__,
         },
         shard_count=1,
         base_path="/mapreduce_base_path")
@@ -192,7 +187,7 @@ class EndToEndTest(testutil.HandlerTestBase):
         # Shard retries + one per entity + one to exhaust input reader + one for
         # finalization.
         SerializableHandler.FAILURES_INDUCED_BY_INSTANCE + entity_count + 1 + 1)
-    vals = [e.int_property for e in TestEntity.all()]
+    vals = [e.int_property for e in FakeEntity.all()]
     vals.sort()
     # SerializableHandler updates int_property to be incremental from 0 to 9.
     self.assertEqual(list(range(10)), vals)
@@ -201,14 +196,14 @@ class EndToEndTest(testutil.HandlerTestBase):
     entity_count = 1000
 
     for _ in range(entity_count):
-      TestEntity().put()
+      FakeEntity().put()
 
     control.start_map(
         "test_map",
         __name__ + ".TestHandler",
         input_readers.__name__ + ".DatastoreInputReader",
         {
-            "entity_kind": __name__ + "." + TestEntity.__name__,
+            "entity_kind": __name__ + "." + FakeEntity.__name__,
         },
         shard_count=4,
         base_path="/mapreduce_base_path")
@@ -220,14 +215,14 @@ class EndToEndTest(testutil.HandlerTestBase):
     entity_count = 1000
 
     for i in range(entity_count):
-      TestEntity(int_property=i % 5).put()
+      FakeEntity(int_property=i % 5).put()
 
     control.start_map(
         "test_map",
         __name__ + ".TestHandler",
         input_readers.__name__ + ".DatastoreInputReader",
         {
-            "entity_kind": __name__ + "." + TestEntity.__name__,
+            "entity_kind": __name__ + "." + FakeEntity.__name__,
             "filters": [("int_property", "=", 3),
                         # Test datetime can be json serialized.
                         ("dt", "=", datetime.datetime(2000, 1, 1))],
@@ -261,7 +256,7 @@ class EndToEndTest(testutil.HandlerTestBase):
     entity_count = 100
 
     for _ in range(entity_count):
-      TestEntity().put()
+      FakeEntity().put()
 
     control.start_map(
         "test_map",
@@ -269,7 +264,7 @@ class EndToEndTest(testutil.HandlerTestBase):
         input_readers.__name__ + ".DatastoreInputReader",
         {
             "input_reader": {
-                "entity_kind": __name__ + "." + TestEntity.__name__,
+                "entity_kind": __name__ + "." + FakeEntity.__name__,
             },
         },
         shard_count=4,
@@ -283,14 +278,14 @@ class EndToEndTest(testutil.HandlerTestBase):
     entity_count = 1000
 
     for _ in range(entity_count):
-      TestEntity().put()
+      FakeEntity().put()
 
     control.start_map(
         "test_map",
         __name__ + ".test_handler_yield_key",
         input_readers.__name__ + ".DatastoreInputReader",
         {
-            "entity_kind": __name__ + "." + TestEntity.__name__,
+            "entity_kind": __name__ + "." + FakeEntity.__name__,
         },
         shard_count=4,
         base_path="/mapreduce_base_path",
@@ -298,7 +293,7 @@ class EndToEndTest(testutil.HandlerTestBase):
 
     test_support.execute_until_empty(self.taskqueue)
     self.assertEqual(entity_count,
-                      sum(map(len, list(TestOutputWriter.file_contents.values()))))
+                      sum(map(len, list(FakeOutputWriter.file_contents.values()))))
 
   def testRecordsReader(self):
     """End-to-end test for records reader."""
@@ -410,7 +405,7 @@ class GCSOutputWriterTestBase(testutil.CloudStorageTestBase):
     # Populate datastore with inputs.
     entity_count = 30
     for i in range(entity_count):
-      TestEntity(int_property=i).put()
+      FakeEntity(int_property=i).put()
 
     # Make slice short.
     parameters.config._SLICE_DURATION_SEC = 1
@@ -438,7 +433,7 @@ class GCSOutputWriterNoDupModeTest(GCSOutputWriterTestBase):
         input_readers.__name__ + ".DatastoreInputReader",
         {
             "input_reader": {
-                "entity_kind": __name__ + "." + TestEntity.__name__,
+                "entity_kind": __name__ + "." + FakeEntity.__name__,
             },
             "output_writer": {
                 "bucket_name": "bucket",
@@ -484,7 +479,7 @@ class GCSOutputWriterNoDupModeTest(GCSOutputWriterTestBase):
         input_readers.__name__ + ".DatastoreInputReader",
         {
             "input_reader": {
-                "entity_kind": __name__ + "." + TestEntity.__name__,
+                "entity_kind": __name__ + "." + FakeEntity.__name__,
             },
             "output_writer": {
                 "bucket_name": "bucket",
@@ -521,7 +516,7 @@ class GCSOutputWriterNoDupModeTest(GCSOutputWriterTestBase):
         input_readers.__name__ + ".DatastoreInputReader",
         {
             "input_reader": {
-                "entity_kind": __name__ + "." + TestEntity.__name__,
+                "entity_kind": __name__ + "." + FakeEntity.__name__,
             },
             "output_writer": {
                 "bucket_name": "bucket",
@@ -587,5 +582,3 @@ class FaultyHandler(object):
       raise Exception("Intentionally raise an exception")
 
 
-if __name__ == "__main__":
-  unittest.main()

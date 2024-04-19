@@ -9,6 +9,7 @@ import unittest
 
 from google.appengine.ext import ndb
 from mapreduce import errors
+
 from testlib import testutil
 from mapreduce.api import map_job
 from mapreduce.api.map_job import datastore_input_reader_base_test
@@ -237,5 +238,3 @@ class ModelNDBDatastoreInputReaderTest(datastore_input_reader_base_test
   def _get_keyname(self, entity):
     return entity.key.id()
 
-if __name__ == "__main__":
-  unittest.main()

@@ -1,11 +1,5 @@
 #!/usr/bin/env python
-import os
-import sys
 import unittest
-
-# Fix up paths for running tests.
-sys.path.append(os.path.join(os.path.dirname(__file__), "../../../../src"))
-sys.path.append(os.path.join(os.path.dirname(__file__), "../../../"))
 
 from mapreduce import hooks
 from mapreduce import model
@@ -23,13 +17,13 @@ from mapreduce.api.map_job import sample_input_reader
 TEST_SAMPLE_INPUT_READER_COUNT = 100
 
 
-class TestHooks(hooks.Hooks):
+class FakeHooks(hooks.Hooks):
   """Test hooks class."""
 
   enqueue_kickoff_task_calls = []
 
   def enqueue_kickoff_task(self, task, queue_name):
-    TestHooks.enqueue_kickoff_task_calls.append((task, queue_name))
+    FakeHooks.enqueue_kickoff_task_calls.append((task, queue_name))
     task.add(queue_name=queue_name)
 
 
@@ -38,7 +32,7 @@ class MapJobStartTest(testutil.HandlerTestBase):
 
   def setUp(self):
     super(MapJobStartTest, self).setUp()
-    TestHooks.enqueue_kickoff_task_calls = []
+    FakeHooks.enqueue_kickoff_task_calls = []
     self.config = map_job.JobConfig(
         job_name="test_map",
         shard_count=1,
@@ -51,7 +45,7 @@ class MapJobStartTest(testutil.HandlerTestBase):
         shard_max_attempts=5,
         _task_max_attempts=6,
         done_callback_url="www.google.com",
-        _hooks_cls=TestHooks)
+        _hooks_cls=FakeHooks)
 
   def validate_map_started(self):
     # Only one kickoff task.
@@ -59,7 +53,7 @@ class MapJobStartTest(testutil.HandlerTestBase):
     self.assertEqual(1, len(tasks))
     self.taskqueue.FlushQueue(self.config.queue_name)
     # Hook was run.
-    self.assertEqual(1, len(TestHooks.enqueue_kickoff_task_calls))
+    self.assertEqual(1, len(FakeHooks.enqueue_kickoff_task_calls))
 
     # Check the task.
     task = tasks[0]
@@ -162,5 +156,3 @@ class MapJobStatusTest(testutil.HandlerTestBase):
     self.assertEqual(map_job.Job.ABORTED, job.get_status())
 
 
-if __name__ == "__main__":
-  unittest.main()

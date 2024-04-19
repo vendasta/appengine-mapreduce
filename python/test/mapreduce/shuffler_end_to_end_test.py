@@ -1,15 +1,9 @@
 #!/usr/bin/env python
 # Copyright 2011 Google Inc. All Rights Reserved.
 
-import os
-import sys
 import unittest
 
 import pipeline
-
-# Fix up paths for running tests.
-sys.path.append(os.path.join(os.path.dirname(__file__), "../../src"))
-sys.path.append(os.path.join(os.path.dirname(__file__), "../"))
 
 from mapreduce import base_handler
 from mapreduce import kv_pb
@@ -126,12 +120,12 @@ class SortFileEndToEndTest(testutil.HandlerTestBase):
 
 
 # pylint: disable=invalid-name
-def test_handler_yield_str(key, value, partial):
+def fake_handler_yield_str(key, value, partial):
   """Test handler that yields parameters converted to string."""
   yield str((key, value, partial))
 
 
-class TestMergePipeline(base_handler.PipelineBase):
+class FakeMergePipeline(base_handler.PipelineBase):
   """A pipeline to merge-sort multiple sorted files.
 
   Args:
@@ -194,11 +188,11 @@ class MergingReaderEndToEndTest(testutil.HandlerTestBase):
           proto.set_value(v)
           w.write(proto.Encode())
 
-    p = TestMergePipeline(bucket_name,
+    p = FakeMergePipeline(bucket_name,
                           [full_filename, full_filename, full_filename])
     p.start()
     test_support.execute_until_empty(self.taskqueue)
-    p = TestMergePipeline.from_id(p.pipeline_id)
+    p = FakeMergePipeline.from_id(p.pipeline_id)
 
     output_file = p.outputs.default.value[0]
     output_data = []
@@ -233,11 +227,11 @@ class MergingReaderEndToEndTest(testutil.HandlerTestBase):
             proto.set_value(v)
             w.write(proto.Encode())
 
-      p = TestMergePipeline(bucket_name,
+      p = FakeMergePipeline(bucket_name,
                             [full_filename, full_filename, full_filename])
       p.start()
       test_support.execute_until_empty(self.taskqueue)
-      p = TestMergePipeline.from_id(p.pipeline_id)
+      p = FakeMergePipeline.from_id(p.pipeline_id)
 
       output_file = p.outputs.default.value[0]
       output_data = []
@@ -343,5 +337,3 @@ class ShuffleEndToEndTest(testutil.HandlerTestBase):
     self.assertEqual(1, len(self.emails))
 
 
-if __name__ == "__main__":
-  unittest.main()

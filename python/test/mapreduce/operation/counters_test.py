@@ -14,11 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
-
-
-import mox
 import unittest
+from unittest.mock import Mock
 
 from mapreduce import context
 from mapreduce import operation as op
@@ -29,23 +26,15 @@ class IncrementTest(unittest.TestCase):
 
   def testIncrement(self):
     """Test applying Increment operation."""
-    m = mox.Mox()
-
     ctx = context.Context(None, None)
-    ctx._counters = m.CreateMock(context._Counters)
+    ctx._counters = Mock()
 
     operation = op.counters.Increment("test", 12)
 
-    # Record calls
     ctx._counters.increment("test", 12)
 
-    m.ReplayAll()
-    try:  # test, verify
-      operation(ctx)
-      m.VerifyAll()
-    finally:
-      m.UnsetStubs()
+    operation(ctx)
+
+    ctx._counters.increment.assert_called_with("test", 12)
 
 
-if __name__ == "__main__":
-  unittest.main()

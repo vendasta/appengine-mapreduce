@@ -6,7 +6,6 @@
 # pylint: disable=g-bad-name
 
 import os
-import sys
 import unittest
 
 from google.appengine.api import namespace_manager
@@ -14,15 +13,11 @@ from google.appengine.ext import db
 from google.appengine.ext import key_range
 from google.appengine.ext import testbed
 
-# Fix up paths for running tests.
-sys.path.append(os.path.join(os.path.dirname(__file__), "../../src"))
-sys.path.append(os.path.join(os.path.dirname(__file__), "../"))
-
 from mapreduce import key_ranges
 from mapreduce import namespace_range
 
 
-class TestEntity(db.Model):
+class FakeEntity(db.Model):
   foo = db.StringProperty(default="something")
 
 
@@ -75,9 +70,7 @@ class KeyRangesTest(unittest.TestCase):
     ns = namespace_manager.get_namespace()
     for name in names:
       namespace_manager.set_namespace(name)
-      TestEntity().put()
+      FakeEntity().put()
     namespace_manager.set_namespace(ns)
 
 
-if __name__ == "__main__":
-  unittest.main()

@@ -15,19 +15,15 @@
 
 """Tests for mapreduce.namespace_range."""
 
-
-
 import os
 import unittest
-
-
-import mox
 
 from google.appengine.api import apiproxy_stub_map
 from google.appengine.api import datastore
 from google.appengine.api import datastore_file_stub
 from google.appengine.api import namespace_manager
 from google.appengine.ext import db
+
 from mapreduce import namespace_range
 
 

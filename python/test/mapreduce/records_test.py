@@ -1,16 +1,8 @@
 #!/usr/bin/env python
 """Tests for records.py."""
 
-
-
 import array
-import os
-import sys
 import unittest
-
-# Fix up paths for running tests.
-sys.path.append(os.path.join(os.path.dirname(__file__), "../../src"))
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from mapreduce.third_party import crc32c
 from mapreduce import records

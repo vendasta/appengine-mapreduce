@@ -1,13 +1,5 @@
 #!/usr/bin/env python
 
-# Fix up paths for running tests.
-import os
-import sys
-
-
-sys.path.append(os.path.join(os.path.dirname(__file__), "../../../../src"))
-sys.path.append(os.path.join(os.path.dirname(__file__), "../../../"))
-
 from testlib import testutil
 
 import mock

@@ -3,13 +3,7 @@
 
 # Using opensource naming conventions, pylint: disable=g-bad-name
 
-import os
-import sys
 import unittest
-
-# Fix up paths for running tests.
-sys.path.append(os.path.join(os.path.dirname(__file__), "../../../../src"))
-sys.path.append(os.path.join(os.path.dirname(__file__), "../../../"))
 
 from mapreduce import model
 from mapreduce import parameters
@@ -121,5 +115,3 @@ class GCSInputReaderEndToEndTest(testutil.CloudStorageTestBase):
     self._run_test(num_shards=4, num_files=10, multi_slices=True)
 
 
-if __name__ == "__main__":
-  unittest.main()

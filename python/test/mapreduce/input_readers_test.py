@@ -33,24 +33,20 @@ import time
 import unittest
 import zipfile
 
-import mox
-
 from google.appengine.ext import ndb
 from google.appengine.api import apiproxy_stub_map
 from google.appengine.api import datastore
 from google.appengine.api import datastore_file_stub
 from google.appengine.api import datastore_types
-from google.appengine.api import logservice
 from google.appengine.api import namespace_manager
 from google.appengine.api.blobstore import blobstore_stub
 from google.appengine.api.blobstore import dict_blob_storage
-from google.appengine.api.logservice import log_service_pb
-from google.appengine.api.logservice import logservice_stub
 from google.appengine.datastore import datastore_stub_util
 from google.appengine.ext import blobstore
 from google.appengine.ext import key_range
 from google.appengine.ext import testbed
 from google.appengine.ext.blobstore import blobstore as blobstore_internal
+
 from mapreduce import context
 from mapreduce import errors
 from mapreduce import input_readers
@@ -2787,5 +2783,3 @@ class GoogleCloudStorageRecordInputReaderTest(GoogleCloudStorageInputTestBase):
         input_readers.COUNTER_IO_READ_BYTES))
 
 
-if __name__ == "__main__":
-  unittest.main()

@@ -7,15 +7,9 @@
 
 # Using opensource naming conventions, pylint: disable=g-bad-name
 
-import os
-import sys
 import unittest
 
 from google.appengine.ext import db
-
-# Fix up paths for running tests.
-sys.path.append(os.path.join(os.path.dirname(__file__), "../../src"))
-sys.path.append(os.path.join(os.path.dirname(__file__), "../"))
 
 from mapreduce import control
 from mapreduce import input_readers
@@ -29,11 +23,11 @@ DATASTORE_READER_NAME = (input_readers.__name__ + "." +
                          input_readers.DatastoreInputReader.__name__)
 
 
-class TestEntity(db.Model):
+class FakeEntity(db.Model):
   """Test entity class."""
 
 
-def test_handler_yield_key_str(entity):
+def fake_handler_yield_key_str(entity):
   """Test handler which yields entity key."""
   yield str(entity.key()) + "\n"
 
@@ -50,14 +44,14 @@ class GoogleCloudStorageOutputWriterEndToEndTest(testutil.CloudStorageTestBase):
     job_name = "test_map"
 
     for _ in range(entity_count):
-      TestEntity().put()
+      FakeEntity().put()
 
     mapreduce_id = control.start_map(
         job_name,
         __name__ + ".test_handler_yield_key_str",
         DATASTORE_READER_NAME,
         {
-            "entity_kind": __name__ + "." + TestEntity.__name__,
+            "entity_kind": __name__ + "." + FakeEntity.__name__,
             "output_writer": {
                 "bucket_name": bucket_name,
             },
@@ -98,14 +92,14 @@ class GCSRecordOutputWriterEndToEndTestBase(object):
     job_name = "test_map"
 
     for _ in range(entity_count):
-      TestEntity().put()
+      FakeEntity().put()
 
     mapreduce_id = control.start_map(
         job_name,
         __name__ + ".test_handler_yield_key_str",
         DATASTORE_READER_NAME,
         {
-            "entity_kind": __name__ + "." + TestEntity.__name__,
+            "entity_kind": __name__ + "." + FakeEntity.__name__,
             "output_writer": {
                 "bucket_name": bucket_name,
             },
@@ -168,14 +162,14 @@ class GoogleCloudStorageConsistentOutputWriterEndToEndTest(
     job_name = "test_map"
 
     for _ in range(entity_count):
-      TestEntity().put()
+      FakeEntity().put()
 
     mapreduce_id = control.start_map(
         job_name,
         __name__ + ".test_handler_yield_key_str",
         DATASTORE_READER_NAME,
         {
-            "entity_kind": __name__ + "." + TestEntity.__name__,
+            "entity_kind": __name__ + "." + FakeEntity.__name__,
             "output_writer": {
                 "bucket_name": bucket_name,
                 "tmp_bucket_name": tmp_bucket_name,
@@ -213,5 +207,3 @@ class GoogleCloudStorageConsistentOutputWriterEndToEndTest(
     self._runTest(num_shards=4)
 
 
-if __name__ == "__main__":
-  unittest.main()

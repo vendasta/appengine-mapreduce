@@ -7,17 +7,11 @@
 
 # Using opensource naming conventions, pylint: disable=g-bad-name
 
-import os
-import sys
 import unittest
 
 
 import pipeline
 from google.appengine.ext import db
-
-# Fix up paths for running tests.
-sys.path.append(os.path.join(os.path.dirname(__file__), "../../src"))
-sys.path.append(os.path.join(os.path.dirname(__file__), "../"))
 
 from mapreduce import input_readers
 from mapreduce import mapreduce_pipeline
@@ -27,7 +21,7 @@ from mapreduce import test_support
 from testlib import testutil
 
 
-class TestEntity(db.Model):
+class FakeEntity(db.Model):
   """Test entity class."""
   data = db.TextProperty()
 
@@ -57,7 +51,7 @@ class LargeMapreduceTest(testutil.HandlerTestBase):
     self.emails.append((sender, subject, body, html))
 
   def testLotsOfValuesForSingleKey(self):
-    TestEntity(data=str(1)).put()
+    FakeEntity(data=str(1)).put()
     # Run Mapreduce
     p = mapreduce_pipeline.MapreducePipeline(
         "test",
@@ -67,7 +61,7 @@ class LargeMapreduceTest(testutil.HandlerTestBase):
         output_writer_spec=(
             output_writers.__name__ + ".GoogleCloudStorageRecordOutputWriter"),
         mapper_params={
-            "entity_kind": __name__ + "." + TestEntity.__name__,
+            "entity_kind": __name__ + "." + FakeEntity.__name__,
         },
         reducer_params={
             "output_writer": {
@@ -96,6 +90,4 @@ class LargeMapreduceTest(testutil.HandlerTestBase):
     self.assertEqual(expected_data, output_data)
 
 
-if __name__ == "__main__":
-  unittest.main()
 

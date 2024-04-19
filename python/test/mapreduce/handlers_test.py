@@ -37,14 +37,9 @@ import math
 import os
 import time
 import unittest
+import json
 
 import mock
-import mox
-
-try:
-  import json
-except ImportError:
-  import simplejson as json
 
 from google.appengine.api import apiproxy_stub_map
 from google.appengine.api import datastore
@@ -69,7 +64,6 @@ from mapreduce import shard_life_cycle
 from mapreduce import test_support
 from mapreduce import util
 from mapreduce.api import map_job
-from google.appengine.ext.webapp import mock_webapp
 
 
 MAPPER_PARAMS = {"batch_size": 50}
@@ -2861,5 +2855,3 @@ class CleanUpJobTest(testutil.HandlerTestBase):
     self.assertFalse(list(model.ShardState.find_all_by_mapreduce_state(state)))
 
 
-if __name__ == "__main__":
-  unittest.main()

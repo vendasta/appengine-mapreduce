@@ -90,5 +90,3 @@ class DatastoreInputReaderTest(datastore_input_reader_base_test
     self._assertEquals_splitInput(itr, expected_keys)
     apiproxy_stub_map.apiproxy.GetStub("datastore_v3").SetTrusted(False)
 
-if __name__ == "__main__":
-  unittest.main()

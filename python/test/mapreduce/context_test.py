@@ -14,12 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
-
-
-import os
 import random
-import sys
 import unittest
 
 from google.appengine.ext import ndb
@@ -27,23 +22,19 @@ from google.appengine.api import datastore
 from google.appengine.ext import db
 from google.appengine.runtime import apiproxy_errors
 
-# Fix up paths for running tests.
-sys.path.append(os.path.join(os.path.dirname(__file__), "../../src"))
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-
 from testlib import testutil
 from mapreduce import context
 
 # pylint: disable=g-bad-name
 
 
-class TestEntity(db.Model):
+class FakeEntity(db.Model):
   """Test entity class to test db operations."""
 
   tag = db.TextProperty()
 
 
-class NdbTestEntity(ndb.Model):
+class NdbFakeEntity(ndb.Model):
   """Test entity class to test ndb operations."""
 
   tag = ndb.TextProperty()
@@ -185,7 +176,7 @@ class MutationPoolTest(testutil.HandlerTestBase):
     # Mix in a model instance.
     # Model instance is "normalized", meaning internal fields are populated
     # in order to accurately calculate size.
-    e2 = TestEntity()
+    e2 = FakeEntity()
     self.pool.put(e2)
     self.assertEqual([e, context._normalize_entity(e2)], self.pool.puts.items)
 
@@ -196,7 +187,7 @@ class MutationPoolTest(testutil.HandlerTestBase):
   def testDeleteEntity(self):
     """Test delete method."""
     # Model instance.
-    e1 = TestEntity(key_name='goingaway')
+    e1 = FakeEntity(key_name='goingaway')
     self.pool.delete(e1)
     # Datastore instance.
     e2 = new_datastore_entity(key_name='goingaway')
@@ -214,7 +205,7 @@ class MutationPoolTest(testutil.HandlerTestBase):
 
   def testPutNdbEntity(self):
     """Test put() using an NDB entity."""
-    e = NdbTestEntity()
+    e = NdbFakeEntity()
     self.pool.put(e)
     self.assertEqual([e], self.pool.ndb_puts.items)
     self.assertEqual([], self.pool.ndb_deletes.items)
@@ -223,7 +214,7 @@ class MutationPoolTest(testutil.HandlerTestBase):
 
   def testDeleteNdbEntity(self):
     """Test delete method with an NDB model instance."""
-    e = NdbTestEntity(id='goingaway')
+    e = NdbFakeEntity(id='goingaway')
     self.pool.delete(e)
     self.assertEqual([], self.pool.ndb_puts.items)
     self.assertEqual([e.key], self.pool.ndb_deletes.items)
@@ -232,7 +223,7 @@ class MutationPoolTest(testutil.HandlerTestBase):
 
   def testDeleteNdbKey(self):
     """Test delete method with an NDB key."""
-    e = NdbTestEntity(id='goingaway')
+    e = NdbFakeEntity(id='goingaway')
     self.pool.delete(e.key)
     self.assertEqual([], self.pool.ndb_puts.items)
     self.assertEqual([e.key], self.pool.ndb_deletes.items)
@@ -244,11 +235,11 @@ class MutationPoolTest(testutil.HandlerTestBase):
     self.pool = context._MutationPool(max_entity_count=3)
 
     for i in range(8):
-      self.pool.put(TestEntity())
+      self.pool.put(FakeEntity())
       self.assertEqual(len(self.pool.puts.items), (i%3) + 1)
 
     for i in range(5):
-      e = TestEntity()
+      e = FakeEntity()
       e.put()
       self.pool.delete(e)
       self.assertEqual(len(self.pool.deletes.items), (i%3) + 1)
@@ -264,11 +255,11 @@ class MutationPoolTest(testutil.HandlerTestBase):
     self.pool = context._MutationPool(max_entity_count=3)
 
     for i in range(8):
-      self.pool.put(NdbTestEntity())
+      self.pool.put(NdbFakeEntity())
       self.assertEqual(len(self.pool.ndb_puts.items), (i%3) + 1)
 
     for i in range(5):
-      self.pool.delete(ndb.Key(NdbTestEntity, 'x%d' % i))
+      self.pool.delete(ndb.Key(NdbFakeEntity, 'x%d' % i))
       self.assertEqual(len(self.pool.ndb_deletes.items), (i%3) + 1)
 
     self.pool.flush()
@@ -279,12 +270,12 @@ class MutationPoolTest(testutil.HandlerTestBase):
 
   def testFlushLogLargestItems(self):
     self.pool = context._MutationPool(max_entity_count=3)
-    self.pool.put(TestEntity(tag='a'*1024*1024))
+    self.pool.put(FakeEntity(tag='a'*1024*1024))
     self.assertRaises(apiproxy_errors.RequestTooLargeError, self.pool.flush)
     self.assertTrue(self.pool.puts._largest)
 
     self.pool = context._MutationPool(max_entity_count=3)
-    self.pool.ndb_put(NdbTestEntity(tag='a'*1024*1024))
+    self.pool.ndb_put(NdbFakeEntity(tag='a'*1024*1024))
     self.assertRaises(apiproxy_errors.RequestTooLargeError, self.pool.flush)
     self.assertTrue(self.pool.ndb_puts._largest)
 
@@ -351,5 +342,3 @@ class ContextTest(testutil.HandlerTestBase):
     finally:
       m.UnsetStubs()
 
-if __name__ == "__main__":
-  unittest.main()

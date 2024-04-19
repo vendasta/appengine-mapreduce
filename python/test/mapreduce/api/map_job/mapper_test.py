@@ -2,13 +2,7 @@
 """Tests for mapper interface."""
 
 import collections
-import os
-import sys
 import unittest
-
-# Fix up paths for running tests.
-sys.path.append(os.path.join(os.path.dirname(__file__), "../../../../src"))
-sys.path.append(os.path.join(os.path.dirname(__file__), "../../../"))
 
 from mapreduce import output_writers
 from mapreduce import parameters
@@ -122,6 +116,4 @@ class MapperTest(testutil.HandlerTestBase):
     self.assertEqual(expected, outputs)
 
 
-if __name__ == "__main__":
-  unittest.main()
 

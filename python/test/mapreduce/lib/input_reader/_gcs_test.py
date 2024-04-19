@@ -5,13 +5,7 @@
 # pylint: disable=g-bad-name
 
 import math
-import os
-import sys
 import unittest
-
-# Fix up paths for running tests.
-sys.path.append(os.path.join(os.path.dirname(__file__), "../../../../src"))
-sys.path.append(os.path.join(os.path.dirname(__file__), "../../../"))
 
 from mapreduce import errors
 from mapreduce import map_job_context
@@ -568,5 +562,3 @@ class GCSRecordInputReaderTest(GCSInputTestBase):
         map_job.InputReader.COUNTER_IO_READ_BYTE))
 
 
-if __name__ == "__main__":
-  unittest.main()

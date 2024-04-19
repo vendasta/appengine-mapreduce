@@ -1,13 +1,7 @@
 #!/usr/bin/env python
 """Tests for context interface."""
 
-import os
-import sys
 import unittest
-
-# Fix up paths for running tests.
-sys.path.append(os.path.join(os.path.dirname(__file__), "../../src"))
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from mapreduce import parameters
 from mapreduce import test_support
@@ -88,6 +82,4 @@ class MapperTest(testutil.HandlerTestBase):
     self.assertEqual(map_job.Job.SUCCESS, job.get_status())
 
 
-if __name__ == "__main__":
-  unittest.main()
 

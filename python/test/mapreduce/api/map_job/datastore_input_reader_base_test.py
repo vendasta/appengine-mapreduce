@@ -253,6 +253,4 @@ class DatastoreInputReaderBaseTest(unittest.TestCase, metaclass=SkipTestsMeta):
                                               len(all_keys),
                                               *results)
 
-if __name__ == "__main__":
-  unittest.main()
 

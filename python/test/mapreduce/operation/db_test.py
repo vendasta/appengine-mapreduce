@@ -14,11 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
-
-
-import mox
 import unittest
+from unittest.mock import Mock
 
 from mapreduce import context
 from mapreduce import operation as op
@@ -32,23 +29,17 @@ class PutTest(unittest.TestCase):
 
   def testPut(self):
     """Test applying Put operation."""
-    m = mox.Mox()
-
     ctx = context.Context(None, None)
-    ctx._mutation_pool = m.CreateMock(context._MutationPool)
+    ctx._mutation_pool = Mock()
 
     entity = TestEntity()
     operation = op.db.Put(entity)
 
-    # Record calls
     ctx._mutation_pool.put(entity)
 
-    m.ReplayAll()
-    try:  # test, verify
-      operation(ctx)
-      m.VerifyAll()
-    finally:
-      m.UnsetStubs()
+    operation(ctx)
+
+    ctx._mutation_pool.put.assert_called_with(entity)
 
 
 class DeleteTest(unittest.TestCase):
@@ -56,23 +47,17 @@ class DeleteTest(unittest.TestCase):
 
   def testDelete(self):
     """Test applying Delete operation."""
-    m = mox.Mox()
-
     ctx = context.Context(None, None)
-    ctx._mutation_pool = m.CreateMock(context._MutationPool)
+    ctx._mutation_pool = Mock()
 
     entity = TestEntity()
     operation = op.db.Delete(entity)
 
-    # Record calls
     ctx._mutation_pool.delete(entity)
 
-    m.ReplayAll()
-    try:  # test, verify
-      operation(ctx)
-      m.VerifyAll()
-    finally:
-      m.UnsetStubs()
+    operation(ctx)
+
+    ctx._mutation_pool.delete.assert_called_with(entity)
 
 
 if __name__ == '__main__':

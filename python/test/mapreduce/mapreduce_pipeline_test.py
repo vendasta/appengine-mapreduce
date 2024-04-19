@@ -1,17 +1,10 @@
 #!/usr/bin/env python
 # Copyright 2011 Google Inc. All Rights Reserved.
 
-import os
-import sys
 import unittest
-
 
 import pipeline
 from google.appengine.ext import db
-
-# Fix up paths for running tests.
-sys.path.append(os.path.join(os.path.dirname(__file__), "../../src"))
-sys.path.append(os.path.join(os.path.dirname(__file__), "../"))
 
 from mapreduce import errors
 from mapreduce import input_readers
@@ -23,12 +16,12 @@ from mapreduce import test_support
 from testlib import testutil
 
 
-class TestEntity(db.Model):
+class FakeEntity(db.Model):
   """Test entity class."""
   data = db.StringProperty()
 
 
-class TestOutputEntity(db.Model):
+class FakeOutputEntity(db.Model):
   """TestOutput entity class."""
   data = db.StringProperty()
 
@@ -39,22 +32,22 @@ class RetryCount(db.Model):
 
 
 # Map or reduce functions.
-def test_mapreduce_map(entity):
+def fake_mapreduce_map(entity):
   """Test map handler."""
   yield (entity.data, "")
 
 
-def test_mapreduce_reduce(key, values):
+def fake_mapreduce_reduce(key, values):
   """Test reduce handler."""
   yield str((key, values))
 
 
-def test_failed_map(_):
+def fake_failed_map(_):
   """Always fail the map immediately."""
   raise errors.FailJobError()
 
 
-class TestFileRecordsOutputWriter(
+class FakeFileRecordsOutputWriter(
     output_writers._GoogleCloudStorageRecordOutputWriter):
 
   RETRIES = 11
@@ -68,7 +61,7 @@ class TestFileRecordsOutputWriter(
       retry_count.retries += 1
       retry_count.put()
       raise cloudstorage.TransientError("output writer finalize failed.")
-    super(TestFileRecordsOutputWriter, self).finalize(ctx, shard_state)
+    super(FakeFileRecordsOutputWriter, self).finalize(ctx, shard_state)
 
 
 class MapreducePipelineTest(testutil.HandlerTestBase):
@@ -95,8 +88,8 @@ class MapreducePipelineTest(testutil.HandlerTestBase):
       print(dir(pipeline.pipeline))
 
       for i in range(entity_count):
-        TestEntity(data=str(i)).put()
-        TestEntity(data=str(i)).put()
+        FakeEntity(data=str(i)).put()
+        FakeEntity(data=str(i)).put()
 
       p = mapreduce_pipeline.MapreducePipeline(
           "test",
@@ -106,7 +99,7 @@ class MapreducePipelineTest(testutil.HandlerTestBase):
           output_writer_spec=(output_writers.__name__ +
                               "._GoogleCloudStorageRecordOutputWriter"),
           mapper_params={
-              "entity_kind": __name__ + "." + TestEntity.__name__,
+              "entity_kind": __name__ + "." + FakeEntity.__name__,
           },
           reducer_params={
               "output_writer": {
@@ -130,8 +123,8 @@ class MapreducePipelineTest(testutil.HandlerTestBase):
     entity_count = 200
 
     for i in range(entity_count):
-      TestEntity(data=str(i)).put()
-      TestEntity(data=str(i)).put()
+      FakeEntity(data=str(i)).put()
+      FakeEntity(data=str(i)).put()
 
     # Run Mapreduce
     p = mapreduce_pipeline.MapreducePipeline(
@@ -142,7 +135,7 @@ class MapreducePipelineTest(testutil.HandlerTestBase):
         output_writer_spec=(
             output_writers.__name__ + "._GoogleCloudStorageRecordOutputWriter"),
         mapper_params={
-            "entity_kind": __name__ + "." + TestEntity.__name__,
+            "entity_kind": __name__ + "." + FakeEntity.__name__,
             "bucket_name": bucket_name
         },
         reducer_params={
@@ -189,8 +182,8 @@ class MapreducePipelineTest(testutil.HandlerTestBase):
     db.delete(RetryCount.all())
 
     for i in range(entity_count):
-      TestEntity(data=str(i)).put()
-      TestEntity(data=str(i)).put()
+      FakeEntity(data=str(i)).put()
+      FakeEntity(data=str(i)).put()
 
     # Run Mapreduce
     p = mapreduce_pipeline.MapreducePipeline(
@@ -202,7 +195,7 @@ class MapreducePipelineTest(testutil.HandlerTestBase):
             __name__ + ".TestFileRecordsOutputWriter"),
         mapper_params={
             "input_reader": {
-                "entity_kind": __name__ + "." + TestEntity.__name__,
+                "entity_kind": __name__ + "." + FakeEntity.__name__,
             },
         },
         reducer_params={
@@ -240,5 +233,3 @@ class MapreducePipelineTest(testutil.HandlerTestBase):
     self.assertEqual(expected_data, output_data)
 
 
-if __name__ == "__main__":
-  unittest.main()

@@ -6,16 +6,10 @@
 
 # Using opensource naming conventions, pylint: disable=g-bad-name
 
-import os
-import sys
 import unittest
 
 import pipeline
 from google.appengine.ext import db
-
-# Fix up paths for running tests.
-sys.path.append(os.path.join(os.path.dirname(__file__), "../../src"))
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from mapreduce import input_readers
 from mapreduce import mapreduce_pipeline
@@ -26,17 +20,17 @@ from mapreduce import test_support
 from testlib import testutil
 
 
-class TestEntity(db.Model):
+class FakeEntity(db.Model):
   """Test entity class."""
   data = db.TextProperty()
 
 
-def test_combiner_map(entity):
+def fake_combiner_map(entity):
   """Tests map handler for use with the Combiner test."""
   yield str(int(entity.data) % 4), entity.data
 
 
-class TestCombiner(object):
+class FakeCombiner(object):
   """Test combine handler."""
   invocations = []
 
@@ -53,7 +47,7 @@ class TestCombiner(object):
     cls.invocations = []
 
 
-def test_combiner_reduce(key, values):
+def fake_combiner_reduce(key, values):
   yield repr((key, sum([int(x) for x in values]))) + "\n"
 
 
@@ -68,7 +62,7 @@ class CombinerTest(testutil.HandlerTestBase):
     self.old_max_values_count = shuffler._MergePipeline._MAX_VALUES_COUNT
     shuffler._MergePipeline._MAX_VALUES_COUNT = 1
 
-    TestCombiner.reset()
+    FakeCombiner.reset()
 
   def tearDown(self):
     shuffler._MergePipeline._MAX_VALUES_COUNT = self.old_max_values_count
@@ -88,8 +82,8 @@ class CombinerTest(testutil.HandlerTestBase):
     entity_count = 200
 
     for i in range(entity_count):
-      TestEntity(data=str(i)).put()
-      TestEntity(data=str(i)).put()
+      FakeEntity(data=str(i)).put()
+      FakeEntity(data=str(i)).put()
 
     p = mapreduce_pipeline.MapreducePipeline(
         "test",
@@ -130,8 +124,8 @@ class CombinerTest(testutil.HandlerTestBase):
     entity_count = 200
 
     for i in range(entity_count):
-      TestEntity(data=str(i)).put()
-      TestEntity(data=str(i)).put()
+      FakeEntity(data=str(i)).put()
+      FakeEntity(data=str(i)).put()
 
     p = mapreduce_pipeline.MapreducePipeline(
         "test",
@@ -167,9 +161,9 @@ class CombinerTest(testutil.HandlerTestBase):
         ["('0', 9800)", "('1', 9900)", "('2', 10000)", "('3', 10100)"],
         file_content)
 
-    self.assertTrue(TestCombiner.invocations)
+    self.assertTrue(FakeCombiner.invocations)
 
-    for invocation in TestCombiner.invocations:
+    for invocation in FakeCombiner.invocations:
       key = invocation[0]
       values = invocation[1]
       self.assertTrue(key)
@@ -178,6 +172,4 @@ class CombinerTest(testutil.HandlerTestBase):
       self.assertTrue(int(values[0]) % 4 == int(key))
 
 
-if __name__ == "__main__":
-  unittest.main()
 

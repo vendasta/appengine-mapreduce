@@ -25,10 +25,6 @@ import unittest
 
 from google.appengine.api import taskqueue
 
-# Fix up paths for running tests.
-sys.path.append(os.path.join(os.path.dirname(__file__), "../../src"))
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-
 from mapreduce import model
 from mapreduce import parameters
 from mapreduce import util
@@ -58,7 +54,7 @@ def fake_handler_function(entity):
   pass
 
 
-class TestHandlerWithArgs(object):
+class FakeHandlerWithArgs(object):
   """Test handler with argument in constructor."""
 
   def __init__(self, arg_unused):
@@ -79,7 +75,7 @@ class TestHandlerOldStyle():
 
 
 # pylint: disable=unused-argument
-def test_handler_yield(entity):
+def fake_handler_yield(entity):
   """Yielding handler function."""
   yield 1
   yield 2
@@ -111,7 +107,7 @@ class ForNameTest(unittest.TestCase):
 
   def testClassWithArgs(self):
     """Test passing method name of class with constructor args."""
-    self.assertEqual(TestHandlerWithArgs.process,
+    self.assertEqual(FakeHandlerWithArgs.process,
                       util.for_name(f"{TestHandler.__module__}.TestHandlerWithArgs.process"))
 
   def testBadModule(self):
@@ -200,7 +196,7 @@ class IsGeneratorFunctionTest(unittest.TestCase):
   """Test util.is_generator function."""
 
   def testGenerator(self):
-    self.assertTrue(util.is_generator(test_handler_yield))
+    self.assertTrue(util.is_generator(fake_handler_yield))
 
   def testNotGenerator(self):
     self.assertFalse(util.is_generator(fake_handler_function))
@@ -360,5 +356,3 @@ class StripPrefixFromItemsTest(unittest.TestCase):
                       util.strip_prefix_from_items(prefix, items))
 
 
-if __name__ == "__main__":
-  unittest.main()

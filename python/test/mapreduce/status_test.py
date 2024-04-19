@@ -17,17 +17,12 @@
 
 import os
 import shutil
-import sys
 import tempfile
 import time
 import unittest
 import json
 from google.appengine.api import yaml_errors
 from google.appengine.ext import db
-
-# Fix up paths for running tests.
-sys.path.append(os.path.join(os.path.dirname(__file__), "../../src"))
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from mapreduce import errors
 from mapreduce import handlers
@@ -36,13 +31,13 @@ from testlib import testutil
 from mapreduce import test_support
 
 
-class TestKind(db.Model):
+class FakeKind(db.Model):
   """Used for testing."""
 
   foobar = db.StringProperty(default="meep")
 
 
-def TestMap(entity):
+def FakeMap(entity):
   """Used for testing."""
   pass
 
@@ -366,7 +361,7 @@ class ListJobsTest(testutil.HandlerTestBase):
 
     def testCSRF(self):
         """Test that we check the X-Requested-With header."""
-        TestKind().put()
+        FakeKind().put()
 
         response = self.client.post("/mapreduce/command/start_job")
         self.assertEqual(403, response.status_code)
@@ -376,7 +371,7 @@ class ListJobsTest(testutil.HandlerTestBase):
 
     def testBasic(self):
         """Tests when there are fewer than the max results to render."""
-        TestKind().put()
+        FakeKind().put()
 
         for job_name in ["my job 1", "my job 2", "my job 3"]:
           self.client.post(
@@ -384,8 +379,8 @@ class ListJobsTest(testutil.HandlerTestBase):
             data={
               "name": job_name,
               "mapper_input_reader": "mapreduce.input_readers.DatastoreInputReader",
-              "mapper_handler": f"{TestMap.__module__}.{TestMap.__name__}",
-              "mapper_params.entity_kind": f"{TestKind.__module__}.{TestKind.__name__}",
+              "mapper_handler": f"{FakeMap.__module__}.{FakeMap.__name__}",
+              "mapper_params.entity_kind": f"{FakeKind.__module__}.{FakeKind.__name__}",
             },
             headers={
               "X-Requested-With": "XMLHttpRequest",
@@ -423,15 +418,15 @@ class ListJobsTest(testutil.HandlerTestBase):
 
     def testCursor(self):
         """Tests when a job cursor is present."""
-        TestKind().put()
+        FakeKind().put()
         for job_name in ["my job 1", "my job 2"]:
           self.client.post(
             "/mapreduce/command/start_job",
             data={
               "name": job_name,
               "mapper_input_reader": "mapreduce.input_readers.DatastoreInputReader",
-              "mapper_handler": f"{TestMap.__module__}.{TestMap.__name__}",
-              "mapper_params.entity_kind": f"{TestKind.__module__}.{TestKind.__name__}",
+              "mapper_handler": f"{FakeMap.__module__}.{FakeMap.__name__}",
+              "mapper_params.entity_kind": f"{FakeKind.__module__}.{FakeKind.__name__}",
             },
             headers={
               "X-Requested-With": "XMLHttpRequest",
@@ -479,15 +474,15 @@ class GetJobDetailTest(testutil.HandlerTestBase):
     testutil.HandlerTestBase.setUp(self)
 
     for _ in range(100):
-      TestKind().put()
+      FakeKind().put()
 
     response = self.client.post(
       "/mapreduce/command/start_job",
       data={
         "name": "my job 1",
         "mapper_input_reader": "mapreduce.input_readers.DatastoreInputReader",
-        "mapper_handler": f"{TestMap.__module__}.{TestMap.__name__}",
-        "mapper_params.entity_kind": f"{TestKind.__module__}.{TestKind.__name__}",
+        "mapper_handler": f"{FakeMap.__module__}.{FakeMap.__name__}",
+        "mapper_params.entity_kind": f"{FakeKind.__module__}.{FakeKind.__name__}",
       },
       headers={
         "X-Requested-With": "XMLHttpRequest",
@@ -565,5 +560,3 @@ class GetJobDetailTest(testutil.HandlerTestBase):
 # TODO(user): Add tests for abort
 # TODO(user): Add tests for cleanup
 
-if __name__ == "__main__":
-  unittest.main()

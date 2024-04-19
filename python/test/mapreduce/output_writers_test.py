@@ -18,13 +18,7 @@
 
 # Using opensource naming conventions, pylint: disable=g-bad-name
 
-import os
-import sys
 import unittest
-
-# Fix up paths for running tests.
-sys.path.append(os.path.join(os.path.dirname(__file__), "../../src"))
-sys.path.append(os.path.join(os.path.dirname(__file__), "../"))
 
 from mapreduce import context
 from mapreduce import errors
@@ -703,5 +697,3 @@ class GCSOutputConsistentOutputWriterTest(GCSOutputWriterTestCommon,
     self.assertTrue(real_file in names)
 
 
-if __name__ == "__main__":
-  unittest.main()

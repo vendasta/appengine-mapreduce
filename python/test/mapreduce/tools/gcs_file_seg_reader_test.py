@@ -3,17 +3,11 @@
 
 # pylint: disable=g-bad-name
 
-import os
 import pickle
-import sys
 import unittest
 
 from google.appengine.datastore import datastore_stub_util
 from google.appengine.ext import testbed
-
-# Fix up paths for running tests.
-sys.path.append(os.path.join(os.path.dirname(__file__), "../../../src"))
-sys.path.append(os.path.join(os.path.dirname(__file__), "../../"))
 
 from mapreduce import output_writers
 from mapreduce.tools import gcs_file_seg_reader
@@ -135,5 +129,3 @@ class GCSFileSegReaderTest(unittest.TestCase):
     self.assertEqual("1234567890123456", result)
 
 
-if __name__ == "__main__":
-  unittest.main()

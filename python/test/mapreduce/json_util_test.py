@@ -3,21 +3,15 @@
 # pylint: disable=g-bad-name
 
 import datetime
-import os
-import sys
 import unittest
 
 from google.appengine.api import datastore_errors
 from google.appengine.ext import db
 
-# Fix up paths for running tests.
-sys.path.append(os.path.join(os.path.dirname(__file__), "../../src"))
-sys.path.append(os.path.join(os.path.dirname(__file__), "../"))
-
 from mapreduce import json_util
 
 
-class TestJsonType(object):
+class FakeJsonType(object):
   """Test class with to_json/from_json methods."""
 
   def __init__(self, size=0):
@@ -42,12 +36,12 @@ class EmptyDictJsonType(object):
     return cls()
 
 
-class TestEntity(db.Model):
+class FakeEntity(db.Model):
   """Test entity class."""
 
-  json_property = json_util.JsonProperty(TestJsonType)
+  json_property = json_util.JsonProperty(FakeJsonType)
   json_property_default_value = json_util.JsonProperty(
-      TestJsonType, default=TestJsonType())
+      FakeJsonType, default=FakeJsonType())
   empty_json_property = json_util.JsonProperty(EmptyDictJsonType)
 
 
@@ -67,44 +61,42 @@ class JsonPropertyTest(unittest.TestCase):
 
   def testGetValueForDatastore(self):
     """Test get_value_for_datastore method."""
-    e = TestEntity()
-    self.assertEqual(None, TestEntity.json_property.get_value_for_datastore(e))
-    e.json_property = TestJsonType(5)
+    e = FakeEntity()
+    self.assertEqual(None, FakeEntity.json_property.get_value_for_datastore(e))
+    e.json_property = FakeJsonType(5)
     self.assertEqual(
-        '{"size": 5}', TestEntity.json_property.get_value_for_datastore(e))
+        '{"size": 5}', FakeEntity.json_property.get_value_for_datastore(e))
 
     e.empty_json_property = EmptyDictJsonType()
     self.assertEqual(
-        None, TestEntity.empty_json_property.get_value_for_datastore(e))
+        None, FakeEntity.empty_json_property.get_value_for_datastore(e))
 
   def testMakeValueFromDatastore(self):
     """Test make_value_from_datastore method."""
     self.assertEqual(
-        None, TestEntity.json_property.make_value_from_datastore(None))
+        None, FakeEntity.json_property.make_value_from_datastore(None))
     self.assertEqual(
-        TestJsonType,
-        type(TestEntity.json_property.make_value_from_datastore('{"size":4}')))
+        FakeJsonType,
+        type(FakeEntity.json_property.make_value_from_datastore('{"size":4}')))
     self.assertTrue(
         4,
-        TestEntity.json_property.make_value_from_datastore('{"size":4}').size)
+        FakeEntity.json_property.make_value_from_datastore('{"size":4}').size)
 
   def testValidate(self):
     """Test validate method."""
     self.assertRaises(
         datastore_errors.BadValueError,
-        TestEntity.json_property.validate, "a")
+        FakeEntity.json_property.validate, "a")
 
   def testEmpty(self):
     """Test empty() method."""
-    self.assertTrue(TestEntity.json_property.empty(None))
-    self.assertFalse(TestEntity.json_property.empty("abcd"))
+    self.assertTrue(FakeEntity.json_property.empty(None))
+    self.assertFalse(FakeEntity.json_property.empty("abcd"))
 
   def testDefaultValue(self):
     """Test default value."""
-    e = TestEntity()
+    e = FakeEntity()
     self.assertEqual(None, e.json_property)
     self.assertTrue(e.json_property_default_value is not None)
 
 
-if __name__ == "__main__":
-  unittest.main()

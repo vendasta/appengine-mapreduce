@@ -398,5 +398,3 @@ class AbstractDatastoreInputReaderTest(unittest.TestCase):
     self.assertEqual(expected, results)
 
 
-if __name__ == "__main__":
-  unittest.main()
