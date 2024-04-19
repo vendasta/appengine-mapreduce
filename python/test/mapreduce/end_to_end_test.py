@@ -17,7 +17,10 @@ from google.appengine.ext import db
 
 from google.appengine.ext import ndb
 
-# pylint: disable=g-direct-third-party-import
+# Fix up paths for running tests.
+sys.path.append(os.path.join(os.path.dirname(__file__), "../../src"))
+sys.path.append(os.path.join(os.path.dirname(__file__), "../"))
+
 from mapreduce import context
 from mapreduce import control
 from mapreduce import handlers
@@ -29,22 +32,6 @@ from mapreduce import records
 from mapreduce import test_support
 from mapreduce.tools import gcs_file_seg_reader
 from testlib import testutil
-
-
-# pylint: disable=g-import-not-at-top
-try:
-  import cloudstorage
-  # In 25 runtime, the above code will be scrubbed to import the stub version
-  # of cloudstorage. All occurences of the following if condition in MR
-  # codebase is to tell it apart.
-  # TODO(user): Remove after 25 runtime MR is abondoned.
-  if hasattr(cloudstorage, "_STUB"):
-    cloudstorage = None
-  from cloudstorage import storage_api
-except ImportError:
-  cloudstorage = None  # CloudStorage library not available
-
-# pylint: disable=g-bad-name
 
 
 def random_string(length):

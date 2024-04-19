@@ -7,13 +7,18 @@
 
 # Using opensource naming conventions, pylint: disable=g-bad-name
 
+import os
+import sys
 import unittest
 
 
 import pipeline
-import cloudstorage
 from google.appengine.ext import db
-# pylint: disable=g-direct-third-party-import
+
+# Fix up paths for running tests.
+sys.path.append(os.path.join(os.path.dirname(__file__), "../../src"))
+sys.path.append(os.path.join(os.path.dirname(__file__), "../"))
+
 from mapreduce import input_readers
 from mapreduce import mapreduce_pipeline
 from mapreduce import output_writers

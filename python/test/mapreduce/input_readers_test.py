@@ -60,16 +60,6 @@ from mapreduce import namespace_range
 from mapreduce import records
 from testlib import testutil
 
-
-# pylint: disable=g-import-not-at-top
-# TODO(user): Cleanup imports if/when cloudstorage becomes part of runtime.
-try:
-  import cloudstorage
-  enable_cloudstorage_tests = True
-except ImportError:
-  enable_cloudstorage_tests = False
-
-
 class AbstractDatastoreInputReaderTest(unittest.TestCase):
   """Tests for AbstractDatastoreInputReader."""
 

@@ -53,7 +53,7 @@ class TestHandler(object):
 
 
 # pylint: disable=unused-argument
-def test_handler_function(entity):
+def fake_handler_function(entity):
   """Empty test handler function."""
   pass
 
@@ -97,22 +97,22 @@ class ForNameTest(unittest.TestCase):
 
   def testClassName(self):
     """Test passing fq class name."""
-    self.assertEqual(TestHandler, util.for_name("__main__.TestHandler"))
+    self.assertEqual(TestHandler, util.for_name(f"{TestHandler.__module__}.TestHandler"))
 
   def testFunctionName(self):
     """Test passing function name."""
-    self.assertEqual(test_handler_function,
-                      util.for_name("__main__.test_handler_function"))
+    self.assertEqual(fake_handler_function,
+                      util.for_name(f"{fake_handler_function.__module__}.fake_handler_function"))
 
   def testMethodName(self):
     """Test passing method name."""
     self.assertEqual(TestHandler.process,
-                      util.for_name("__main__.TestHandler.process"))
+                      util.for_name(f"{TestHandler.__module__}.TestHandler.process"))
 
   def testClassWithArgs(self):
     """Test passing method name of class with constructor args."""
     self.assertEqual(TestHandlerWithArgs.process,
-                      util.for_name("__main__.TestHandlerWithArgs.process"))
+                      util.for_name(f"{TestHandler.__module__}.TestHandlerWithArgs.process"))
 
   def testBadModule(self):
     """Tests when the module name is bogus."""
@@ -175,7 +175,7 @@ class SerializeHandlerTest(unittest.TestCase):
 
   def testNonSerializableTypes(self):
     # function.
-    self.assertEqual(None, util.try_serialize_handler(test_handler_function))
+    self.assertEqual(None, util.try_serialize_handler(fake_handler_function))
     # Unbound method.
     self.assertEqual(None, util.try_serialize_handler(TestHandler.process))
     # bounded method.
@@ -203,7 +203,7 @@ class IsGeneratorFunctionTest(unittest.TestCase):
     self.assertTrue(util.is_generator(test_handler_yield))
 
   def testNotGenerator(self):
-    self.assertFalse(util.is_generator(test_handler_function))
+    self.assertFalse(util.is_generator(fake_handler_function))
 
 
 class GetTaskHeadersTest(unittest.TestCase):
@@ -313,9 +313,9 @@ class ObjToPathTest(unittest.TestCase):
 
   def testBasic(self):
     self.assertEqual(None, util._obj_to_path(None))
-    self.assertEqual("__main__.FooClass", util._obj_to_path(FooClass))
-    self.assertEqual("__main__.test_handler_function",
-                     util._obj_to_path(test_handler_function))
+    self.assertEqual(f"{FooClass.__module__}.FooClass", util._obj_to_path(FooClass))
+    self.assertEqual(f"{fake_handler_function.__module__}.fake_handler_function",
+                     util._obj_to_path(fake_handler_function))
 
   @staticmethod
   def foo():

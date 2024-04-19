@@ -7,11 +7,18 @@
 # pylint: disable=g-bad-name
 
 import datetime
+import os
+import sys
 import unittest
 
 
 import pipeline
 from google.appengine.ext import db
+
+# Fix up paths for running tests.
+sys.path.append(os.path.join(os.path.dirname(__file__), "../../src"))
+sys.path.append(os.path.join(os.path.dirname(__file__), "../"))
+
 from mapreduce import context
 from mapreduce import errors
 from mapreduce import input_readers

@@ -6,6 +6,7 @@
 # pylint: disable=g-bad-name
 
 import os
+import sys
 import unittest
 from google.appengine.ext import ndb
 
@@ -14,6 +15,11 @@ from google.appengine.api import namespace_manager
 from google.appengine.ext import db
 from google.appengine.ext import key_range
 from google.appengine.ext import testbed
+
+# Fix up paths for running tests.
+sys.path.append(os.path.join(os.path.dirname(__file__), "../../src"))
+sys.path.append(os.path.join(os.path.dirname(__file__), "../"))
+
 from mapreduce import datastore_range_iterators as db_iters
 from mapreduce import key_ranges
 from mapreduce import model

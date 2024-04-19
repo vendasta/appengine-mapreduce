@@ -3,8 +3,13 @@
 
 # Using opensource naming conventions, pylint: disable=g-bad-name
 
+import os
+import sys
 import unittest
 
+# Fix up paths for running tests.
+sys.path.append(os.path.join(os.path.dirname(__file__), "../../../../src"))
+sys.path.append(os.path.join(os.path.dirname(__file__), "../../../"))
 
 from mapreduce import model
 from mapreduce import parameters
@@ -12,14 +17,6 @@ from mapreduce import test_support
 from testlib import testutil
 from mapreduce.api import map_job
 from mapreduce.lib import input_reader
-
-# pylint: disable=g-import-not-at-top
-# TODO(user): Cleanup imports if/when cloudstorage becomes part of runtime.
-try:
-  import cloudstorage
-  enable_cloudstorage_tests = True
-except ImportError:
-  enable_cloudstorage_tests = False
 
 # Global for collecting data across all map shards
 _memory_mapper_data = []

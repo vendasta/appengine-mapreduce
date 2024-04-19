@@ -1,5 +1,12 @@
 #!/usr/bin/env python
+import os
+import sys
 import unittest
+
+# Fix up paths for running tests.
+sys.path.append(os.path.join(os.path.dirname(__file__), "../../../../src"))
+sys.path.append(os.path.join(os.path.dirname(__file__), "../../../"))
+
 
 from mapreduce import errors
 from mapreduce.api import map_job

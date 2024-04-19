@@ -1,9 +1,13 @@
 #!/usr/bin/env python
 
+# Fix up paths for running tests.
+import os
+import sys
 
-# testutil must be imported before mock.
-# pylint: disable=unused-import
-# pylint: disable=g-bad-import-order
+
+sys.path.append(os.path.join(os.path.dirname(__file__), "../../../../src"))
+sys.path.append(os.path.join(os.path.dirname(__file__), "../../../"))
+
 from testlib import testutil
 
 import mock

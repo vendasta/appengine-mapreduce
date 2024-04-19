@@ -9,6 +9,10 @@ import unittest
 _TEST_DATA_PATH = os.path.join(os.path.dirname(__file__), 'test_data')
 sys.path.insert(0, _TEST_DATA_PATH)
 
+# Fix up paths for running tests.
+sys.path.append(os.path.join(os.path.dirname(__file__), "../../src"))
+sys.path.append(os.path.join(os.path.dirname(__file__), "../"))
+
 # pylint: disable=g-import-not-at-top
 from mapreduce import parameters
 

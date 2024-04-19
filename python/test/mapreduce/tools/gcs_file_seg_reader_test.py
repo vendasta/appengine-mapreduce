@@ -3,12 +3,18 @@
 
 # pylint: disable=g-bad-name
 
+import os
 import pickle
+import sys
 import unittest
 
 from google.appengine.datastore import datastore_stub_util
-import cloudstorage
 from google.appengine.ext import testbed
+
+# Fix up paths for running tests.
+sys.path.append(os.path.join(os.path.dirname(__file__), "../../../src"))
+sys.path.append(os.path.join(os.path.dirname(__file__), "../../"))
+
 from mapreduce import output_writers
 from mapreduce.tools import gcs_file_seg_reader
 

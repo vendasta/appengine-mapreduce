@@ -21,10 +21,16 @@ import datetime
 import os
 import random
 import string
+import sys
 import time
 import unittest
 
 from google.appengine.ext import db
+
+# Fix up paths for running tests.
+sys.path.append(os.path.join(os.path.dirname(__file__), "../../src"))
+sys.path.append(os.path.join(os.path.dirname(__file__), "../"))
+
 from mapreduce import control
 from mapreduce import hooks
 from mapreduce import model

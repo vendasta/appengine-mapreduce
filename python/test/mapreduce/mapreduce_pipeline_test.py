@@ -1,17 +1,18 @@
 #!/usr/bin/env python
 # Copyright 2011 Google Inc. All Rights Reserved.
 
-
-
-
-# pylint: disable=g-bad-name
-
+import os
+import sys
 import unittest
 
 
 import pipeline
-import cloudstorage
 from google.appengine.ext import db
+
+# Fix up paths for running tests.
+sys.path.append(os.path.join(os.path.dirname(__file__), "../../src"))
+sys.path.append(os.path.join(os.path.dirname(__file__), "../"))
+
 from mapreduce import errors
 from mapreduce import input_readers
 from mapreduce import mapreduce_pipeline

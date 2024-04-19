@@ -1,15 +1,16 @@
 #!/usr/bin/env python
 # Copyright 2011 Google Inc. All Rights Reserved.
 
-
-
-
-
+import os
+import sys
 import unittest
 
 import pipeline
 
-import cloudstorage
+# Fix up paths for running tests.
+sys.path.append(os.path.join(os.path.dirname(__file__), "../../src"))
+sys.path.append(os.path.join(os.path.dirname(__file__), "../"))
+
 from mapreduce import base_handler
 from mapreduce import kv_pb
 from mapreduce import mapreduce_pipeline
