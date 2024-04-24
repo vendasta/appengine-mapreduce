@@ -5,17 +5,14 @@
 from google.appengine.tools import os_compat  # pylint: disable=unused-import
 
 import datetime
-import unittest
 
 from google.appengine.api import apiproxy_stub_map
 from google.appengine.api import datastore
 from mapreduce import errors
 from testlib import testutil
 from mapreduce.api import map_job
-from mapreduce.api.map_job import datastore_input_reader_base_test
+import datastore_input_reader_base_test
 from mapreduce.api.map_job import datastore_input_reader
-
-# pylint: disable=invalid-name
 
 
 class DatastoreInputReaderTest(datastore_input_reader_base_test

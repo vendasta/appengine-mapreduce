@@ -37,6 +37,7 @@ from google.appengine.api import queueinfo
 from google.appengine.datastore import datastore_stub_util
 from google.appengine.ext import db
 from google.appengine.ext import testbed
+from google.appengine.datastore import entity_bytes_pb2 as entity_pb
 from mapreduce import json_util
 from mapreduce import model
 import mapreduce
@@ -116,14 +117,15 @@ def set_scatter_setter(key_names_to_vals):
   """
 
   def _get_scatter_property(entity_proto):
-    key_name = entity_proto.key().path().element_list()[-1].name()
+    key_name = entity_proto.key.path.element[-1].name
     if key_name in key_names_to_vals:
       scatter_property = entity_pb.Property()
-      scatter_property.set_name(datastore_types.SCATTER_SPECIAL_PROPERTY)
-      scatter_property.set_meaning(entity_pb.Property.BYTESTRING)
-      scatter_property.set_multiple(False)
-      property_value = scatter_property.mutable_value()
-      property_value.set_stringvalue(str(key_names_to_vals[key_name]))
+      for field_name in scatter_property.DESCRIPTOR.fields_by_name:
+        print(field_name)
+      scatter_property.name = datastore_types.SCATTER_SPECIAL_PROPERTY
+      scatter_property.meaning = entity_pb.Property.BYTESTRING
+      scatter_property.multiple = False
+      scatter_property.value.stringValue = datastore_types.ByteString(str(key_names_to_vals[key_name]).encode())
       return scatter_property
   datastore_stub_util._SPECIAL_PROPERTY_MAP[
       datastore_types.SCATTER_SPECIAL_PROPERTY] = (

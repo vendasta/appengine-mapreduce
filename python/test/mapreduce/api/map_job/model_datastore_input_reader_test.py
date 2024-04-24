@@ -12,7 +12,7 @@ from mapreduce import errors
 
 from testlib import testutil
 from mapreduce.api import map_job
-from mapreduce.api.map_job import datastore_input_reader_base_test
+import datastore_input_reader_base_test
 from mapreduce.api.map_job import model_datastore_input_reader
 
 # pylint: disable=invalid-name

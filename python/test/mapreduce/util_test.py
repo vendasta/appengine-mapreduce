@@ -30,7 +30,7 @@ from mapreduce import parameters
 from mapreduce import util
 
 
-class TestHandler(object):
+class FakeHandler(object):
   """Test handler class."""
 
   def __call__(self, entity):
@@ -93,7 +93,7 @@ class ForNameTest(unittest.TestCase):
 
   def testClassName(self):
     """Test passing fq class name."""
-    self.assertEqual(TestHandler, util.for_name(f"{TestHandler.__module__}.TestHandler"))
+    self.assertEqual(FakeHandler, util.for_name(f"{FakeHandler.__module__}.FakeHandler"))
 
   def testFunctionName(self):
     """Test passing function name."""
@@ -102,13 +102,13 @@ class ForNameTest(unittest.TestCase):
 
   def testMethodName(self):
     """Test passing method name."""
-    self.assertEqual(TestHandler.process,
-                      util.for_name(f"{TestHandler.__module__}.TestHandler.process"))
+    self.assertEqual(FakeHandler.process,
+                      util.for_name(f"{FakeHandler.__module__}.FakeHandler.process"))
 
   def testClassWithArgs(self):
     """Test passing method name of class with constructor args."""
     self.assertEqual(FakeHandlerWithArgs.process,
-                      util.for_name(f"{TestHandler.__module__}.TestHandlerWithArgs.process"))
+                      util.for_name(f"{FakeHandlerWithArgs.__module__}.FakeHandlerWithArgs.process"))
 
   def testBadModule(self):
     """Tests when the module name is bogus."""
@@ -173,17 +173,17 @@ class SerializeHandlerTest(unittest.TestCase):
     # function.
     self.assertEqual(None, util.try_serialize_handler(fake_handler_function))
     # Unbound method.
-    self.assertEqual(None, util.try_serialize_handler(TestHandler.process))
+    self.assertEqual(None, util.try_serialize_handler(FakeHandler.process))
     # bounded method.
-    self.assertEqual(None, util.try_serialize_handler(TestHandler().process))
+    self.assertEqual(None, util.try_serialize_handler(FakeHandler().process))
     # class method.
-    self.assertEqual(None, util.try_serialize_handler(TestHandler.process3))
+    self.assertEqual(None, util.try_serialize_handler(FakeHandler.process3))
     # staticmethod, which is really a function.
-    self.assertEqual(None, util.try_serialize_handler(TestHandler.process2))
+    self.assertEqual(None, util.try_serialize_handler(FakeHandler.process2))
 
   def testSerializableTypes(self):
     # new style callable instance.
-    i = TestHandler()
+    i = FakeHandler()
     self.assertNotEqual(
         None, util.try_deserialize_handler(util.try_serialize_handler(i)))
 

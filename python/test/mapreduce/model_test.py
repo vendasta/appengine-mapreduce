@@ -32,7 +32,7 @@ from mapreduce import hooks
 from mapreduce import model
 
 
-class TestHandler(object):
+class FakeHandler(object):
   """Test handler class."""
 
   def __call__(self, entity):
@@ -42,7 +42,7 @@ class TestHandler(object):
     pass
 
 
-class TestHandlerWithArgs(object):
+class FakeHandlerWithArgs(object):
   """Test handler with argument in constructor."""
 
   def __init__(self, arg_unused):
@@ -54,12 +54,12 @@ class TestHandlerWithArgs(object):
     pass
 
 
-class TestHooks(hooks.Hooks):
+class FakeHooks(hooks.Hooks):
   """Test hooks class."""
   pass
 
 
-def test_handler_function(entity):
+def fake_handler_function(entity):
   """Empty test handler function."""
   pass
 
@@ -93,7 +93,7 @@ class MapperSpecTest(unittest.TestCase):
   """Tests model.MapperSpec."""
 
   ENTITY_KIND = "__main__.TestEntity"
-  TEST_HANDLER = __name__ + "." + TestHandler.__name__
+  TEST_HANDLER = __name__ + "." + FakeHandler.__name__
   TEST_READER = __name__ + "." + TestReader.__name__
   TEST_WRITER = __name__ + "." + TestWriter.__name__
 
@@ -130,8 +130,8 @@ class MapperSpecTest(unittest.TestCase):
     self.assertEqual(self.default_json["mapper_input_reader"],
                       ms.input_reader_spec)
     self.assertEqual(self.TEST_HANDLER, ms.handler_spec)
-    self.assertTrue(isinstance(ms.get_handler(), TestHandler))
-    self.assertTrue(isinstance(ms.handler, TestHandler))
+    self.assertTrue(isinstance(ms.get_handler(), FakeHandler))
+    self.assertTrue(isinstance(ms.handler, FakeHandler))
     self.assertEqual(8, ms.shard_count)
 
     d = dict(self.default_json)
@@ -147,14 +147,13 @@ class MapperSpecTest(unittest.TestCase):
   def testClassHandler(self):
     """Test class name as handler spec."""
     mapper_spec = self.specForHandler(
-        __name__ + "." + TestHandler.__name__)
-    self.assertTrue(TestHandler,
+        __name__ + "." + FakeHandler.__name__)
+    self.assertTrue(FakeHandler,
                     type(mapper_spec.handler))
 
   def testInstanceMethodHandler(self):
     """Test instance method as handler spec."""
-    mapper_spec = self.specForHandler(
-        __name__ + "." + TestHandler.__name__ + ".process")
+    mapper_spec = self.specForHandler(f"{FakeHandler.__module__}.{FakeHandler.__name__}.process")
     self.assertEqual(types.MethodType,
                       type(mapper_spec.handler))
     # call it
@@ -163,7 +162,7 @@ class MapperSpecTest(unittest.TestCase):
   def testFunctionHandler(self):
     """Test function name as handler spec."""
     mapper_spec = self.specForHandler(
-        __name__ + "." + test_handler_function.__name__)
+        __name__ + "." + fake_handler_function.__name__)
     self.assertEqual(types.FunctionType,
                       type(mapper_spec.handler))
     # call it
@@ -172,13 +171,13 @@ class MapperSpecTest(unittest.TestCase):
   def testHandlerWithConstructorArgs(self):
     """Test class with constructor args as a handler."""
     mapper_spec = self.specForHandler(
-        __name__ + "." + TestHandlerWithArgs.__name__)
+        __name__ + "." + FakeHandlerWithArgs.__name__)
     self.assertRaises(TypeError, mapper_spec.get_handler)
 
   def testMethodHandlerWithConstructorArgs(self):
     """Test method from a class with constructor args as a handler."""
     mapper_spec = self.specForHandler(
-        __name__ + "." + TestHandlerWithArgs.__name__ + ".process")
+        __name__ + "." + FakeHandlerWithArgs.__name__ + ".process")
     self.assertRaises(TypeError, mapper_spec.get_handler)
 
 
@@ -195,13 +194,13 @@ class MapreduceSpecTest(unittest.TestCase):
                                          "mr0",
                                          mapper_spec_dict,
                                          {"extra": "value"},
-                                         __name__+"."+TestHooks.__name__)
+                                         __name__+"."+FakeHooks.__name__)
     self.assertEqual(
         {"name": "my job",
          "mapreduce_id": "mr0",
          "mapper_spec": mapper_spec_dict,
          "params": {"extra": "value"},
-         "hooks_class_name": __name__+"."+TestHooks.__name__,
+         "hooks_class_name": __name__+"."+FakeHooks.__name__,
         },
         mapreduce_spec.to_json())
 
@@ -235,7 +234,7 @@ class MapreduceSpecTest(unittest.TestCase):
          "mapreduce_id": "mr0",
          "name": "my job",
          "params": {"extra": "value"},
-         "hooks_class_name": __name__+"."+TestHooks.__name__
+         "hooks_class_name": __name__+"."+FakeHooks.__name__
         })
 
     self.assertEqual("my job", mapreduce_spec.name)
@@ -243,7 +242,7 @@ class MapreduceSpecTest(unittest.TestCase):
     self.assertEqual(mapper_spec_dict, mapreduce_spec.mapper.to_json())
     self.assertEqual("TestHandler", mapreduce_spec.mapper.handler_spec)
     self.assertEqual({"extra": "value"}, mapreduce_spec.params)
-    self.assertEqual(__name__+"."+TestHooks.__name__,
+    self.assertEqual(__name__+"."+FakeHooks.__name__,
                       mapreduce_spec.hooks_class_name)
     self.assertEqual(mapreduce_spec, mapreduce_spec.get_hooks().mapreduce_spec)
 

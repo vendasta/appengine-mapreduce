@@ -2321,18 +2321,13 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.handler.request.headers["X-AppEngine-TaskExecutionCount"] = 5
     TestEntity().put()
 
-    m = mox.Mox()
-    m.StubOutWithMock(context.Context, "_set", use_mock_anything=True)
+    with mock.patch.object(context.Context, '_set') as mock_set:
+      mock_set.assert_any_call(task_retry_count=5)
+      mock_set.assert_any_call(None)
 
-    context.Context._set(MatchesContext(task_retry_count=5))
-    context.Context._set(None)
-
-    m.ReplayAll()
-    try: # test, verify
       self.handler.post()
-      m.VerifyAll()
-    finally:
-      m.UnsetStubs()
+
+      mock_set.assert_called()
 
   def testContextFlush(self):
     """Test context handling."""

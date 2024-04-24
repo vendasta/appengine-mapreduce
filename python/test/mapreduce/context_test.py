@@ -16,6 +16,7 @@
 
 import random
 import unittest
+from unittest import mock
 
 from google.appengine.ext import ndb
 from google.appengine.api import datastore
@@ -285,24 +286,15 @@ class CountersTest(unittest.TestCase):
 
   def testIncrement(self):
     """Test increment() method."""
-    m = mox.Mox()
-
-    # Set up mocks
-    shard_state = m.CreateMockAnything()
-    counters_map = m.CreateMockAnything()
+    shard_state = mock.Mock()
+    counters_map = mock.Mock()
     shard_state.counters_map = counters_map
     counters = context._Counters(shard_state)
 
-    # Record call
-    counters_map.increment('test', 19)
+    counters_map.increment = mock.Mock()
 
-    m.ReplayAll()
-    try:  # test, verify
-      counters.increment('test', 19)
-
-      m.VerifyAll()
-    finally:
-      m.UnsetStubs()
+    counters.increment('test', 19)
+    counters_map.increment.assert_called_once_with('test', 19)
 
   def testFlush(self):
     """Test flush() method."""
@@ -324,21 +316,14 @@ class ContextTest(testutil.HandlerTestBase):
 
   def testArbitraryPool(self):
     """Test arbitrary pool registration."""
-    m = mox.Mox()
-
     ctx = context.Context(None, None)
     self.assertFalse(ctx.get_pool("test"))
-    pool = m.CreateMockAnything()
+
+    pool = mock.Mock()
     ctx.register_pool("test", pool)
     self.assertEqual(pool, ctx.get_pool("test"))
 
-    # Record calls
-    pool.flush()
+    pool.flush = mock.Mock()
 
-    m.ReplayAll()
-    try:  # test, verify
-      ctx.flush()
-      m.VerifyAll()
-    finally:
-      m.UnsetStubs()
-
+    ctx.flush()
+    pool.flush.assert_called_once()

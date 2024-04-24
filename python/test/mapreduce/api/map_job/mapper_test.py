@@ -72,10 +72,6 @@ class MapperTest(testutil.HandlerTestBase):
   def tearDown(self):
     parameters.config._SLICE_DURATION_SEC = self.original_slice_duration
 
-  # TODO(user): After mr release is done via pypi, we can start assume
-  # cloudstorage library is present.
-  @unittest.skipIf(cloudstorage is None,
-                   "Cloudstorage library is not available.")
   def testSmoke(self):
     entity_count = 10
 
@@ -114,6 +110,4 @@ class MapperTest(testutil.HandlerTestBase):
       for line in f:
         outputs[line] += 1
     self.assertEqual(expected, outputs)
-
-
 
