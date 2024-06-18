@@ -16,11 +16,8 @@
 import copy
 import datetime
 import logging
-
-try:
-  import json
-except ImportError:
-  import simplejson as json
+import json
+import types
 
 from google.appengine.api import datastore_errors
 from google.appengine.api import datastore_types
@@ -37,6 +34,10 @@ class JsonEncoder(json.JSONEncoder):
 
   def default(self, o):
     """Inherit docs."""
+    if isinstance(o, types.MethodType):
+      return str(o)
+    if isinstance(o, bytes):
+      return o.decode()
     if type(o) in _TYPE_TO_ENCODER:
       encoder = _TYPE_TO_ENCODER[type(o)]
       json_struct = encoder(o)

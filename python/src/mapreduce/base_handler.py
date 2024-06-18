@@ -103,13 +103,29 @@ class TaskQueueHandler(MethodView):
     """To be implemented by subclasses."""
     raise NotImplementedError()
 
+  class _RequestWrapper:
+    """Container of a request and associated parameters."""
+
+    def __init__(self, request):
+      self._request = request
+
+    def get(self, name, default=""):
+      return self._request.form.get(name, self._request.args.get(name, default))
+    
+    def __getattr__(self, name):
+      if name == "get":
+        return self.get
+      if name == "_request":
+        return self._request
+      return self._request.__getattr__(name)
+
   def _preprocess(self):
     """Preprocess.
 
     This method is called after webapp initialization code has been run
     successfully. It can thus access self.request, self.response and so on.
     """
-    pass
+    self.request = self._RequestWrapper(request)
 
   def _drop_gracefully(self):
     """Drop task gracefully.

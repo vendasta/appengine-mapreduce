@@ -19,6 +19,7 @@
 # pylint: disable=g-bad-name
 import itertools
 from google.appengine.datastore import datastore_query
+from google.appengine.datastore.datastore_query import Cursor
 from google.appengine.datastore import datastore_rpc
 from google.appengine.ext import db
 from google.appengine.ext import key_range
@@ -193,17 +194,17 @@ class _PropertyRangeModelIterator(RangeIterator):
   def to_json(self):
     """Inherit doc."""
     cursor = self._cursor
+    cursor_object = False
     if self._query is not None:
       if isinstance(self._query, db.Query):
-        cursor = self._query.cursor()
+        cursor = self._query.cursor().decode()
       else:
-        cursor = self._query.cursor_after()
+        cursor_object = True
+        cursor = self._query.cursor_after().to_websafe_string().decode()
 
-    if cursor is None or isinstance(cursor, str):
-      cursor_object = False
-    else:
+    if isinstance(cursor, Cursor):
       cursor_object = True
-      cursor = cursor.to_websafe_string()
+      cursor = cursor.to_websafe_string().decode()
 
     return {"property_range": self._property_range.to_json(),
             "query_spec": self._query_spec.to_json(),

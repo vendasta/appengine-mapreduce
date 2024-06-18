@@ -122,6 +122,8 @@ class SliceContext:
     Args:
       value: a value of type expected by the output writer.
     """
+    if isinstance(value, str):
+      value = value.encode('utf-8')
     if not self._tstate.output_writer:
       logging.error("emit is called, but no output writer is set.")
       return

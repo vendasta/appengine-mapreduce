@@ -117,7 +117,7 @@ def _ord_to_namespace(n, _max_length=None):
   if n == 0:
     return ''
   n -= 1
-  return (NAMESPACE_CHARACTERS[n / length] +
+  return (NAMESPACE_CHARACTERS[n // length] +
           _ord_to_namespace(n % length, _max_length - 1))
 
 

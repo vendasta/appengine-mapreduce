@@ -163,8 +163,8 @@ class _ItemList:
       except apiproxy_errors.RequestTooLargeError:
         self._log_largest_items()
         raise
-    else:
-      raise
+    if retry > self.__timeout_retries:
+      raise db.Timeout('Flush operation timed out after %s retries' % retry)
 
   def _log_largest_items(self):
     if not self.__repr_function:
