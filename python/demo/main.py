@@ -48,6 +48,8 @@ from mapreduce import base_handler, mapreduce_pipeline
 app = Flask(__name__)
 app.wsgi_app = wrap_wsgi_app(app.wsgi_app, use_legacy_context_mode=True)
 
+project_name = os.getenv('MAPREDUCE_TEST_PROJECT', app_identity.get_application_id())
+bucket_name = os.getenv('MAPREDUCE_TEST_BUCKET', app_identity.get_default_gcs_bucket_name())
 
 class FileMetadata(db.Model):
   """A helper class that will hold metadata for the user's blobs.
@@ -144,7 +146,6 @@ class IndexHandler(MethodView):
         items = [result for result in results]
         length = len(items)
 
-        bucket_name = app_identity.get_default_gcs_bucket_name()
         upload_url = blobstore.create_upload_url("/upload", gs_bucket_name=bucket_name)
 
         return render_template("index.html", username=username, items=items, length=length, upload_url=upload_url)
@@ -184,6 +185,8 @@ def word_count_map(data):
   """Word count map function."""
   (entry, text_fn) = data
   text = text_fn()
+  if isinstance(text, bytes):
+    text = text.decode("utf-8")
 
   logging.debug("Got %s", entry.filename)
   for s in split_into_sentences(text):
@@ -255,7 +258,6 @@ class WordCountPipeline(base_handler.PipelineBase):
 
   def run(self, filekey, blobkey):
     logging.debug("filename is %s" % filekey)
-    bucket_name = app_identity.get_default_gcs_bucket_name()
     output = yield mapreduce_pipeline.MapreducePipeline(
         "word_count",
         "main.word_count_map",
@@ -264,6 +266,7 @@ class WordCountPipeline(base_handler.PipelineBase):
         "mapreduce.output_writers.GoogleCloudStorageOutputWriter",
         mapper_params={
             "blob_key": blobkey,
+            "bucket_name": bucket_name,
         },
         reducer_params={
             "output_writer": {
@@ -285,7 +288,6 @@ class IndexPipeline(base_handler.PipelineBase):
 
 
   def run(self, filekey, blobkey):
-    bucket_name = app_identity.get_default_gcs_bucket_name()
     output = yield mapreduce_pipeline.MapreducePipeline(
         "index",
         "main.index_map",
@@ -294,6 +296,7 @@ class IndexPipeline(base_handler.PipelineBase):
         "mapreduce.output_writers.GoogleCloudStorageOutputWriter",
         mapper_params={
             "blob_key": blobkey,
+            "bucket_name": bucket_name,
         },
         reducer_params={
             "output_writer": {
@@ -314,7 +317,6 @@ class PhrasesPipeline(base_handler.PipelineBase):
   """
 
   def run(self, filekey, blobkey):
-    bucket_name = app_identity.get_default_gcs_bucket_name()
     output = yield mapreduce_pipeline.MapreducePipeline(
         "phrases",
         "main.phrases_map",
@@ -323,6 +325,7 @@ class PhrasesPipeline(base_handler.PipelineBase):
         "mapreduce.output_writers.GoogleCloudStorageOutputWriter",
         mapper_params={
             "blob_key": blobkey,
+            "bucket_name": bucket_name,
         },
         reducer_params={
             "output_writer": {
@@ -384,9 +387,7 @@ class UploadHandler(blobstore.BlobstoreUploadHandler):
     m.source = source
     m.blobkey = str_blob_key
     m.put()
-
-    import logging
-    logging.critical('redirecting to index')
+    
     return redirect(url_for('index'))
 
 
@@ -411,3 +412,6 @@ def download(key):
 mapreduce_handlers = mapreduce.create_handlers_map("/mapreduce")
 for route, handler in mapreduce_handlers:
     app.add_url_rule(route, view_func=handler.as_view(route.lstrip("/")))
+
+if __name__ == '__main__':
+  app.run(debug=True)
