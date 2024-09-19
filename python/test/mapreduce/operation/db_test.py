@@ -20,7 +20,7 @@ from unittest.mock import Mock
 from mapreduce import context
 from mapreduce import operation as op
 
-class TestEntity(object):
+class TestEntity:
   """Test entity class."""
 
 

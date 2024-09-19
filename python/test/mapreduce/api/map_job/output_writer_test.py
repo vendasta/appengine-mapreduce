@@ -2,7 +2,7 @@
 
 from testlib import testutil
 
-import mock
+from unittest import mock
 import unittest
 
 from mapreduce.api.map_job import output_writer

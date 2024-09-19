@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 """Tests for context interface."""
 
+import signal
 import unittest
 
 from mapreduce import parameters
@@ -58,7 +59,7 @@ class MapperTest(testutil.HandlerTestBase):
   """Test mapper interface."""
 
   def setUp(self):
-    super(MapperTest, self).setUp()
+    super().setUp()
     MyMapper.reset()
     self.original_slice_duration = parameters.config._SLICE_DURATION_SEC
 
@@ -77,9 +78,16 @@ class MapperTest(testutil.HandlerTestBase):
         user_params={"foo": 1, "bar": 2})
     MyMapper.original_conf = job_config
     map_job.Job.submit(job_config)
-    test_support.execute_until_empty(self.taskqueue)
+
+    def timeout_handler(signum, frame):
+        raise TimeoutError()
+
+    signal.signal(signal.SIGALRM, timeout_handler)
+    signal.alarm(60)
+    try:
+        test_support.execute_until_empty(self.taskqueue)
+    finally:
+        signal.alarm(0)
     job = map_job.Job.get_job_by_id(job_config.job_id)
     self.assertEqual(map_job.Job.SUCCESS, job.get_status())
-
-
 

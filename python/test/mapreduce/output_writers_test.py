@@ -14,11 +14,9 @@
 # limitations under the License.
 
 
-
-
 # Using opensource naming conventions, pylint: disable=g-bad-name
 
-import unittest
+from google.cloud import storage
 
 from mapreduce import context
 from mapreduce import errors
@@ -27,56 +25,62 @@ from mapreduce import output_writers
 from mapreduce import records
 from testlib import testutil
 
+from google.cloud import storage
+
+storage_client = storage.Client(project="repcore-prod")
+
 class GCSRecordsPoolTest(testutil.CloudStorageTestBase):
   """Tests for GCSRecordsPool."""
 
   def setUp(self):
-    super(GCSRecordsPoolTest, self).setUp()
-    bucket_name = "testbucket"
+    super().setUp()
+    # bucket_name = "testbucket"
+    bucket_name = "byates"
     test_filename = "testfile"
 
-    self.filename = "/%s/%s" % (bucket_name, test_filename)
-    self.filehandle = cloudstorage.open(self.filename, mode="w")
+    storage_client = storage.Client(project="repcore-prod")
+    bucket = storage_client.get_bucket(bucket_name)
+    self.blob = bucket.blob(test_filename)
+    if self.blob.exists():
+      self.blob.delete()
+    self.filehandle = self.blob.open("wb", ignore_flush=True)
     self.pool = output_writers.GCSRecordsPool(self.filehandle,
                                               flush_size_chars=30)
 
   def testAppendAndFlush(self):
     self.pool.append("a")
-    self.assertRaises(cloudstorage.errors.NotFoundError, cloudstorage.open,
-                      self.filename)
+    self.assertFalse(self.blob.exists())
     self.pool.append("b")
-    self.assertRaises(cloudstorage.errors.NotFoundError, cloudstorage.open,
-                      self.filename)
+    self.assertFalse(self.blob.exists())
     self.pool.flush()
-    self.assertRaises(cloudstorage.errors.NotFoundError, cloudstorage.open,
-                      self.filename)
+    self.assertFalse(self.blob.exists())
     # File handle does need to be explicitly closed.
     self.filehandle.close()
-    self.assertEqual(32 * 1024, cloudstorage.stat(self.filename).st_size)
+    self.blob.reload()
+    self.assertEqual(32 * 1024, self.blob.size)
+    self.filehandle = self.blob.open("rb")
     self.assertEqual(
-        ["a", "b"],
-        list(records.RecordsReader(cloudstorage.open(self.filename))))
+        [b"a", b"b"],
+        list(records.RecordsReader(self.filehandle)))
 
   def testAppendAndForceFlush(self):
     self.pool.append("a")
-    self.assertRaises(cloudstorage.errors.NotFoundError, cloudstorage.open,
-                      self.filename)
+    self.assertFalse(self.blob.exists())
     self.pool.append("b")
-    self.assertRaises(cloudstorage.errors.NotFoundError, cloudstorage.open,
-                      self.filename)
+    self.assertFalse(self.blob.exists())
     self.pool.flush(True)
-    self.assertRaises(cloudstorage.errors.NotFoundError, cloudstorage.open,
-                      self.filename)
+    self.assertFalse(self.blob.exists())
     # File handle does need to be explicitly closed.
     self.filehandle.close()
-    # Check the file size contains the padding.
-    self.assertEqual(256 * 1024, cloudstorage.stat(self.filename).st_size)
+    self.blob.reload()
+    self.assertEqual(256 * 1024, self.blob.size)
+    self.filehandle = self.blob.open("rb")
     self.assertEqual(
-        ["a", "b"],
-        list(records.RecordsReader(cloudstorage.open(self.filename))))
+        [b"a", b"b"],
+        list(records.RecordsReader(self.filehandle)))
 
 
-class GCSOutputTestBase(object):
+class GCSOutputTestBase:
   """Base class for running output tests with Google Cloud Storage.
 
   Subclasses must define WRITER_NAME and may redefine NUM_SHARDS.
@@ -85,6 +89,7 @@ class GCSOutputTestBase(object):
   # Defaults
   NUM_SHARDS = 10
   WRITER_CLS = None
+  TEST_BUCKET = "byates"
 
   def _serialize_and_deserialize(self, writer):
     writer.end_slice(None)
@@ -137,16 +142,16 @@ class GCSOutputWriterNoDupModeTest(GCSOutputTestBase,
   WRITER_NAME = output_writers.__name__ + "." + WRITER_CLS.__name__
 
   def setUp(self):
-    super(GCSOutputWriterNoDupModeTest, self).setUp()
+    super().setUp()
     self.mr_state = self.create_mapreduce_state(
         output_params=
-        {self.WRITER_CLS.BUCKET_NAME_PARAM: "test",
+        {self.WRITER_CLS.BUCKET_NAME_PARAM:self.TEST_BUCKET,
          self.WRITER_CLS._NO_DUPLICATE: True})
 
   def testValidate_NoDuplicateParam(self):
     # Good.
     self.WRITER_CLS.validate(self.create_mapper_spec(
-        output_params={self.WRITER_CLS.BUCKET_NAME_PARAM: "test",
+        output_params={self.WRITER_CLS.BUCKET_NAME_PARAM: self.TEST_BUCKET,
                        self.WRITER_CLS._NO_DUPLICATE: True}))
 
     # Bad. Expect a boolean.
@@ -155,7 +160,7 @@ class GCSOutputWriterNoDupModeTest(GCSOutputTestBase,
         self.WRITER_CLS.validate,
         self.create_mapper_spec(
             output_params=
-            {self.WRITER_CLS.BUCKET_NAME_PARAM: "test",
+            {self.WRITER_CLS.BUCKET_NAME_PARAM: self.TEST_BUCKET,
              self.WRITER_CLS._NO_DUPLICATE: "False"}))
 
   def testSmoke(self):
@@ -192,13 +197,13 @@ class GCSOutputWriterNoDupModeTest(GCSOutputTestBase,
 
     writer = self.WRITER_CLS.create(mr_spec, 0, 0)
     writer._seg_index = 1
-    writer.write("abcde")
+    writer.write(b"abcde")
 
     writer = self.WRITER_CLS.from_json_str(writer.to_json_str())
     # _seg_index doesn't change.
     self.assertEqual(1, writer._seg_index)
     # _seg_valid_length is updated to what was in the buffer.
-    self.assertEqual(len("abcde"), writer._seg_valid_length)
+    self.assertEqual(len(b"abcde"), writer._seg_valid_length)
 
   def testRecoverNothingWrittenInFailedInstance(self):
     mr_spec = self.mr_state.mapreduce_spec
@@ -221,16 +226,18 @@ class GCSOutputWriterNoDupModeTest(GCSOutputTestBase,
     context.Context._set(ctx)
 
     writer = self.WRITER_CLS.create(mr_spec, 0, 0)
-    writer.write("123")
+    writer.write(b"123")
     writer = self.WRITER_CLS.from_json(writer.to_json())
-    writer.write("4")
+    writer.write(b"4")
 
     new_writer = writer._recover(mr_spec, 0, 0)
     # Old instance is finalized and valid offset saved.
-    old_stat = cloudstorage.stat(writer._streaming_buffer.name)
+    blob = writer._streaming_buffer._blob
+    blob.reload()
+    
     self.assertEqual(
         len("123"),
-        int(old_stat.metadata[self.WRITER_CLS._VALID_LENGTH]))
+        int(blob.metadata[self.WRITER_CLS._VALID_LENGTH]))
     # New instance is created with an incremented seg index.
     self.assertEqual(writer._seg_index + 1, new_writer._seg_index)
 
@@ -243,220 +250,242 @@ class GCSOutputWriterNoDupModeTest(GCSOutputTestBase,
 
 class GCSOutputWriterTestCommon(GCSOutputTestBase):
 
-  # GoogleCloudStorageOutputWriter and
-  # GoogleCloudStorageConsistentOutputWriter both run all of these tests.
+    # GoogleCloudStorageOutputWriter and
+    # GoogleCloudStorageConsistentOutputWriter both run all of these tests.
 
-  def testValidate_PassesBasic(self):
-    self.WRITER_CLS.validate(self.create_mapper_spec(
+    def testValidate_PassesBasic(self):
+        self.WRITER_CLS.validate(self.create_mapper_spec(
         output_params=
-        {self.WRITER_CLS.BUCKET_NAME_PARAM: "test"}))
+        # {self.WRITER_CLS.BUCKET_NAME_PARAM: "test"}))
+        {self.WRITER_CLS.BUCKET_NAME_PARAM: "byates"}))
 
-  def testValidate_PassesAllOptions(self):
-    self.WRITER_CLS.validate(
+    def testValidate_PassesAllOptions(self):
+        self.WRITER_CLS.validate(
         self.create_mapper_spec(
             output_params=
-            {self.WRITER_CLS.BUCKET_NAME_PARAM: "test",
+            # {self.WRITER_CLS.BUCKET_NAME_PARAM: "test",
+            {self.WRITER_CLS.BUCKET_NAME_PARAM: "byates",
              self.WRITER_CLS.ACL_PARAM: "test-acl",
              self.WRITER_CLS.NAMING_FORMAT_PARAM:
              "fname",
              self.WRITER_CLS.CONTENT_TYPE_PARAM:
              "mime"}))
 
-  def testValidate_NoBucket(self):
-    self.assertRaises(
+    def testValidate_NoBucket(self):
+        self.assertRaises(
         errors.BadWriterParamsError,
         self.WRITER_CLS.validate,
         self.create_mapper_spec())
 
-  def testValidate_BadBucket(self):
-    # Only test a single bad name to ensure that the validator is called.
-    # Full testing of the validation is in cloudstorage component.
-    self.assertRaises(
-        errors.BadWriterParamsError,
-        self.WRITER_CLS.validate,
-        self.create_mapper_spec(
-            output_params=
-            {self.WRITER_CLS.BUCKET_NAME_PARAM: "#"}))
+    def testValidate_BadBucket(self):
+        # Only test a single bad name to ensure that the validator is called.
+        # Full testing of the validation is in cloudstorage component.
+        with self.assertRaises(errors.BadWriterParamsError):
+            self.WRITER_CLS.validate(
+                self.create_mapper_spec(
+                    output_params={self.WRITER_CLS.BUCKET_NAME_PARAM: "#"}
+                )
+            )
 
-  def testValidate_BadNamingTemplate(self):
-    # Send a naming format that includes an unknown subsitution: $bad
-    self.assertRaises(
-        errors.BadWriterParamsError,
-        self.WRITER_CLS.validate,
-        self.create_mapper_spec(
-            output_params=
-            {self.WRITER_CLS.BUCKET_NAME_PARAM: "test",
-             self.WRITER_CLS.NAMING_FORMAT_PARAM:
-             "$bad"}))
+    def testValidate_BadNamingTemplate(self):
+        # Send a naming format that includes an unknown subsitution: $bad
+        with self.assertRaises(errors.BadWriterParamsError):
+            self.WRITER_CLS.validate(
+                self.create_mapper_spec(
+                    output_params={
+                        self.WRITER_CLS.BUCKET_NAME_PARAM: "test",
+                        self.WRITER_CLS.NAMING_FORMAT_PARAM: "$bad",
+                    }
+                )
+            )
 
-  def testCreateWriters(self):
-    mapreduce_state = self.create_mapreduce_state(
+    def testCreateWriters(self):
+        mapreduce_state = self.create_mapreduce_state(
         output_params=
-        {self.WRITER_CLS.BUCKET_NAME_PARAM: "test"})
-    for shard_num in range(self.NUM_SHARDS):
-      shard = self.create_shard_state(shard_num)
-      writer = self.WRITER_CLS.create(mapreduce_state.mapreduce_spec,
+        # {self.WRITER_CLS.BUCKET_NAME_PARAM: "test"})
+        {self.WRITER_CLS.BUCKET_NAME_PARAM: "byates"})
+        for shard_num in range(self.NUM_SHARDS):
+            shard = self.create_shard_state(shard_num)
+            writer = self.WRITER_CLS.create(mapreduce_state.mapreduce_spec,
                                       shard.shard_number, 0)
-      cxt = context.Context(mapreduce_state.mapreduce_spec,
+            cxt = context.Context(mapreduce_state.mapreduce_spec,
                             shard)
-      shard.result_status = model.ShardState.RESULT_SUCCESS
-      writer.finalize(cxt, shard)
-      shard.put()
-    filenames = self.WRITER_CLS.get_filenames(mapreduce_state)
-    # Verify we have the correct number of filenames
-    self.assertEqual(self.NUM_SHARDS, len(filenames))
+            shard.result_status = model.ShardState.RESULT_SUCCESS
+            writer.finalize(cxt, shard)
+            shard.put()
+        filenames = self.WRITER_CLS.get_filenames(mapreduce_state)
+        # Verify we have the correct number of filenames
+        self.assertEqual(self.NUM_SHARDS, len(filenames))
 
-    # Verify each has a unique filename
-    self.assertEqual(self.NUM_SHARDS, len(set(filenames)))
+        # Verify each has a unique filename
+        self.assertEqual(self.NUM_SHARDS, len(set(filenames)))
 
-  def testWriter(self):
-    mapreduce_state = self.create_mapreduce_state(
-        output_params=
-        {self.WRITER_CLS.BUCKET_NAME_PARAM: "test"})
-    shard_state = self.create_shard_state(0)
-    ctx = context.Context(mapreduce_state.mapreduce_spec, shard_state)
-    context.Context._set(ctx)
+    def testWriter(self):
+        # bucket_name = "test"
+        bucket_name = "byates"
+        mapreduce_state = self.create_mapreduce_state(
+          output_params={self.WRITER_CLS.BUCKET_NAME_PARAM: bucket_name}
+        )
 
-    writer = self.WRITER_CLS.create(mapreduce_state.mapreduce_spec,
+        shard_state = self.create_shard_state(0)
+        ctx = context.Context(mapreduce_state.mapreduce_spec, shard_state)
+        context.Context._set(ctx)
+
+        writer = self.WRITER_CLS.create(mapreduce_state.mapreduce_spec,
                                     shard_state.shard_number, 0)
-    writer.begin_slice(None)
-    data = "fakedata"
-    writer.write(data)
-    writer = self._serialize_and_deserialize(writer)
-    writer.finalize(ctx, shard_state)
-    filename = self.WRITER_CLS._get_filename(shard_state)
+        writer.begin_slice(None)
+        data = b"fakedata"
+        writer.write(data)
+        writer = self._serialize_and_deserialize(writer)
+        writer.finalize(ctx, shard_state)
+        filename = self.WRITER_CLS._get_filename(shard_state)
 
-    self.assertNotEqual(None, filename)
-    self.assertEqual(data, cloudstorage.open(filename).read())
+        self.assertNotEqual(None, filename)
+        bucket = storage_client.get_bucket(bucket_name)
+        blob = bucket.blob(filename)
+        self.assertEqual(data, blob.download_as_string())
 
-  def testCreateWritersWithRetries(self):
-    mapreduce_state = self.create_mapreduce_state(
-        output_params=
-        {self.WRITER_CLS.BUCKET_NAME_PARAM: "test"})
-    shard_state = self.create_shard_state(0)
-    ctx = context.Context(mapreduce_state.mapreduce_spec, shard_state)
-    context.Context._set(ctx)
+    def testCreateWritersWithRetries(self):
+        # bucket_name = "test"
+        bucket_name = "byates"
+        mapreduce_state = self.create_mapreduce_state(output_params={self.WRITER_CLS.BUCKET_NAME_PARAM: bucket_name})
+        shard_state = self.create_shard_state(0)
+        ctx = context.Context(mapreduce_state.mapreduce_spec, shard_state)
+        context.Context._set(ctx)
 
-    # Create the writer for the 1st attempt
-    writer = self.WRITER_CLS.create(mapreduce_state.mapreduce_spec,
+        # Create the writer for the 1st attempt
+        writer = self.WRITER_CLS.create(mapreduce_state.mapreduce_spec,
                                     shard_state.shard_number,
                                     shard_state.retries + 1)
-    new_filename = writer._get_filename_for_test()
-    writer.begin_slice(None)
-    writer.write("initData")
-    writer.end_slice(None)
+        new_filename = writer._get_filename_for_test()
+        writer.begin_slice(None)
+        writer.write(b"initData")
+        writer.end_slice(None)
 
-    orig_json = writer.to_json()
+        orig_json = writer.to_json()
 
-    writer = self.WRITER_CLS.from_json(orig_json)
-    writer.begin_slice(None)
-    writer.write("badData")  # we fail here so this data should be discarded
+        writer = self.WRITER_CLS.from_json(orig_json)
+        writer.begin_slice(None)
+        writer.write(b"badData")  # we fail here so this data should be discarded
 
-    # Recreate the same rewrite (simulates a slice retry).
-    writer = self.WRITER_CLS.from_json(orig_json)
-    writer.begin_slice(None)
-    writer.write("goodData")
-    writer.end_slice(None)
-    writer = self._serialize_and_deserialize(writer)
-    writer.finalize(ctx, shard_state)
+        # Recreate the same rewrite (simulates a slice retry).
+        writer = self.WRITER_CLS.from_json(orig_json)
+        writer.begin_slice(None)
+        writer.write(b"goodData")
+        writer.end_slice(None)
+        writer = self._serialize_and_deserialize(writer)
+        writer.finalize(ctx, shard_state)
 
-    # Verify the badData is not in the final file
-    self.assertEqual("initDatagoodData", cloudstorage.open(new_filename).read())
+        # Verify the badData is not in the final file
+        bucket = storage_client.get_bucket(bucket_name)
+        blob = bucket.blob(new_filename)
 
-  def testWriterMetadata(self):
-    test_acl = "test-acl"
-    test_content_type = "test-mime"
-    mapreduce_state = self.create_mapreduce_state(
+        self.assertEqual(b"initDatagoodData", blob.download_as_bytes())
+
+    def testWriterMetadata(self):
+        test_acl = "test-acl"
+        test_content_type = "test-mime"
+        bucket_name = "byates"
+        mapreduce_state = self.create_mapreduce_state(
         output_params=
-        {self.WRITER_CLS.BUCKET_NAME_PARAM: "test",
+        {self.WRITER_CLS.BUCKET_NAME_PARAM: bucket_name,
          self.WRITER_CLS.ACL_PARAM: test_acl,
          self.WRITER_CLS.CONTENT_TYPE_PARAM:
          test_content_type})
-    shard_state = self.create_shard_state(0)
-    ctx = context.Context(mapreduce_state.mapreduce_spec, shard_state)
-    context.Context._set(ctx)
+        shard_state = self.create_shard_state(0)
+        ctx = context.Context(mapreduce_state.mapreduce_spec, shard_state)
+        context.Context._set(ctx)
 
-    writer = self.WRITER_CLS.create(mapreduce_state.mapreduce_spec,
+        writer = self.WRITER_CLS.create(mapreduce_state.mapreduce_spec,
                                     shard_state.shard_number,
                                     0)
-    writer = self.WRITER_CLS.from_json(writer.to_json())
-    writer.finalize(ctx, shard_state)
+        writer = self.WRITER_CLS.from_json(writer.to_json())
+        writer.finalize(ctx, shard_state)
 
-    filename = self.WRITER_CLS._get_filename(
+        filename = self.WRITER_CLS._get_filename(
         shard_state)
 
-    file_stat = cloudstorage.stat(filename)
-    self.assertEqual(test_content_type, file_stat.content_type)
-    # TODO(user) Add support in the stub to retrieve acl metadata
+        bucket = storage_client.get_bucket(bucket_name)
+        blob = bucket.blob(filename)
+        blob.reload()
+        self.assertEqual(test_content_type, blob.content_type)
+        # TODO(user) Add support in the stub to retrieve acl metadata
 
-  def testWriterSerialization(self):
-    mapreduce_state = self.create_mapreduce_state(
+    def testWriterSerialization(self):
+        mapreduce_state = self.create_mapreduce_state(
+          output_params={self.WRITER_CLS.BUCKET_NAME_PARAM: self.TEST_BUCKET}
+        )
+        shard_state = self.create_shard_state(0)
+        ctx = context.Context(mapreduce_state.mapreduce_spec, shard_state)
+        context.Context._set(ctx)
+
+        writer = self.WRITER_CLS.create(
+            mapreduce_state.mapreduce_spec, shard_state.shard_number, 0
+        )
+        writer.begin_slice(None)
+        # data expliclity contains binary data
+        data = b'"fake"\tdatathatishardtoencode'
+        writer.write(data)
+
+        # Serialize/deserialize writer after some data written
+        writer = self._serialize_and_deserialize(writer)
+        writer.write(data)
+
+        # Serialize/deserialize writer after more data written
+        writer = self._serialize_and_deserialize(writer)
+        writer.finalize(ctx, shard_state)
+
+        # Serialize/deserialize writer after finalization
+        writer = self._serialize_and_deserialize(writer)
+        with self.assertRaises(ValueError):
+           writer.write(data)
+
+        filename = self.WRITER_CLS._get_filename(shard_state)
+
+        self.assertNotEqual(None, filename)
+        bucket = storage_client.get_bucket(self.TEST_BUCKET)
+        filename = filename.replace(f"/{self.TEST_BUCKET}/", "")
+        blob = bucket.blob(filename)
+        self.assertEqual(data + data, blob.download_as_bytes())
+
+    def testWriterCounters(self):
+        mapreduce_state = self.create_mapreduce_state(
         output_params=
-        {self.WRITER_CLS.BUCKET_NAME_PARAM: "test"})
-    shard_state = self.create_shard_state(0)
-    ctx = context.Context(mapreduce_state.mapreduce_spec, shard_state)
-    context.Context._set(ctx)
-
-    writer = self.WRITER_CLS.create(mapreduce_state.mapreduce_spec,
+        # {self.WRITER_CLS.BUCKET_NAME_PARAM: "test"})
+        {self.WRITER_CLS.BUCKET_NAME_PARAM: "byates"})
+        shard_state = self.create_shard_state(0)
+        writer = self.WRITER_CLS.create(mapreduce_state.mapreduce_spec,
                                     shard_state.shard_number, 0)
-    writer.begin_slice(None)
-    # data expliclity contains binary data
-    data = "\"fake\"\tdatathatishardtoencode"
-    writer.write(data)
+        writer.begin_slice(None)
+        ctx = context.Context(mapreduce_state.mapreduce_spec, shard_state)
+        context.Context._set(ctx)
 
-    # Serialize/deserialize writer after some data written
-    writer = self._serialize_and_deserialize(writer)
-    writer.write(data)
-
-    # Serialize/deserialize writer after more data written
-    writer = self._serialize_and_deserialize(writer)
-    writer.finalize(ctx, shard_state)
-
-    # Serialize/deserialize writer after finalization
-    writer = self._serialize_and_deserialize(writer)
-    self.assertRaises(IOError, writer.write, data)
-
-    filename = self.WRITER_CLS._get_filename(shard_state)
-
-    self.assertNotEqual(None, filename)
-    self.assertEqual(data + data, cloudstorage.open(filename).read())
-
-  def testWriterCounters(self):
-    mapreduce_state = self.create_mapreduce_state(
-        output_params=
-        {self.WRITER_CLS.BUCKET_NAME_PARAM: "test"})
-    shard_state = self.create_shard_state(0)
-    writer = self.WRITER_CLS.create(mapreduce_state.mapreduce_spec,
-                                    shard_state.shard_number, 0)
-    writer.begin_slice(None)
-    ctx = context.Context(mapreduce_state.mapreduce_spec, shard_state)
-    context.Context._set(ctx)
-
-    # Write large amount of data to ensure measurable time passes during write.
-    data = "d" * 1024 * 1024 * 10
-    writer.write(data)
-    self.assertEqual(len(data), shard_state.counters_map.get(
+        # Write large amount of data to ensure measurable time passes during write.
+        data = b"d" * 1024 * 1024 * 10
+        writer.write(data)
+        self.assertEqual(len(data), shard_state.counters_map.get(
         output_writers.COUNTER_IO_WRITE_BYTES))
-    self.assertTrue(shard_state.counters_map.get(
+        self.assertTrue(shard_state.counters_map.get(
         output_writers.COUNTER_IO_WRITE_MSEC) > 0)
 
-  def testGetFilenamesNoInput(self):
-    """Tests get_filenames when no other writer's methods are called.
+    def testGetFilenamesNoInput(self):
+        """Tests get_filenames when no other writer's methods are called.
 
     Emulates the zero input case.
 
     Other tests on get_filenames see output_writers_end_to_end_test.
     """
-    mapreduce_state = self.create_mapreduce_state(
+        mapreduce_state = self.create_mapreduce_state(
         output_params={self.WRITER_CLS.BUCKET_NAME_PARAM: "test"})
-    self.assertEqual([], self.WRITER_CLS.get_filenames(mapreduce_state))
+        self.assertEqual([], self.WRITER_CLS.get_filenames(mapreduce_state))
 
 
 class GCSRecordOutputWriterTestBase(GCSOutputTestBase):
 
   WRITER_CLS = None
   WRITER_NAME = None
-  BUCKET_NAME = "test"
+  # BUCKET_NAME = "test"
+  BUCKET_NAME = "byates"
 
   def create_mapreduce_state(self, output_params=None):
     """Create a model.MapreduceState including MapreduceSpec and MapperSpec.
@@ -469,7 +498,7 @@ class GCSRecordOutputWriterTestBase(GCSOutputTestBase):
     """
     all_params = {self.WRITER_CLS.BUCKET_NAME_PARAM: self.BUCKET_NAME}
     all_params.update(output_params or {})
-    return super(GCSRecordOutputWriterTestBase, self).create_mapreduce_state(
+    return super().create_mapreduce_state(
         all_params)
 
   def setupWriter(self):
@@ -552,7 +581,7 @@ class GCSOutputConsistentOutputWriterTest(GCSOutputWriterTestCommon,
     """Just make sure finalize is never called after processing data."""
     mapreduce_state = self.create_mapreduce_state(
         output_params=
-        {self.WRITER_CLS.BUCKET_NAME_PARAM: "test"})
+        {self.WRITER_CLS.BUCKET_NAME_PARAM: self.TEST_BUCKET})
     shard_state = self.create_shard_state(0)
     ctx = context.Context(mapreduce_state.mapreduce_spec, shard_state)
     context.Context._set(ctx)
@@ -560,14 +589,14 @@ class GCSOutputConsistentOutputWriterTest(GCSOutputWriterTestCommon,
     writer = self.WRITER_CLS.create(mapreduce_state.mapreduce_spec,
                                     shard_state.shard_number, 0)
     writer.begin_slice(None)
-    writer.write("foobar")
+    writer.write(b"foobar")
     # We wrote something, finalize must fail (sanity check).
     self.assertRaises(errors.FailJobError, writer.finalize, ctx, shard_state)
 
   def testTemporaryFilesGetCleanedUp(self):
     mapreduce_state = self.create_mapreduce_state(
         output_params=
-        {self.WRITER_CLS.BUCKET_NAME_PARAM: "test"})
+        {self.WRITER_CLS.BUCKET_NAME_PARAM: self.TEST_BUCKET})
     shard_state = self.create_shard_state(0)
     ctx = context.Context(mapreduce_state.mapreduce_spec, shard_state)
     context.Context._set(ctx)
@@ -575,20 +604,20 @@ class GCSOutputConsistentOutputWriterTest(GCSOutputWriterTestCommon,
     writer = self.WRITER_CLS.create(mapreduce_state.mapreduce_spec,
                                     shard_state.shard_number, 0)
     writer.begin_slice(None)
-    writer.write("foo")
+    writer.write(b"foo")
     writer = self.WRITER_CLS.from_json(writer.to_json())
-    writer.write("bar")
+    writer.write(b"bar")
     writer = self.WRITER_CLS.from_json(writer.to_json())
-    writer.write("foo again")
+    writer.write(b"foo again")
     writer = self.WRITER_CLS.from_json(writer.to_json())
     writer.finalize(ctx, shard_state)
 
-    names = [l.filename for l in cloudstorage.listbucket("/test")]
+    names = [l.name for l in storage_client.list_blobs(self.TEST_BUCKET, prefix="DummyMapReduceJobName/DummyMapReduceJobId")]
     self.assertEqual(
-        ["/test/DummyMapReduceJobName/DummyMapReduceJobId/output-0"], names)
+        ["DummyMapReduceJobName/DummyMapReduceJobId/output-0"], names)
 
   def testRemovingIgnoredNonExistent(self):
-    writer_spec = {self.WRITER_CLS.BUCKET_NAME_PARAM: "test"}
+    writer_spec = {self.WRITER_CLS.BUCKET_NAME_PARAM: self.TEST_BUCKET}
     mapreduce_state = self.create_mapreduce_state(output_params=writer_spec)
     shard_state = self.create_shard_state(0)
     ctx = context.Context(mapreduce_state.mapreduce_spec, shard_state)
@@ -600,7 +629,7 @@ class GCSOutputConsistentOutputWriterTest(GCSOutputWriterTestCommon,
     writer._remove_tmpfile("/test/i_dont_exist", writer_spec)
 
   def testTmpfileName(self):
-    writer_spec = {self.WRITER_CLS.BUCKET_NAME_PARAM: "test"}
+    writer_spec = {self.WRITER_CLS.BUCKET_NAME_PARAM: self.TEST_BUCKET}
     mapreduce_state = self.create_mapreduce_state(output_params=writer_spec)
     shard_state = self.create_shard_state(19)
     ctx = context.Context(mapreduce_state.mapreduce_spec, shard_state)
@@ -610,13 +639,13 @@ class GCSOutputConsistentOutputWriterTest(GCSOutputWriterTestCommon,
                                     shard_state.shard_number, 0)
     writer.begin_slice(None)
 
-    prefix = "/test/gae_mr_tmp/DummyMapReduceJobId-tmp-19-"
+    prefix = "gae_mr_tmp/DummyMapReduceJobId-tmp-19-"
     tmpfile_name = writer.status.tmpfile.name
     self.assertTrue(tmpfile_name.startswith(prefix),
                     "Test file name is: %s" % tmpfile_name)
 
   def testTmpDefaultsToMain(self):
-    writer_spec = {self.WRITER_CLS.BUCKET_NAME_PARAM: "bucket",
+    writer_spec = {self.WRITER_CLS.BUCKET_NAME_PARAM: self.TEST_BUCKET,
                    self.WRITER_CLS._ACCOUNT_ID_PARAM: "account"}
     mapreduce_state = self.create_mapreduce_state(output_params=writer_spec)
     shard_state = self.create_shard_state(1)
@@ -626,11 +655,11 @@ class GCSOutputConsistentOutputWriterTest(GCSOutputWriterTestCommon,
     writer = self.WRITER_CLS.create(mapreduce_state.mapreduce_spec,
                                     shard_state.shard_number, 0)
 
-    self.assertEqual("bucket", writer._get_tmp_gcs_bucket(writer_spec))
+    self.assertEqual(self.TEST_BUCKET, writer._get_tmp_gcs_bucket(writer_spec))
     self.assertEqual("account", writer._get_tmp_account_id(writer_spec))
 
   def testTmpTakesPrecedence(self):
-    writer_spec = {self.WRITER_CLS.BUCKET_NAME_PARAM: "bucket",
+    writer_spec = {self.WRITER_CLS.BUCKET_NAME_PARAM: self.TEST_BUCKET,
                    self.WRITER_CLS._ACCOUNT_ID_PARAM: "account",
                    self.WRITER_CLS.TMP_BUCKET_NAME_PARAM: "tmp_bucket",
                    self.WRITER_CLS._TMP_ACCOUNT_ID_PARAM: None}
@@ -647,8 +676,8 @@ class GCSOutputConsistentOutputWriterTest(GCSOutputWriterTestCommon,
 
   def testRemoveGarbage(self):
     """Make sure abandoned files get removed."""
-    writer_spec = {self.WRITER_CLS.BUCKET_NAME_PARAM: "unused",
-                   self.WRITER_CLS.TMP_BUCKET_NAME_PARAM: "test"}
+    writer_spec = {self.WRITER_CLS.BUCKET_NAME_PARAM: self.TEST_BUCKET,
+                   self.WRITER_CLS.TMP_BUCKET_NAME_PARAM: self.TEST_BUCKET}
     mapreduce_state = self.create_mapreduce_state(output_params=writer_spec)
     shard_state = self.create_shard_state(1)
     ctx = context.Context(mapreduce_state.mapreduce_spec, shard_state)
@@ -658,42 +687,38 @@ class GCSOutputConsistentOutputWriterTest(GCSOutputWriterTestCommon,
                                     shard_state.shard_number, 0)
     writer.begin_slice(None)
 
+    bucket = storage_client.get_bucket(self.TEST_BUCKET)
+
     # our shard
-    our_file = "/test/gae_mr_tmp/DummyMapReduceJobId-tmp-1-very-random"
-    f = cloudstorage.open(our_file, "w")
-    f.write("foo?")
-    f.close()
+    our_file = "gae_mr_tmp/DummyMapReduceJobId-tmp-1-very-random"
+    blob = bucket.blob(our_file)
+    blob.upload_from_string("foo?")
 
     # not our shard
-    their_file = "/test/gae_mr_tmp/DummyMapReduceJobId-tmp-3-very-random"
-    f = cloudstorage.open(their_file, "w")
-    f.write("bar?")
-    f.close()
+    their_file = "gae_mr_tmp/DummyMapReduceJobId-tmp-3-very-random"
+    blob = bucket.blob(their_file)
+    blob.upload_from_string("bar?")
 
     # unrelated file
-    real_file = "/test/this_things_should_survive"
-    f = cloudstorage.open(real_file, "w")
-    f.write("yes, foobar!")
-    f.close()
+    real_file = "this_things_should_survive"
+    blob = bucket.blob(real_file)
+    blob.upload_from_string("yes, foobar!")
 
     # Make sure bogus file still exists
-    names = [l.filename for l in cloudstorage.listbucket("/test")]
-    self.assertTrue(our_file in names)
-    self.assertTrue(their_file in names)
-    self.assertTrue(real_file in names)
+    self.assertTrue(bucket.blob(our_file).exists())
+    self.assertTrue(bucket.blob(their_file).exists())
+    self.assertTrue(bucket.blob(real_file).exists())
 
     # slice end should clean up the garbage
     writer = self._serialize_and_deserialize(writer)
 
-    names = [l.filename for l in cloudstorage.listbucket("/test")]
-    self.assertFalse(our_file in names)
-    self.assertTrue(their_file in names)
-    self.assertTrue(real_file in names)
+    self.assertFalse(bucket.blob(our_file).exists())
+    self.assertTrue(bucket.blob(their_file).exists())
+    self.assertTrue(bucket.blob(real_file).exists())
 
     # finalize shouldn't change anything
     writer.finalize(ctx, shard_state)
-    self.assertFalse(our_file in names)
-    self.assertTrue(their_file in names)
-    self.assertTrue(real_file in names)
 
-
+    self.assertFalse(bucket.blob(our_file).exists())
+    self.assertTrue(bucket.blob(their_file).exists())
+    self.assertTrue(bucket.blob(real_file).exists())

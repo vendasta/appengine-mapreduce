@@ -30,7 +30,7 @@ def fake_combiner_map(entity):
   yield str(int(entity.data) % 4), entity.data
 
 
-class FakeCombiner(object):
+class FakeCombiner:
   """Test combine handler."""
   invocations = []
 
@@ -80,6 +80,7 @@ class CombinerTest(testutil.HandlerTestBase):
 
     # Prepare test data
     entity_count = 200
+    bucket_name = "byates"
 
     for i in range(entity_count):
       FakeEntity(data=str(i)).put()
@@ -87,17 +88,18 @@ class CombinerTest(testutil.HandlerTestBase):
 
     p = mapreduce_pipeline.MapreducePipeline(
         "test",
-        __name__ + ".test_combiner_map",
-        __name__ + ".test_combiner_reduce",
+        __name__ + ".fake_combiner_map",
+        __name__ + ".fake_combiner_reduce",
         input_reader_spec=input_readers.__name__ + ".DatastoreInputReader",
         output_writer_spec=
         output_writers.__name__ + ".GoogleCloudStorageOutputWriter",
         mapper_params={
-            "entity_kind": __name__ + ".TestEntity",
-            },
+          "bucket_name": bucket_name,
+          "entity_kind": __name__ + ".FakeEntity",
+        },
         reducer_params={
             "output_writer": {
-                "bucket_name": "testbucket"
+                "bucket_name": bucket_name
             },
         },
         shards=4)
@@ -129,18 +131,19 @@ class CombinerTest(testutil.HandlerTestBase):
 
     p = mapreduce_pipeline.MapreducePipeline(
         "test",
-        __name__ + ".test_combiner_map",
-        __name__ + ".test_combiner_reduce",
-        combiner_spec=__name__ + ".TestCombiner",
+        __name__ + ".fake_combiner_map",
+        __name__ + ".fake_combiner_reduce",
+        combiner_spec=__name__ + ".FakeCombiner",
         input_reader_spec=input_readers.__name__ + ".DatastoreInputReader",
         output_writer_spec=
         output_writers.__name__ + ".GoogleCloudStorageOutputWriter",
         mapper_params={
-            "entity_kind": __name__ + ".TestEntity",
+          "bucket_name": "byates",
+          "entity_kind": __name__ + ".FakeEntity",
         },
         reducer_params={
             "output_writer": {
-                "bucket_name": "testbucket"
+                "bucket_name": "byates"
             },
         },
         shards=4)

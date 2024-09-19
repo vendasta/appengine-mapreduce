@@ -2,14 +2,16 @@
 """Tests for mapper interface."""
 
 import collections
-import unittest
+from unittest import mock
+from unittest.mock import patch
 
-from mapreduce import output_writers
-from mapreduce import parameters
-from mapreduce import test_support
+from google.cloud import storage
 from testlib import testutil
+
+from mapreduce import output_writers, parameters, test_support
 from mapreduce.api import map_job
 from mapreduce.api.map_job import sample_input_reader
+
 
 class MyMapper(map_job.Mapper):
 
@@ -17,7 +19,7 @@ class MyMapper(map_job.Mapper):
   slices = 0
 
   def __init__(self):
-    super(MyMapper, self).__init__()
+    super().__init__()
     self.processed = 0
     self._started = False
     self._slice_started = False
@@ -60,15 +62,14 @@ class MyMapper(map_job.Mapper):
     cls.mappers = {}
     cls.slices = 0
 
-
 class MapperTest(testutil.HandlerTestBase):
   """Test mapper interface."""
 
   def setUp(self):
-    super(MapperTest, self).setUp()
+    super().setUp()
     MyMapper.reset()
     self.original_slice_duration = parameters.config._SLICE_DURATION_SEC
-
+   
   def tearDown(self):
     parameters.config._SLICE_DURATION_SEC = self.original_slice_duration
 
@@ -84,7 +85,7 @@ class MapperTest(testutil.HandlerTestBase):
         input_reader_cls=sample_input_reader.SampleInputReader,
         input_reader_params={"count": entity_count},
         output_writer_cls=output_writers._GoogleCloudStorageOutputWriter,
-        output_writer_params={"bucket_name": "bucket"}))
+        output_writer_params={"bucket_name": "byates"}))
     test_support.execute_until_empty(self.taskqueue)
     total = 0
     for m in list(MyMapper.mappers.values()):
@@ -100,14 +101,17 @@ class MapperTest(testutil.HandlerTestBase):
     # Verify outputs.
     files = output_writers._GoogleCloudStorageOutputWriter.get_filenames(
         job._state)
-    outputs = collections.defaultdict(lambda: 0)
+    outputs = collections.defaultdict(int)
     expected = {"foo\n": entity_count,
                 "bar\n": entity_count,
                 "end_slice\n": MyMapper.slices,
                 "begin_slice\n": MyMapper.slices}
+    
+    storage_client = storage.Client(project='repcore-prod')
+    bucket = storage_client.get_bucket("byates")
     for fn in files:
-      f = cloudstorage.open(fn)
-      for line in f:
-        outputs[line] += 1
+        blob = bucket.blob(fn)
+        content = blob.download_as_text()
+        for line in content.splitlines():
+            outputs[line + '\n'] += 1
     self.assertEqual(expected, outputs)
-

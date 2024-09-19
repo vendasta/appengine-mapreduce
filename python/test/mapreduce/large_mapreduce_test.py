@@ -20,6 +20,10 @@ from mapreduce import records
 from mapreduce import test_support
 from testlib import testutil
 
+from google.cloud import storage
+
+storage_client = storage.Client(project="repcore-prod")
+
 
 class FakeEntity(db.Model):
   """Test entity class."""
@@ -30,12 +34,12 @@ class FakeEntity(db.Model):
 def map_yield_lots_of_values(entity):
   """Test map handler that yields lots of pairs."""
   for _ in range(50000):
-    yield (1, " " * 100)
+    yield (1, b" " * 100)
 
 
 def reduce_length(key, values):
   """Reduce function yielding a string with key and values length."""
-  yield str((key, len(values)))
+  yield str((key, len(values))).encode()
 
 
 class LargeMapreduceTest(testutil.HandlerTestBase):
@@ -51,6 +55,7 @@ class LargeMapreduceTest(testutil.HandlerTestBase):
     self.emails.append((sender, subject, body, html))
 
   def testLotsOfValuesForSingleKey(self):
+    bucket_name = "byates"
     FakeEntity(data=str(1)).put()
     # Run Mapreduce
     p = mapreduce_pipeline.MapreducePipeline(
@@ -61,11 +66,12 @@ class LargeMapreduceTest(testutil.HandlerTestBase):
         output_writer_spec=(
             output_writers.__name__ + ".GoogleCloudStorageRecordOutputWriter"),
         mapper_params={
+            "bucket_name": bucket_name,
             "entity_kind": __name__ + "." + FakeEntity.__name__,
         },
         reducer_params={
             "output_writer": {
-                "bucket_name": "test"
+                "bucket_name": bucket_name
             },
         },
         shards=16)
@@ -79,8 +85,9 @@ class LargeMapreduceTest(testutil.HandlerTestBase):
     # Verify reduce output.
     p = mapreduce_pipeline.MapreducePipeline.from_id(p.pipeline_id)
     output_data = []
+    bucket = storage_client.get_bucket(bucket_name)
     for output_file in p.outputs.default.value:
-      with cloudstorage.open(output_file, "r") as f:
+      with bucket.blob(output_file).open("r") as f:
         for record in records.RecordsReader(f):
           output_data.append(record)
 

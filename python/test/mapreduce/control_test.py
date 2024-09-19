@@ -34,7 +34,7 @@ from mapreduce.api import map_job
 def random_string(length):
   """Generate a random string of given length."""
   return "".join(
-      random.choice(string.letters + string.digits) for _ in range(length))
+      random.choice(string.ascii_letters + string.digits) for _ in range(length))
 
 
 class FakeEntity(db.Model):
@@ -79,14 +79,12 @@ class ControlTest(testutil.HandlerTestBase):
     self.assertEqual(1, len(tasks))
     # Checks that tasks are scheduled into the future.
     task = tasks[0]
-    self.assertEqual("/mapreduce_base_path/kickoffjob_callback/" + mapreduce_id,
+    self.assertEqual("/mapreduce/kickoffjob_callback/" + mapreduce_id,
                      task["url"])
     handler = test_support.execute_task(task)
-    self.assertEqual(mapreduce_id, handler.request.get("mapreduce_id"))
     state = model.MapreduceState.get_by_job_id(mapreduce_id)
     params = map_job.JobConfig._get_default_mr_params()
     params.update({"foo": "bar",
-                   "base_path": "/mapreduce_base_path",
                    "queue_name": queue_name})
     self.assertEqual(state.mapreduce_spec.params, params)
 
@@ -106,14 +104,13 @@ class ControlTest(testutil.HandlerTestBase):
     shard_count = 4
     mapreduce_id = control.start_map(
         "test_map",
-        __name__ + ".test_handler",
+        __name__ + ".fake_handler",
         "mapreduce.input_readers.DatastoreInputReader",
         {
             "entity_kind": __name__ + "." + FakeEntity.__name__,
         },
         shard_count,
         mapreduce_parameters={"foo": "bar"},
-        base_path="/mapreduce_base_path",
         queue_name=self.QUEUE_NAME)
 
     self.validate_map_started(mapreduce_id)
@@ -132,14 +129,13 @@ class ControlTest(testutil.HandlerTestBase):
     shard_count = 4
     mapreduce_id = control.start_map(
         "test_map",
-        __name__ + ".test_handler",
+        __name__ + ".fake_handler",
         "mapreduce.input_readers.DatastoreInputReader",
         {
             "entity_kind": __name__ + "." + FakeEntity.__name__,
         },
         shard_count,
         mapreduce_parameters={"foo": "bar"},
-        base_path="/mapreduce_base_path",
         queue_name=self.QUEUE_NAME,
         countdown=1000)
 
@@ -161,14 +157,13 @@ class ControlTest(testutil.HandlerTestBase):
     shard_count = 4
     mapreduce_id = control.start_map(
         "test_map",
-        __name__ + ".test_handler",
+        __name__ + ".fake_handler",
         "mapreduce.input_readers.DatastoreInputReader",
         {
             "entity_kind": __name__ + "." + FakeEntity.__name__,
         },
         shard_count,
         mapreduce_parameters={"foo": "bar"},
-        base_path="/mapreduce_base_path",
         queue_name=self.QUEUE_NAME,
         eta=eta)
 
@@ -183,15 +178,15 @@ class ControlTest(testutil.HandlerTestBase):
     os.environ["HTTP_X_APPENGINE_QUEUENAME"] = self.QUEUE_NAME
     try:
       mapreduce_id = control.start_map(
-          "test_map",
-          __name__ + ".test_handler",
+          "fake_map",
+          __name__ + ".fake_handler",
           "mapreduce.input_readers.DatastoreInputReader",
           {
               "entity_kind": __name__ + "." + FakeEntity.__name__,
           },
           shard_count,
           mapreduce_parameters={"foo": "bar"},
-          base_path="/mapreduce_base_path")
+          )
     finally:
       del os.environ["HTTP_X_APPENGINE_QUEUENAME"]
 
@@ -207,21 +202,20 @@ class ControlTest(testutil.HandlerTestBase):
 
     shard_count = 4
     mapreduce_id = control.start_map(
-        "test_map",
-        __name__ + ".test_handler",
+        "fake_map",
+        __name__ + ".fake_handler",
         "mapreduce.input_readers.DatastoreInputReader",
         {
             "entity_kind": __name__ + "." + FakeEntity.__name__,
         },
         shard_count,
         mapreduce_parameters={"foo": "bar"},
-        base_path="/mapreduce_base_path",
         queue_name="crazy-queue",
         hooks_class_name=__name__+"."+FakeHooks.__name__)
 
     self.assertTrue(mapreduce_id)
     task, queue_name = FakeHooks.enqueue_kickoff_task_calls[0]
-    self.assertEqual("/mapreduce_base_path/kickoffjob_callback/" + mapreduce_id,
+    self.assertEqual("/mapreduce/kickoffjob_callback/" + mapreduce_id,
                      task.url)
     self.assertEqual("crazy-queue", queue_name)
 
@@ -238,15 +232,14 @@ class ControlTest(testutil.HandlerTestBase):
 
     shard_count = 4
     mapreduce_id = control.start_map(
-        "test_map",
-        __name__ + ".test_handler",
+        "fake_map",
+        __name__ + ".fake_handler",
         "mapreduce.input_readers.DatastoreInputReader",
         {
             "entity_kind": __name__ + "." + FakeEntity.__name__,
         },
         shard_count,
         mapreduce_parameters={"foo": "bar"},
-        base_path="/mapreduce_base_path",
         queue_name="crazy-queue",
         hooks_class_name=hooks.__name__+"."+hooks.Hooks.__name__)
 
@@ -264,8 +257,8 @@ class ControlTest(testutil.HandlerTestBase):
     mapreduce_id = ""
 
     mapreduce_id = control.start_map(
-        "test_map",
-        __name__ + ".test_handler",
+        "fake_map",
+        __name__ + ".fake_handler",
         "mapreduce.input_readers.DatastoreInputReader",
         {
             "entity_kind": __name__ + "." + FakeEntity.__name__,
@@ -273,7 +266,6 @@ class ControlTest(testutil.HandlerTestBase):
         },
         shard_count,
         mapreduce_parameters={"foo": "bar"},
-        base_path="/mapreduce_base_path",
         queue_name=self.QUEUE_NAME)
     self.validate_map_started(mapreduce_id)
 
@@ -294,14 +286,13 @@ class ControlTest(testutil.HandlerTestBase):
       some_entity.put()
       return control.start_map(
           "test_map",
-          __name__ + ".test_handler",
+          __name__ + ".fake_handler",
           "mapreduce.input_readers.DatastoreInputReader",
           {
               "entity_kind": __name__ + "." + FakeEntity.__name__,
           },
           shard_count,
           mapreduce_parameters={"foo": "bar"},
-          base_path="/mapreduce_base_path",
           queue_name=self.QUEUE_NAME,
           in_xg_transaction=True)
     mapreduce_id = tx()
@@ -324,7 +315,7 @@ class ControlTest(testutil.HandlerTestBase):
       some_entity.put()
       return control.start_map(
           "test_map",
-          __name__ + ".test_handler",
+          __name__ + ".fake_handler",
           "mapreduce.input_readers.DatastoreInputReader",
           {
               "entity_kind": __name__ + "." + FakeEntity.__name__,
@@ -332,7 +323,6 @@ class ControlTest(testutil.HandlerTestBase):
           },
           shard_count,
           mapreduce_parameters={"foo": "bar"},
-          base_path="/mapreduce_base_path",
           queue_name=self.QUEUE_NAME,
           in_xg_transaction=True)
     mapreduce_id = tx()

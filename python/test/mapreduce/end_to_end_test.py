@@ -28,11 +28,14 @@ from mapreduce import test_support
 from mapreduce.tools import gcs_file_seg_reader
 from testlib import testutil
 
+from google.cloud import exceptions, storage
+
+storage_client = storage.Client(project="repcore-prod")
 
 def random_string(length):
   """Generate a random string of given length."""
   return "".join(
-      random.choice(string.letters + string.digits) for _ in range(length))
+      random.choice(string.ascii_letters + string.digits) for _ in range(length))
 
 
 class FakeEntity(db.Model):
@@ -41,11 +44,11 @@ class FakeEntity(db.Model):
   dt = db.DateTimeProperty(default=datetime.datetime(2000, 1, 1))
 
 
-class NdbTestEntity(ndb.Model):
+class NdbFakeEntity(ndb.Model):
   """Test entity class for NDB."""
 
 
-class TestHandler(object):
+class FakeHandler:
   """Test handler which stores all processed entities keys.
 
   Properties:
@@ -60,15 +63,15 @@ class TestHandler(object):
     Args:
       entity: entity to process.
     """
-    TestHandler.processed_entites.append(entity)
+    FakeHandler.processed_entites.append(entity)
 
   @staticmethod
   def reset():
     """Clear processed_entites & reset delay to 0."""
-    TestHandler.processed_entites = []
+    FakeHandler.processed_entites = []
 
 
-class SerializableHandler(object):
+class SerializableHandler:
   """Handler that utilize serialization."""
 
   _next_instance_id = 0
@@ -85,7 +88,7 @@ class SerializableHandler(object):
 
   def __call__(self, entity):
     if self.instance < self.INSTANCES_THAT_RAISE_ERRORS:
-      raise cloudstorage.FatalError("Injected error.")
+      raise exceptions.GoogleCloudError("Injected error.")
     # Increment the int property by one on every call.
     entity.int_property = self.count
     entity.put()
@@ -153,7 +156,7 @@ class EndToEndTest(testutil.HandlerTestBase):
 
   def setUp(self):
     testutil.HandlerTestBase.setUp(self)
-    TestHandler.reset()
+    FakeHandler.reset()
     FakeOutputWriter.reset()
     self.original_slice_duration = parameters.config._SLICE_DURATION_SEC
     SerializableHandler.reset()
@@ -172,14 +175,14 @@ class EndToEndTest(testutil.HandlerTestBase):
     parameters.config._SLICE_DURATION_SEC = 0
 
     control.start_map(
-        "test_map",
+        "fake_map",
         __name__ + ".SerializableHandler",
         input_readers.__name__ + ".DatastoreInputReader",
         {
             "entity_kind": __name__ + "." + FakeEntity.__name__,
         },
         shard_count=1,
-        base_path="/mapreduce_base_path")
+    )
 
     task_run_counts = test_support.execute_until_empty(self.taskqueue)
     self.assertEqual(
@@ -199,17 +202,17 @@ class EndToEndTest(testutil.HandlerTestBase):
       FakeEntity().put()
 
     control.start_map(
-        "test_map",
-        __name__ + ".TestHandler",
+        "fake_map",
+        __name__ + ".FakeHandler",
         input_readers.__name__ + ".DatastoreInputReader",
         {
             "entity_kind": __name__ + "." + FakeEntity.__name__,
         },
         shard_count=4,
-        base_path="/mapreduce_base_path")
+       )
 
     test_support.execute_until_empty(self.taskqueue)
-    self.assertEqual(entity_count, len(TestHandler.processed_entites))
+    self.assertEqual(entity_count, len(FakeHandler.processed_entites))
 
   def testEntityQuery(self):
     entity_count = 1000
@@ -218,8 +221,8 @@ class EndToEndTest(testutil.HandlerTestBase):
       FakeEntity(int_property=i % 5).put()
 
     control.start_map(
-        "test_map",
-        __name__ + ".TestHandler",
+        "fake_map",
+        __name__ + ".FakeHandler",
         input_readers.__name__ + ".DatastoreInputReader",
         {
             "entity_kind": __name__ + "." + FakeEntity.__name__,
@@ -228,29 +231,29 @@ class EndToEndTest(testutil.HandlerTestBase):
                         ("dt", "=", datetime.datetime(2000, 1, 1))],
         },
         shard_count=4,
-        base_path="/mapreduce_base_path")
+      )
 
     test_support.execute_until_empty(self.taskqueue)
-    self.assertEqual(200, len(TestHandler.processed_entites))
+    self.assertEqual(200, len(FakeHandler.processed_entites))
 
   def testLotsOfNdbEntities(self):
     entity_count = 1000
 
     for _ in range(entity_count):
-      NdbTestEntity().put()
+      NdbFakeEntity().put()
 
     control.start_map(
-        "test_map",
-        __name__ + ".TestHandler",
+        "fake_map",
+        __name__ + ".FakeHandler",
         input_readers.__name__ + ".DatastoreInputReader",
         {
-            "entity_kind": __name__ + "." + NdbTestEntity.__name__,
+            "entity_kind": __name__ + "." + NdbFakeEntity.__name__,
         },
         shard_count=4,
-        base_path="/mapreduce_base_path")
+      )
 
     test_support.execute_until_empty(self.taskqueue)
-    self.assertEqual(entity_count, len(TestHandler.processed_entites))
+    self.assertEqual(entity_count, len(FakeHandler.processed_entites))
 
   def testInputReaderDedicatedParameters(self):
     entity_count = 100
@@ -259,8 +262,8 @@ class EndToEndTest(testutil.HandlerTestBase):
       FakeEntity().put()
 
     control.start_map(
-        "test_map",
-        __name__ + ".TestHandler",
+        "fake_map",
+        __name__ + ".FakeHandler",
         input_readers.__name__ + ".DatastoreInputReader",
         {
             "input_reader": {
@@ -268,10 +271,10 @@ class EndToEndTest(testutil.HandlerTestBase):
             },
         },
         shard_count=4,
-        base_path="/mapreduce_base_path")
+      )
 
     test_support.execute_until_empty(self.taskqueue)
-    self.assertEqual(entity_count, len(TestHandler.processed_entites))
+    self.assertEqual(entity_count, len(FakeHandler.processed_entites))
 
   def testOutputWriter(self):
     """End-to-end test with output writer."""
@@ -281,15 +284,14 @@ class EndToEndTest(testutil.HandlerTestBase):
       FakeEntity().put()
 
     control.start_map(
-        "test_map",
-        __name__ + ".test_handler_yield_key",
+        "fake_map",
+        __name__ + ".fake_handler_yield_key",
         input_readers.__name__ + ".DatastoreInputReader",
         {
             "entity_kind": __name__ + "." + FakeEntity.__name__,
         },
         shard_count=4,
-        base_path="/mapreduce_base_path",
-        output_writer_spec=__name__ + ".TestOutputWriter")
+        output_writer_spec=__name__ + ".FakeOutputWriter")
 
     test_support.execute_until_empty(self.taskqueue)
     self.assertEqual(entity_count,
@@ -299,18 +301,20 @@ class EndToEndTest(testutil.HandlerTestBase):
     """End-to-end test for records reader."""
     input_data = [str(i) for i in range(100)]
 
-    bucket_name = "testbucket"
+    bucket_name = "byates"
     test_filename = "testfile"
-    full_filename = "/%s/%s" % (bucket_name, test_filename)
 
-    with cloudstorage.open(full_filename, mode="w") as f:
+    bucket = storage_client.get_bucket(bucket_name)
+    blob = bucket.blob(test_filename)
+
+    with blob.open("wb") as f:
       with records.RecordsWriter(f) as w:
         for record in input_data:
           w.write(record)
 
     control.start_map(
-        "test_map",
-        __name__ + ".TestHandler",
+        "fake_map",
+        __name__ + ".FakeHandler",
         input_readers.__name__ + ".GoogleCloudStorageRecordInputReader",
         {
             "input_reader": {
@@ -319,27 +323,29 @@ class EndToEndTest(testutil.HandlerTestBase):
             }
         },
         shard_count=4,
-        base_path="/mapreduce_base_path")
+      )
 
     test_support.execute_until_empty(self.taskqueue)
-    self.assertEqual(100, len(TestHandler.processed_entites))
+    self.assertEqual(100, len(FakeHandler.processed_entites))
 
   def testHugeTaskPayloadTest(self):
     """Test map job with huge parameter values."""
     input_data = [str(i) for i in range(100)]
 
-    bucket_name = "testbucket"
+    bucket_name = "byates"
     test_filename = "testfile"
-    full_filename = "/%s/%s" % (bucket_name, test_filename)
 
-    with cloudstorage.open(full_filename, mode="w") as f:
+    bucket = storage_client.get_bucket(bucket_name)
+    blob = bucket.blob(test_filename)
+    
+    with blob.open("wb") as f:
       with records.RecordsWriter(f) as w:
         for record in input_data:
           w.write(record)
 
     control.start_map(
-        "test_map",
-        __name__ + ".TestHandler",
+        "fake_map",
+        __name__ + ".FakeHandler",
         input_readers.__name__ + ".GoogleCloudStorageRecordInputReader",
         {
             "input_reader": {
@@ -351,28 +357,30 @@ class EndToEndTest(testutil.HandlerTestBase):
             }
         },
         shard_count=4,
-        base_path="/mapreduce_base_path")
+      )
 
     test_support.execute_until_empty(self.taskqueue)
-    self.assertEqual(100, len(TestHandler.processed_entites))
+    self.assertEqual(100, len(FakeHandler.processed_entites))
     self.assertEqual([], model._HugeTaskPayload.all().fetch(100))
 
   def testHugeTaskUseDatastore(self):
     """Test map job with huge parameter values."""
     input_data = [str(i) for i in range(100)]
 
-    bucket_name = "testbucket"
+    bucket_name = "byates"
     test_filename = "testfile"
-    full_filename = "/%s/%s" % (bucket_name, test_filename)
 
-    with cloudstorage.open(full_filename, mode="w") as f:
+    bucket = storage_client.get_bucket(bucket_name)
+    blob = bucket.blob(test_filename)
+
+    with blob.open("wb") as f:
       with records.RecordsWriter(f) as w:
         for record in input_data:
           w.write(record)
 
     control.start_map(
-        "test_map",
-        __name__ + ".TestHandler",
+        "fake_map",
+        __name__ + ".FakeHandler",
         input_readers.__name__ + ".GoogleCloudStorageRecordInputReader",
         {
             "input_reader": {
@@ -384,10 +392,10 @@ class EndToEndTest(testutil.HandlerTestBase):
             }
         },
         shard_count=4,
-        base_path="/mapreduce_base_path")
+      )
 
     test_support.execute_until_empty(self.taskqueue)
-    self.assertEqual(100, len(TestHandler.processed_entites))
+    self.assertEqual(100, len(FakeHandler.processed_entites))
     self.assertEqual([], model._HugeTaskPayload.all().fetch(100))
 
 
@@ -395,7 +403,7 @@ class GCSOutputWriterTestBase(testutil.CloudStorageTestBase):
   """Base class for all GCS output writer tests."""
 
   def setUp(self):
-    super(GCSOutputWriterTestBase, self).setUp()
+    super().setUp()
     self.original_slice_duration = parameters.config._SLICE_DURATION_SEC
     self.original_block_size = storage_api.StreamingBuffer._blocksize
     # Use this to adjust what is printed for debugging purpose.
@@ -416,7 +424,7 @@ class GCSOutputWriterTestBase(testutil.CloudStorageTestBase):
   def tearDown(self):
     storage_api.StreamingBuffer._blocksize = self.original_block_size
     parameters.config._SLICE_DURATION_SEC = self.original_slice_duration
-    super(GCSOutputWriterTestBase, self).tearDown()
+    super().tearDown()
 
 
 class GCSOutputWriterNoDupModeTest(GCSOutputWriterTestBase):
@@ -463,10 +471,10 @@ class GCSOutputWriterNoDupModeTest(GCSOutputWriterTestBase):
     self._assertOutputEqual(seg_prefix, last_seg_index)
 
     # Check there are indeed duplicated data.
-    f1 = set([line for line in cloudstorage.open(seg_prefix + "0")])
-    f2 = set([line for line in cloudstorage.open(seg_prefix + "1")])
+    f1 = {line for line in cloudstorage.open(seg_prefix + "0")}
+    f2 = {line for line in cloudstorage.open(seg_prefix + "1")}
     common = f1.intersection(f2)
-    self.assertEqual(set(["10\n", "11\n"]), common)
+    self.assertEqual({"10\n", "11\n"}, common)
 
   def testSliceRecoveryWithFrequentFlushing(self):
     # Force a flush to GCS on every 8 chars.
@@ -562,7 +570,7 @@ class GCSOutputWriterNoDupModeTest(GCSOutputWriterTestBase):
     self.assertEqual(expected, result)
 
 
-class FaultyHandler(object):
+class FaultyHandler:
 
   def __init__(self):
     self.slice_count = 0

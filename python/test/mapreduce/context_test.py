@@ -42,10 +42,10 @@ class NdbFakeEntity(ndb.Model):
 
 
 def new_datastore_entity(key_name=None):
-  return datastore.Entity('TestEntity', name=key_name)
+  return datastore.Entity('FakeEntity', name=key_name)
 
 
-class FlushFunction(object):
+class FlushFunction:
   """Flush function to use for tests."""
 
   # How many time to raise timeouts.
@@ -158,7 +158,7 @@ class MutationPoolTest(testutil.HandlerTestBase):
   """Tests for context._MutationPool class."""
 
   def setUp(self):
-    super(MutationPoolTest, self).setUp()
+    super().setUp()
     self.pool = context._MutationPool()
 
   def testPoolWithForceWrites(self):

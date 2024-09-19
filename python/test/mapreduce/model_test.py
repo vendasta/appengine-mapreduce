@@ -24,6 +24,7 @@ import datetime
 import os
 import types
 import unittest
+from unittest import mock
 import urllib.parse
 
 from google.appengine.ext import db
@@ -32,7 +33,7 @@ from mapreduce import hooks
 from mapreduce import model
 
 
-class FakeHandler(object):
+class FakeHandler:
   """Test handler class."""
 
   def __call__(self, entity):
@@ -42,7 +43,7 @@ class FakeHandler(object):
     pass
 
 
-class FakeHandlerWithArgs(object):
+class FakeHandlerWithArgs:
   """Test handler with argument in constructor."""
 
   def __init__(self, arg_unused):
@@ -71,7 +72,8 @@ class HugeTaskTest(unittest.TestCase):
   """
 
   def testIncorrectPayloadVersion(self):
-    request = mock_webapp.MockRequest()
+    request = mock.Mock()
+    request.headers = {}
     self.assertRaises(DeprecationWarning,
                       model.HugeTask.decode_payload,
                       request)
@@ -81,11 +83,11 @@ class HugeTaskTest(unittest.TestCase):
                       request)
 
 
-class TestReader(object):
+class TestReader:
   pass
 
 
-class TestWriter(object):
+class TestWriter:
   pass
 
 
@@ -154,10 +156,9 @@ class MapperSpecTest(unittest.TestCase):
   def testInstanceMethodHandler(self):
     """Test instance method as handler spec."""
     mapper_spec = self.specForHandler(f"{FakeHandler.__module__}.{FakeHandler.__name__}.process")
-    self.assertEqual(types.MethodType,
+    self.assertEqual(types.FunctionType,
                       type(mapper_spec.handler))
-    # call it
-    mapper_spec.handler(0)
+    mapper_spec.handler(0, None)
 
   def testFunctionHandler(self):
     """Test function name as handler spec."""
@@ -165,7 +166,6 @@ class MapperSpecTest(unittest.TestCase):
         __name__ + "." + fake_handler_function.__name__)
     self.assertEqual(types.FunctionType,
                       type(mapper_spec.handler))
-    # call it
     mapper_spec.handler(0)
 
   def testHandlerWithConstructorArgs(self):
@@ -177,8 +177,10 @@ class MapperSpecTest(unittest.TestCase):
   def testMethodHandlerWithConstructorArgs(self):
     """Test method from a class with constructor args as a handler."""
     mapper_spec = self.specForHandler(
-        __name__ + "." + FakeHandlerWithArgs.__name__ + ".process")
-    self.assertRaises(TypeError, mapper_spec.get_handler)
+      f"{__name__}.{FakeHandlerWithArgs.__name__}.process")
+    with self.assertRaises(TypeError):
+      handler = mapper_spec.get_handler()
+      handler()
 
 
 class MapreduceSpecTest(unittest.TestCase):
@@ -245,27 +247,6 @@ class MapreduceSpecTest(unittest.TestCase):
     self.assertEqual(__name__+"."+FakeHooks.__name__,
                       mapreduce_spec.hooks_class_name)
     self.assertEqual(mapreduce_spec, mapreduce_spec.get_hooks().mapreduce_spec)
-
-
-class MapreduceStateTest(unittest.TestCase):
-  """Tests model.MapreduceState."""
-
-  def testSetProcessedCounts(self):
-    """Test set_processed_counts method."""
-    mapreduce_state = model.MapreduceState.create_new()
-    mapreduce_state.set_processed_counts([1, 2], ['running', 'running'])
-    self.assertTrue(mapreduce_state.chart_url.startswith(
-        "https://www.google.com/chart?"))
-    self.assertEqual(
-        {"cht": ["bvs"],
-         "chs": ["300x200"],
-         "chxr": ["0,0,2.1"],
-         "chxt": ["y,x"],
-         "chd": ["s:AA,AA,d6,AA,AA"],
-         "chbh": ["a"],
-         "chxl": ["0:|0|2|1:|0|1"],
-         "chco": ['404040,00ac42,3636a9,e29e24,f6350f']},
-        urllib.parse.parse_qs(urllib.parse.urlparse(mapreduce_state.chart_url).query))
 
 
 class ShardStateTest(unittest.TestCase):

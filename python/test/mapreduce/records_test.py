@@ -8,7 +8,7 @@ from mapreduce.third_party import crc32c
 from mapreduce import records
 
 
-class StringWriter(object):
+class StringWriter:
   """records.FileWriter compliant writer to string."""
 
   def __init__(self):
@@ -26,7 +26,7 @@ class StringWriter(object):
     return self.toarray().tolist()
 
 
-class StringReader(object):
+class StringReader:
   """records.FileReader compliant reader from string."""
 
   def __init__(self, data):

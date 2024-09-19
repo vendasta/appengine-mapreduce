@@ -17,6 +17,7 @@
 
 import os
 import unittest
+from unittest import mock
 
 from google.appengine.api import apiproxy_stub_map
 from google.appengine.api import datastore
@@ -106,42 +107,26 @@ class NamespaceRangeIterationTest(unittest.TestCase):
     namespace_range._setup_constants('abc', 3, 3)
     self.app_id = 'testapp'
     os.environ['APPLICATION_ID'] = self.app_id
-    self.mox = mox.Mox()
 
   def tearDown(self):
     namespace_range._setup_constants()
     unittest.TestCase.tearDown(self)
-    try:
-      self.mox.VerifyAll()
-    finally:
-      self.mox.UnsetStubs()
 
   def testQueryPaging(self):
-    self.mox.StubOutClassWithMocks(datastore, 'Query')
-    ns_range = namespace_range.NamespaceRange(
-        namespace_start='a', namespace_end='b', _app=self.app_id)
-    ns_kind = '__namespace__'
-    ns_key = lambda ns: db.Key.from_path(ns_kind, ns)
-    filters = {'__key__ >= ': ns_key('a'), '__key__ <= ': ns_key('b')}
+    with mock.patch.object(datastore, 'Query') as mock_query:
+        ns_range = namespace_range.NamespaceRange(
+            namespace_start='a', namespace_end='b', _app=self.app_id)
+        ns_kind = '__namespace__'
+        ns_key = lambda ns: db.Key.from_path(ns_kind, ns)
+        filters = {'__key__ >= ': ns_key('a'), '__key__ <= ': ns_key('b')}
 
-    def ExpectQuery(cursor):
-      return datastore.Query(
-          ns_kind, filters=filters, keys_only=True, cursor=cursor,
-          _app=self.app_id)
+        mock_query.side_effect = [
+            mock.Mock(Run=lambda limit=None: iter([ns_key(ns) for ns in ['a', 'aa', 'aaa']]), GetCursor=lambda: 'c1'),
+            mock.Mock(Run=lambda limit=None: iter([ns_key(ns) for ns in ['aab', 'ab', 'ac']]), GetCursor=lambda: 'c2'),
+            mock.Mock(Run=lambda limit=None: iter([ns_key('b')]))
+        ]
 
-    query = ExpectQuery(None)
-    query.Run(limit=3).AndReturn([ns_key(ns) for ns in ['a', 'aa', 'aaa']])
-    query.GetCursor().AndReturn('c1')
-
-    query = ExpectQuery('c1')
-    query.Run(limit=3).AndReturn([ns_key(ns) for ns in ['aab', 'ab', 'ac']])
-    query.GetCursor().AndReturn('c2')
-
-    query = ExpectQuery('c2')
-    query.Run(limit=3).AndReturn([ns_key('b')])
-
-    self.mox.ReplayAll()
-    self.assertEqual(7, len(list(ns_range)))
+        self.assertEqual(7, len(list(ns_range)))
 
 
 class NamespaceRangeSplitTest(unittest.TestCase):

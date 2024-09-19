@@ -11,7 +11,7 @@ from google.appengine.ext import db
 from mapreduce import json_util
 
 
-class FakeJsonType(object):
+class FakeJsonType:
   """Test class with to_json/from_json methods."""
 
   def __init__(self, size=0):
@@ -25,7 +25,7 @@ class FakeJsonType(object):
     return cls(json["size"])
 
 
-class EmptyDictJsonType(object):
+class EmptyDictJsonType:
   """Test class which serializes to empty json dict."""
 
   def to_json(self):

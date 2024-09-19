@@ -12,6 +12,10 @@ from testlib import testutil
 from mapreduce.api import map_job
 from mapreduce.lib import input_reader
 
+from google.cloud import storage
+
+storage_client = storage.Client(project="repcore-prod")
+
 # Global for collecting data across all map shards
 _memory_mapper_data = []
 _processed_count = 0
@@ -37,7 +41,7 @@ class GCSInputReaderEndToEndTest(testutil.CloudStorageTestBase):
   """End-to-end tests for GoogleCloudStorageInputReader."""
 
   def setUp(self):
-    super(GCSInputReaderEndToEndTest, self).setUp()
+    super().setUp()
     # clear global list of mapped data
     global _memory_mapper_data
     _memory_mapper_data = []
@@ -61,18 +65,18 @@ class GCSInputReaderEndToEndTest(testutil.CloudStorageTestBase):
       A list with each element containing the data in one of the created files.
     """
     created_content = []
+    bucket = storage_client.get_bucket(bucket_name)
+    created_content = []
     for file_num in range(num_files):
-      content = "Dummy Content %d" % file_num
-      created_content.append(content)
-      test_file = cloudstorage.open(
-          "/%s/%s%03d" % (bucket_name, object_prefix, file_num),
-          mode="w")
-      test_file.write(content)
-      test_file.close()
+        content = f"Dummy Content {file_num}"
+        created_content.append(content)
+        blob = bucket.blob(f"{object_prefix}{file_num:03d}")
+        blob.upload_from_string(content)
     return created_content
 
   def _run_test(self, num_shards, num_files, multi_slices=False):
-    bucket_name = "testing"
+    # bucket_name = "testing"
+    bucket_name = "byates"
     object_prefix = "file-"
     job_name = "test_map"
     expected_content = self.create_test_content(bucket_name,

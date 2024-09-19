@@ -13,7 +13,7 @@ sys.path.insert(0, _TEST_DATA_PATH)
 from mapreduce import parameters
 
 
-class Foo(object):
+class Foo:
   pass
 
 

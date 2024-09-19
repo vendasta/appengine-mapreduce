@@ -31,7 +31,7 @@ class MapJobStartTest(testutil.HandlerTestBase):
   """Test For start."""
 
   def setUp(self):
-    super(MapJobStartTest, self).setUp()
+    super().setUp()
     FakeHooks.enqueue_kickoff_task_calls = []
     self.config = map_job.JobConfig(
         job_name="test_map",
@@ -40,7 +40,6 @@ class MapJobStartTest(testutil.HandlerTestBase):
         input_reader_cls=sample_input_reader.SampleInputReader,
         input_reader_params={"count": TEST_SAMPLE_INPUT_READER_COUNT},
         queue_name="crazy-queue",
-        _base_path="/mr_base",
         _force_writes=True,
         shard_max_attempts=5,
         _task_max_attempts=6,
@@ -77,7 +76,7 @@ class MapJobStartTest(testutil.HandlerTestBase):
     self.assertEqual(1 + self.config.shard_count, len(tasks))
 
     state = model.MapreduceState.get_by_job_id(self.config.job_id)
-    self.assertEqual("__main__.TestHooks",
+    self.assertEqual(f"{FakeHooks.__module__}.{FakeHooks.__name__}",
                      state.mapreduce_spec.hooks_class_name)
 
     # Verify mapreduce_spec.mapper_spec
@@ -116,7 +115,7 @@ class MapJobStatusTest(testutil.HandlerTestBase):
   """Test For Job status."""
 
   def setUp(self):
-    super(MapJobStatusTest, self).setUp()
+    super().setUp()
     self.config = map_job.JobConfig(
         job_name="test_map",
         shard_count=1,

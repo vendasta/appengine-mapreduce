@@ -30,7 +30,7 @@ from mapreduce import parameters
 from mapreduce import util
 
 
-class FakeHandler(object):
+class FakeHandler:
   """Test handler class."""
 
   def __call__(self, entity):
@@ -54,7 +54,7 @@ def fake_handler_function(entity):
   pass
 
 
-class FakeHandlerWithArgs(object):
+class FakeHandlerWithArgs:
   """Test handler with argument in constructor."""
 
   def __init__(self, arg_unused):
@@ -205,7 +205,7 @@ class IsGeneratorFunctionTest(unittest.TestCase):
 class GetTaskHeadersTest(unittest.TestCase):
 
   def setUp(self):
-    super(GetTaskHeadersTest, self).setUp()
+    super().setUp()
     os.environ["CURRENT_VERSION_ID"] = "v7.1"
     os.environ["CURRENT_MODULE_ID"] = "foo-module"
     os.environ["DEFAULT_VERSION_HOSTNAME"] = "foo.appspot.com"
@@ -278,7 +278,7 @@ class CreateConfigTest(unittest.TestCase):
   """Test create_datastore_write_config function."""
 
   def setUp(self):
-    super(CreateConfigTest, self).setUp()
+    super().setUp()
     self.spec = MockMapreduceSpec()
 
   def testDefaultConfig(self):
@@ -293,18 +293,18 @@ class CreateConfigTest(unittest.TestCase):
     self.assertTrue(config.force_writes)
 
 
-class FooClass(object):
+class FooClass:
   pass
 
 
 class ObjToPathTest(unittest.TestCase):
 
   def setUp(self):
-    super(ObjToPathTest, self).setUp()
+    super().setUp()
     self.sys_modules = sys.modules
 
   def tearDown(self):
-    super(ObjToPathTest, self).tearDown()
+    super().tearDown()
     sys.modules = self.sys_modules
 
   def testBasic(self):
@@ -317,7 +317,7 @@ class ObjToPathTest(unittest.TestCase):
   def foo():
     pass
 
-  class FooClass2(object):
+  class FooClass2:
     pass
 
   def testNotTopLevel(self):

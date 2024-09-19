@@ -14,6 +14,8 @@ from mapreduce import shuffler
 from mapreduce import test_support
 from testlib import testutil
 
+from google.cloud import storage
+
 
 class HashEndToEndTest(testutil.HandlerTestBase):
   """End-to-end test for _HashPipeline."""
@@ -33,17 +35,22 @@ class HashEndToEndTest(testutil.HandlerTestBase):
     input_data = [(str(i), str(i)) for i in range(100)]
     input_data.sort()
 
-    bucket_name = "testbucket"
+    # bucket_name = "testbucket"
+    bucket_name = "byates"
     test_filename = "testfile"
-    full_filename = "/%s/%s" % (bucket_name, test_filename)
+    full_filename = "/{}/{}".format(bucket_name, test_filename)   
 
-    with cloudstorage.open(full_filename, mode="w") as f:
+    storage_client = storage.Client(project='repcore-prod')
+    bucket = storage_client.get_bucket(bucket_name)
+    blob = bucket.blob(test_filename)
+    
+    with blob.open("wb") as f:
       with records.RecordsWriter(f) as w:
         for (k, v) in input_data:
           proto = kv_pb.KeyValue()
-          proto.set_key(k)
-          proto.set_value(v)
-          w.write(proto.Encode())
+          proto.key = k
+          proto.value = v
+          w.write(proto.SerializeToString())
 
     p = shuffler._HashPipeline("testjob", bucket_name,
                                [full_filename, full_filename, full_filename])
@@ -55,7 +62,8 @@ class HashEndToEndTest(testutil.HandlerTestBase):
     output_data = []
     for output_files in list_of_output_files:
       for output_file in output_files:
-        with cloudstorage.open(output_file) as f:
+        blob = bucket.blob(output_file)
+        with blob.open() as f:
           for binary_record in records.RecordsReader(f):
             proto = kv_pb.KeyValue()
             proto.ParseFromString(binary_record)
@@ -87,7 +95,7 @@ class SortFileEndToEndTest(testutil.HandlerTestBase):
     """Test sorting a file."""
     bucket_name = "testbucket"
     test_filename = "testfile"
-    full_filename = "/%s/%s" % (bucket_name, test_filename)
+    full_filename = "/{}/{}".format(bucket_name, test_filename)
 
     input_data = [
         (str(i), "_" + str(i)) for i in range(100)]
@@ -178,7 +186,7 @@ class MergingReaderEndToEndTest(testutil.HandlerTestBase):
 
     bucket_name = "testbucket"
     test_filename = "testfile"
-    full_filename = "/%s/%s" % (bucket_name, test_filename)
+    full_filename = "/{}/{}".format(bucket_name, test_filename)
 
     with cloudstorage.open(full_filename, mode="w") as f:
       with records.RecordsWriter(f) as w:
@@ -217,7 +225,7 @@ class MergingReaderEndToEndTest(testutil.HandlerTestBase):
 
       bucket_name = "testbucket"
       test_filename = "testfile"
-      full_filename = "/%s/%s" % (bucket_name, test_filename)
+      full_filename = "/{}/{}".format(bucket_name, test_filename)
 
       with cloudstorage.open(full_filename, mode="w") as f:
         with records.RecordsWriter(f) as w:
@@ -272,7 +280,7 @@ class ShuffleEndToEndTest(testutil.HandlerTestBase):
   def testShuffleNoData(self):
     bucket_name = "testbucket"
     test_filename = "testfile"
-    full_filename = "/%s/%s" % (bucket_name, test_filename)
+    full_filename = "/{}/{}".format(bucket_name, test_filename)
 
     gcs_file = cloudstorage.open(full_filename, mode="w")
     gcs_file.close()
@@ -305,7 +313,7 @@ class ShuffleEndToEndTest(testutil.HandlerTestBase):
 
     bucket_name = "testbucket"
     test_filename = "testfile"
-    full_filename = "/%s/%s" % (bucket_name, test_filename)
+    full_filename = "/{}/{}".format(bucket_name, test_filename)
 
     with cloudstorage.open(full_filename, mode="w") as f:
       with records.RecordsWriter(f) as w:

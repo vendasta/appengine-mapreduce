@@ -395,8 +395,7 @@ class ListJobsTest(testutil.HandlerTestBase):
             },
         )
         result = json.loads(response.data)
-        expected_args = set(
-            [
+        expected_args = {
                 "active",
                 "active_shards",
                 "chart_url",
@@ -406,8 +405,7 @@ class ListJobsTest(testutil.HandlerTestBase):
                 "shards",
                 "start_timestamp_ms",
                 "updated_timestamp_ms",
-            ]
-        )
+        }
         self.assertEqual(3, len(result["jobs"]))
         self.assertEqual("my job 3", result["jobs"][0]["name"])
         self.assertEqual("my job 2", result["jobs"][1]["name"])
@@ -511,14 +509,14 @@ class GetJobDetailTest(testutil.HandlerTestBase):
     )
     result = json.loads(response.data)
 
-    expected_keys = set([
+    expected_keys = {
         "active", "chart_url", "counters", "mapper_spec", "mapreduce_id",
         "name", "result_status", "shards", "start_timestamp_ms",
-        "updated_timestamp_ms", "params", "hooks_class_name", "chart_width"])
-    expected_shard_keys = set([
+        "updated_timestamp_ms", "params", "hooks_class_name", "chart_width"}
+    expected_shard_keys = {
         "active", "counters", "last_work_item", "result_status",
         "shard_description", "shard_id", "shard_number",
-        "updated_timestamp_ms"])
+        "updated_timestamp_ms"}
 
     self.assertEqual(expected_keys, set(result.keys()))
     self.assertEqual(8, len(result["shards"]))
@@ -534,10 +532,10 @@ class GetJobDetailTest(testutil.HandlerTestBase):
     )
     result = json.loads(response.data)
     
-    expected_keys = set([
+    expected_keys = {
         "active", "chart_url", "counters", "mapper_spec", "mapreduce_id",
         "name", "result_status", "shards", "start_timestamp_ms",
-        "updated_timestamp_ms", "params", "hooks_class_name", "chart_width"])
+        "updated_timestamp_ms", "params", "hooks_class_name", "chart_width"}
 
     self.assertEqual(expected_keys, set(result.keys()))
 

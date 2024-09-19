@@ -104,11 +104,11 @@ class MapperPipelineTest(testutil.HandlerTestBase):
     """Test empty mapper over empty dataset."""
     p = mapper_pipeline.MapperPipeline(
         "empty_map",
-        handler_spec=__name__ + ".test_empty_handler",
+        handler_spec=__name__ + ".fake_empty_handler",
         input_reader_spec=input_readers.__name__ + ".DatastoreInputReader",
         params={
             "input_reader": {
-                "entity_kind": __name__ + ".TestEntity",
+                "entity_kind": __name__ + ".FakeEntity",
                 # Test datetime can be json serialized.
                 "filters": [("dt", "=", datetime.datetime(2000, 1, 1))],
                 },
@@ -145,7 +145,7 @@ class MapperPipelineTest(testutil.HandlerTestBase):
 
     p = mapper_pipeline.MapperPipeline(
         "test",
-        handler_spec=__name__ + ".test_fail_map",
+        handler_spec=__name__ + ".fake_fail_map",
         input_reader_spec=input_readers.__name__ + ".DatastoreInputReader",
         params={
             "input_reader": {
@@ -176,11 +176,11 @@ class MapperPipelineTest(testutil.HandlerTestBase):
 
     p = mapper_pipeline.MapperPipeline(
         "empty_map",
-        handler_spec=__name__ + ".test_empty_handler",
+        handler_spec=__name__ + ".fake_empty_handler",
         input_reader_spec=input_readers.__name__ + ".DatastoreInputReader",
         params={
             "input_reader": {
-                "entity_kind": __name__ + ".TestEntity",
+                "entity_kind": __name__ + ".FakeEntity",
                 },
             },
         )
@@ -212,7 +212,7 @@ class MapperPipelineTest(testutil.HandlerTestBase):
 
     p = mapper_pipeline.MapperPipeline(
         "test",
-        handler_spec=__name__ + ".test_slice_retry_map",
+        handler_spec=__name__ + ".fake_slice_retry_map",
         input_reader_spec=input_readers.__name__ + ".DatastoreInputReader",
         params={
             "input_reader": {
@@ -247,7 +247,7 @@ class MapperPipelineTest(testutil.HandlerTestBase):
 
     p = mapper_pipeline.MapperPipeline(
         "test",
-        handler_spec=__name__ + ".test_shard_retry_map",
+        handler_spec=__name__ + ".fake_shard_retry_map",
         input_reader_spec=input_readers.__name__ + ".DatastoreInputReader",
         params={
             "input_reader": {
@@ -282,7 +282,7 @@ class MapperPipelineTest(testutil.HandlerTestBase):
 
     p = mapper_pipeline.MapperPipeline(
         "test",
-        handler_spec=__name__ + ".test_shard_retry_too_many_map",
+        handler_spec=__name__ + ".fake_shard_retry_too_many_map",
         input_reader_spec=input_readers.__name__ + ".DatastoreInputReader",
         params={
             "input_reader": {

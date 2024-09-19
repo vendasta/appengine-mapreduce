@@ -6,7 +6,7 @@
 # pylint: disable=g-bad-import-order
 from testlib import testutil
 
-import mock
+from unittest import mock
 import unittest
 
 from mapreduce.api import map_job

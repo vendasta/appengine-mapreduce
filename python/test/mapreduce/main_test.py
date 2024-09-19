@@ -54,7 +54,7 @@ class MainTest(unittest.TestCase):
     """Corresponding re.match version of assertRegexpMatches."""
     m = re.match(regex, text)
     if not m:
-      self.fail('Text %s was not matched by pattern %s.' % (text, regex))
+      self.fail('Text {} was not matched by pattern {}.'.format(text, regex))
 
   def assertNotMatches(self, text, regex):
     """Corresponding re.match version of assertNotRegexpMatches."""

@@ -17,7 +17,7 @@ class GCSFileSegReaderTest(unittest.TestCase):
   """Test GCSFileSegReader."""
 
   def setUp(self):
-    super(GCSFileSegReaderTest, self).setUp()
+    super().setUp()
 
     self.testbed = testbed.Testbed()
     self.testbed.activate()
@@ -36,7 +36,7 @@ class GCSFileSegReaderTest(unittest.TestCase):
 
   def tearDown(self):
     self.testbed.deactivate()
-    super(GCSFileSegReaderTest, self).tearDown()
+    super().tearDown()
 
   def testMissingMetadata(self):
     f = cloudstorage.open(self.seg_prefix + "0", "w")

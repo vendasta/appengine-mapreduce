@@ -13,6 +13,11 @@ from mapreduce import model
 from mapreduce import test_support
 from testlib import testutil
 
+from google.cloud import storage
+
+storage_client = storage.Client(project="repcore-prod")
+
+
 # Global for collecting data across all map shards
 _memory_mapper_data = []
 
@@ -30,7 +35,7 @@ class GoogleCloudStorageInputReaderEndToEndTest(testutil.CloudStorageTestBase):
     _memory_mapper_data = []
 
   def setUp(self):
-    super(GoogleCloudStorageInputReaderEndToEndTest, self).setUp()
+    super().setUp()
     self._ClearMapperData()
 
   def create_test_content(self, bucket_name, object_prefix, num_files):
@@ -45,19 +50,18 @@ class GoogleCloudStorageInputReaderEndToEndTest(testutil.CloudStorageTestBase):
     Returns:
       A list with each element containing the data in one of the created files.
     """
+    bucket = storage_client.get_bucket(bucket_name)
     created_content = []
     for file_num in range(num_files):
-      content = "Dummy Content %d" % file_num
-      created_content.append(content)
-      test_file = cloudstorage.open(
-          "/%s/%s%03d" % (bucket_name, object_prefix, file_num),
-          mode="w")
-      test_file.write(content)
-      test_file.close()
+        content = "Dummy Content %d" % file_num
+        created_content.append(content)
+        blob = bucket.blob(f"{object_prefix}{file_num:03d}")
+        blob.upload_from_string(content)
     return created_content
 
   def _run_test(self, num_shards, num_files):
-    bucket_name = "testing"
+    # bucket_name = "testing"
+    bucket_name = "byates"
     object_prefix = "file-"
     job_name = "test_map"
     input_class = (input_readers.__name__ + "." +
@@ -91,11 +95,12 @@ class GoogleCloudStorageInputReaderEndToEndTest(testutil.CloudStorageTestBase):
   def testStrict(self):
     """Tests that fail_on_missing_input works properly."""
     gcs_files = []
+    bucket = storage_client.get_bucket("byates")
     for num in range(10):
-      gcs_file = "/los_buckets/file%s" % num
-      with cloudstorage.open(gcs_file, "w") as buf:
-        buf.write(str(num + 100))
-      gcs_files.append("file%s" % num)
+        gcs_file = f"file{num}"
+        blob = bucket.blob(gcs_file)
+        blob.upload_from_string(str(num + 100))
+        gcs_files.append(gcs_file)
 
     input_class = (input_readers.__name__ + "." +
                    input_readers._GoogleCloudStorageInputReader.__name__)
@@ -105,7 +110,7 @@ class GoogleCloudStorageInputReaderEndToEndTest(testutil.CloudStorageTestBase):
       self._ClearMapperData()
 
       input_reader_dict = {
-          "bucket_name": "los_buckets",
+          "bucket_name": bucket.name,
           "objects": gcs_files,
       }
       if fail_on_missing_input is not None:
@@ -123,21 +128,21 @@ class GoogleCloudStorageInputReaderEndToEndTest(testutil.CloudStorageTestBase):
 
     # All files are there. Default, strict and non-strict MRs should work.
     _RunMR(None)
-    self.assertEqual([str(num + 100) for num in range(10)],
+    self.assertEqual([str(num + 100).encode() for num in range(10)],
                      sorted(_memory_mapper_data))
     _RunMR(False)
-    self.assertEqual([str(num + 100) for num in range(10)],
+    self.assertEqual([str(num + 100).encode() for num in range(10)],
                      sorted(_memory_mapper_data))
     _RunMR(True)
-    self.assertEqual([str(num + 100) for num in range(10)],
+    self.assertEqual([str(num + 100).encode() for num in range(10)],
                      sorted(_memory_mapper_data))
 
     # Now remove a file.
-    cloudstorage.delete("/los_buckets/file5")
+    bucket.delete_blob("file5")
 
     # Non-strict MR still works but some output is not there.
     mr_id = _RunMR(False)
-    self.assertEqual([str(num + 100) for num in [0, 1, 2, 3, 4, 6, 7, 8, 9]],
+    self.assertEqual([str(num + 100).encode() for num in [0, 1, 2, 3, 4, 6, 7, 8, 9]],
                      sorted(_memory_mapper_data))
     self.assertEqual(model.MapreduceState.get_by_job_id(mr_id).result_status,
                       model.MapreduceState.RESULT_SUCCESS)

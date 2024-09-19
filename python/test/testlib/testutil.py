@@ -43,10 +43,10 @@ from mapreduce import model
 import mapreduce
 
 from flask import Flask
-import mock
+from unittest import mock
 
 
-class TestJsonType(object):
+class TestJsonType:
   """Test class with to_json/from_json methods."""
 
   def __init__(self, size=0):
@@ -187,7 +187,7 @@ class HandlerTestBase(unittest.TestCase):
     self.major_version_id = "1"
     self.version_id = self.major_version_id + ".23456789"
     self.module_id = "foo_module"
-    self.host = "%s.%s.%s" % (
+    self.host = "{}.{}.{}".format(
         self.major_version_id, self.module_id, "testapp.appspot.com")
 
     self.testbed = testbed.Testbed()
@@ -261,3 +261,7 @@ class HandlerTestBase(unittest.TestCase):
 
 class CloudStorageTestBase(HandlerTestBase):
   """Test base class that ensures cloudstorage library is available."""
+
+  TEST_BUCKET = "byates"
+  TEST_TMP_BUCKET = "byates"
+

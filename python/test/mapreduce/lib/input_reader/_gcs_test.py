@@ -88,7 +88,7 @@ class GCSInputTestBase(testutil.CloudStorageTestBase):
     """
     if contents is not None:
       for f, c in zip(filenames, contents):
-        fullname = "/%s/%s" % (self.TEST_BUCKET, f)
+        fullname = "/{}/{}".format(self.TEST_BUCKET, f)
         self.create_test_file(fullname, c)
 
     job_config = self.create_job_config(
@@ -111,7 +111,7 @@ class GCSInputReaderTest(GCSInputTestBase):
   """Tests for GoogleCloudStorageInputReader."""
 
   def setUp(self):
-    super(GCSInputReaderTest, self).setUp()
+    super().setUp()
 
     # create test content
     self.test_bucket = self.TEST_BUCKET
@@ -354,7 +354,7 @@ class GCSInputReaderWithDelimiterTest(GCSInputTestBase):
   """Tests for GoogleCloudStorageInputReader."""
 
   def setUp(self):
-    super(GCSInputReaderWithDelimiterTest, self).setUp()
+    super().setUp()
 
     # create some test content
     self.test_bucket = "testing"
@@ -466,7 +466,7 @@ class GCSRecordInputReaderTest(GCSInputTestBase):
     all_data = []
     for file_num in range(10):  # Make 10 files
       filename = "file-%03d" % file_num
-      fullname = "/%s/%s" % (self.TEST_BUCKET, filename)
+      fullname = "/{}/{}".format(self.TEST_BUCKET, filename)
       data_set = []
       for record_num in range(10):  # Make 10 records, each 30 chars long
         data_set.append(("%03d" % record_num) * 10)
@@ -485,7 +485,7 @@ class GCSRecordInputReaderTest(GCSInputTestBase):
     all_data = []
     for file_num in range(50):  # Make 10 files
       filename = "file-%03d" % file_num
-      fullname = "/%s/%s" % (self.TEST_BUCKET, filename)
+      fullname = "/{}/{}".format(self.TEST_BUCKET, filename)
       data_set = []
       for record_num in range(file_num % 5):  # Make up to 4 records
         data_set.append(("%03d" % record_num) * 10)
@@ -504,7 +504,7 @@ class GCSRecordInputReaderTest(GCSInputTestBase):
     all_data = []
     for file_num in range(50):  # Make 10 files
       filename = "file-%03d" % file_num
-      fullname = "/%s/%s" % (self.TEST_BUCKET, filename)
+      fullname = "/{}/{}".format(self.TEST_BUCKET, filename)
       data_set = []
       for record_num in range(file_num % 5):  # Make up to 4 records
         data_set.append(("%03d" % record_num) * 10)
@@ -536,7 +536,7 @@ class GCSRecordInputReaderTest(GCSInputTestBase):
     all_data = []
     for file_num in range(10):  # Make 10 files
       filename = "file-%03d" % file_num
-      fullname = "/%s/%s" % (self.TEST_BUCKET, filename)
+      fullname = "/{}/{}".format(self.TEST_BUCKET, filename)
       data_set = []
       for record_num in range(10):  # Make 10 records, each 30 chars long
         data_set.append(("%03d" % record_num) * 10)

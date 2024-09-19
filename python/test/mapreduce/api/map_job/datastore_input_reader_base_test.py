@@ -16,7 +16,7 @@ class SkipTestsMeta(type):
   """Enables skipping tests from the base class but not when sub-classed."""
 
   def __init__(cls, name, bases, dct):
-    super(SkipTestsMeta, cls).__init__(name, bases, dct)
+    super().__init__(name, bases, dct)
     if cls.__name__ == "DatastoreInputReaderBaseTest":
       unittest.skip("Skip tests when testing from the base class.")(cls)
     else:
@@ -223,7 +223,7 @@ class DatastoreInputReaderBaseTest(unittest.TestCase, metaclass=SkipTestsMeta):
     # 10 entities in the default namespace
     empty_ns_keys = [str(k) for k in range(10)]
     self._create_entities(empty_ns_keys,
-                          dict([(k, 1) for k in empty_ns_keys]),
+                          {k: 1 for k in empty_ns_keys},
                           None)
     # 10 entities for each of N different non-default namespaces. The number
     # of namespaces, N, is set to be twice the cutoff for switching to sharding
@@ -233,7 +233,7 @@ class DatastoreInputReaderBaseTest(unittest.TestCase, metaclass=SkipTestsMeta):
       ns_keys = ["n-%02d-k-%02d" % (ns_num, k) for k in range(10)]
       non_empty_ns_keys.extend(ns_keys)
       self._create_entities(ns_keys,
-                            dict([(k, 1) for k in ns_keys]),
+                            {k: 1 for k in ns_keys},
                             "%02d" % ns_num)
 
     # Test a query over all namespaces

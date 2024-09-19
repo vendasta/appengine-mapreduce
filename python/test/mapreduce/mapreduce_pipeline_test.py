@@ -15,6 +15,10 @@ from mapreduce import records
 from mapreduce import test_support
 from testlib import testutil
 
+from google.cloud import storage
+
+storage_client = storage.Client(project="repcore-prod")
+
 
 class FakeEntity(db.Model):
   """Test entity class."""
@@ -61,7 +65,7 @@ class FakeFileRecordsOutputWriter(
       retry_count.retries += 1
       retry_count.put()
       raise cloudstorage.TransientError("output writer finalize failed.")
-    super(FakeFileRecordsOutputWriter, self).finalize(ctx, shard_state)
+    super().finalize(ctx, shard_state)
 
 
 class MapreducePipelineTest(testutil.HandlerTestBase):
@@ -118,7 +122,8 @@ class MapreducePipelineTest(testutil.HandlerTestBase):
 
   def testMapReduce(self):
     # Prepare test data
-    bucket_name = "testbucket"
+    # bucket_name = "testbucket"
+    bucket_name = "byates"
     job_name = "test_job"
     entity_count = 200
 
@@ -129,8 +134,8 @@ class MapreducePipelineTest(testutil.HandlerTestBase):
     # Run Mapreduce
     p = mapreduce_pipeline.MapreducePipeline(
         job_name,
-        __name__ + ".test_mapreduce_map",
-        __name__ + ".test_mapreduce_reduce",
+        __name__ + ".fake_mapreduce_map",
+        __name__ + ".fake_mapreduce_reduce",
         input_reader_spec=input_readers.__name__ + ".DatastoreInputReader",
         output_writer_spec=(
             output_writers.__name__ + "._GoogleCloudStorageRecordOutputWriter"),
@@ -156,8 +161,9 @@ class MapreducePipelineTest(testutil.HandlerTestBase):
     self.assertEqual(model.MapreduceState.RESULT_SUCCESS,
                      p.outputs.result_status.value)
     output_data = []
+    bucket = storage_client.get_bucket(bucket_name)
     for output_file in p.outputs.default.value:
-      with cloudstorage.open(output_file) as f:
+      with bucket.blob(output_file).open() as f:
         for record in records.RecordsReader(f):
           output_data.append(record)
 
@@ -168,7 +174,7 @@ class MapreducePipelineTest(testutil.HandlerTestBase):
     self.assertEqual(expected_data, output_data)
 
     # Verify that mapreduce doesn't leave intermediate files behind.
-    temp_file_stats = cloudstorage.listbucket("/" + bucket_name)
+    temp_file_stats = storage_client.listbucket(bucket_name)
     for stat in temp_file_stats:
       if stat.filename:
         self.assertFalse(

@@ -21,6 +21,8 @@
 
 # os_compat must be first to ensure timezones are UTC.
 # pylint: disable=g-bad-import-order
+from unittest import mock
+from unittest.mock import patch
 from google.appengine.tools import os_compat  # pylint: disable=unused-import
 
 import io
@@ -46,6 +48,7 @@ from google.appengine.ext import blobstore
 from google.appengine.ext import key_range
 from google.appengine.ext import testbed
 from google.appengine.ext.blobstore import blobstore as blobstore_internal
+from google.cloud import storage
 
 from mapreduce import context
 from mapreduce import errors
@@ -55,6 +58,8 @@ from mapreduce import model
 from mapreduce import namespace_range
 from mapreduce import records
 from testlib import testutil
+
+storage_client = storage.Client(project="repcore-prod")
 
 class AbstractDatastoreInputReaderTest(unittest.TestCase):
   """Tests for AbstractDatastoreInputReader."""
@@ -601,7 +606,7 @@ class DatastoreInputReaderTestCommon(unittest.TestCase):
     # 10 entities in the default namespace
     empty_ns_keys = [str(k) for k in range(10)]
     self._create_entities(empty_ns_keys,
-                          dict([(k, 1) for k in empty_ns_keys]),
+                          {k: 1 for k in empty_ns_keys},
                           None)
     # 10 entities for each of N different non-default namespaces. The number
     # of namespaces, N, is set to be twice the cutoff for switching to sharding
@@ -611,7 +616,7 @@ class DatastoreInputReaderTestCommon(unittest.TestCase):
       ns_keys = ["n-%02d-k-%02d" % (ns_num, k) for k in range(10)]
       non_empty_ns_keys.extend(ns_keys)
       self._create_entities(ns_keys,
-                            dict([(k, 1) for k in ns_keys]),
+                            {k: 1 for k in ns_keys},
                             "%02d" % ns_num)
 
     # Test a query over all namespaces
@@ -982,7 +987,7 @@ class BlobstoreLineInputReaderBlobstoreStubTest(unittest.TestCase):
 
   def CheckAllDataRead(self, data, blob_readers):
     """Check that we can read all the data with several blob readers."""
-    expected_results = data.split("\n")
+    expected_results = data.split(b"\n")
     if not expected_results[-1]:
       expected_results.pop(-1)
     actual_results = []
@@ -1044,7 +1049,7 @@ class BlobstoreLineInputReaderBlobstoreStubTest(unittest.TestCase):
   def testEndToEnd(self):
     """End to end test of some data--split and read.."""
     # This particular pattern once caused bugs with 8 shards.
-    data = "20-questions\r\n20q\r\na\r\n"
+    data = b"20-questions\r\n20q\r\na\r\n"
     self.EndToEndTest(data, 8)
     self.EndToEndTest(data, 1)
     self.EndToEndTest(data, 16)
@@ -1052,23 +1057,23 @@ class BlobstoreLineInputReaderBlobstoreStubTest(unittest.TestCase):
 
   def testEndToEndNoData(self):
     """End to end test of some data--split and read.."""
-    data = ""
+    data = b""
     self.EndToEndTest(data, 8)
 
   def testEverySplit(self):
     """Test some data with every possible split point."""
-    self.TestAllSplits("20-questions\r\n20q\r\na\r\n")
-    self.TestAllSplits("a\nbb\nccc\ndddd\n")
-    self.TestAllSplits("aaaa\nbbb\ncc\nd\n")
+    self.TestAllSplits(b"20-questions\r\n20q\r\na\r\n")
+    self.TestAllSplits(b"a\nbb\nccc\ndddd\n")
+    self.TestAllSplits(b"aaaa\nbbb\ncc\nd\n")
 
   def testEverySplitNoTrailingNewLine(self):
     """Test some data with every possible split point."""
-    self.TestAllSplits("20-questions\r\n20q\r\na")
-    self.TestAllSplits("a\nbb\nccc\ndddd")
-    self.TestAllSplits("aaaa\nbbb\ncc\nd")
+    self.TestAllSplits(b"20-questions\r\n20q\r\na")
+    self.TestAllSplits(b"a\nbb\nccc\ndddd")
+    self.TestAllSplits(b"aaaa\nbbb\ncc\nd")
 
 
-class MockBlobInfo(object):
+class MockBlobInfo:
 
   def __init__(self, size):
     self.size = size
@@ -1081,32 +1086,19 @@ class BlobstoreLineInputReaderTest(unittest.TestCase):
 
     self.appid = "testapp"
     os.environ["APPLICATION_ID"] = self.appid
-    self.mox = mox.Mox()
-    self.mock_out_blob_info_size_called = False
-
-  def tearDown(self):
-    self.mox.UnsetStubs()
-    self.mox.ResetAll()
 
   # pylint: disable=unused-argument
   def initMockedBlobstoreLineReader(self,
                                     initial_position,
-                                    num_blocks_read,
-                                    eof_read,
                                     end_offset,
-                                    buffer_size,
-                                    data):
+                                    buffer_size):
     input_readers.BlobstoreLineInputReader._BLOB_BUFFER_SIZE = buffer_size
     # Mock out blob key so as to avoid validation.
     blob_key_str = "foo"
 
-    def fetch_data(blob_key, start, end):
-      return data[start:end + 1]
-    self.mox.stubs.Set(blobstore_internal, "fetch_data", fetch_data)
-
     r = input_readers.BlobstoreLineInputReader(blob_key_str,
-                                               initial_position,
-                                               initial_position + end_offset)
+                                                  initial_position,
+                                                  initial_position + end_offset)
     return r
 
   def assertNextEquals(self, reader, expected_k, expected_v):
@@ -1119,38 +1111,53 @@ class BlobstoreLineInputReaderTest(unittest.TestCase):
 
   def testAtStart(self):
     """If we start at position 0, read the first record."""
-    blob_reader = self.initMockedBlobstoreLineReader(
-        0, 1, True, 100, 100, "foo\nbar\nfoobar")
-    self.assertNextEquals(blob_reader, 0, "foo")
-    self.assertNextEquals(blob_reader, len("foo\n"), "bar")
-    self.assertNextEquals(blob_reader, len("foo\nbar\n"), "foobar")
+    def fetch_data(blob_key, start, end):
+      return b"foo\nbar\nfoobar"[start:end + 1]
+    with patch.object(blobstore_internal, "fetch_data", new=fetch_data):
+      blob_reader = self.initMockedBlobstoreLineReader(
+          0, 100, 100)
+      self.assertNextEquals(blob_reader, 0, b"foo")
+      self.assertNextEquals(blob_reader, len(b"foo\n"), b"bar")
+      self.assertNextEquals(blob_reader, len(b"foo\nbar\n"), b"foobar")
 
   def testOmitFirst(self):
     """If we start in the middle of a record, start with the next record."""
-    blob_reader = self.initMockedBlobstoreLineReader(
-        1, 1, True, 100, 100, "foo\nbar\nfoobar")
-    self.assertNextEquals(blob_reader, len("foo\n"), "bar")
-    self.assertNextEquals(blob_reader, len("foo\nbar\n"), "foobar")
+    def fetch_data(blob_key, start, end):
+      return b"foo\nbar\nfoobar"[start:end + 1]
+    with patch.object(blobstore_internal, "fetch_data", new=fetch_data):
+      blob_reader = self.initMockedBlobstoreLineReader(
+          1, 100, 100)
+      self.assertNextEquals(blob_reader, len(b"foo\n"), b"bar")
+      self.assertNextEquals(blob_reader, len(b"foo\nbar\n"), b"foobar")
 
   def testOmitNewline(self):
     """If we start on a newline, start with the record on the next byte."""
-    blob_reader = self.initMockedBlobstoreLineReader(
-        3, 1, True, 100, 100, "foo\nbar")
-    self.assertNextEquals(blob_reader, len("foo\n"), "bar")
+    def fetch_data(blob_key, start, end):
+      return b"foo\nbar"[start:end + 1]
+    with patch.object(blobstore_internal, "fetch_data", new=fetch_data):
+      blob_reader = self.initMockedBlobstoreLineReader(
+          3, 100, 100)
+      self.assertNextEquals(blob_reader, len(b"foo\n"), b"bar")
 
   def testSpanBlocks(self):
     """Test the multi block case."""
-    blob_reader = self.initMockedBlobstoreLineReader(
-        0, 4, True, 100, 2, "foo\nbar")
-    self.assertNextEquals(blob_reader, 0, "foo")
-    self.assertNextEquals(blob_reader, len("foo\n"), "bar")
+    def fetch_data(blob_key, start, end):
+      return b"foo\nbar"[start:end + 1]
+    with patch.object(blobstore_internal, "fetch_data", new=fetch_data):
+      blob_reader = self.initMockedBlobstoreLineReader(
+          0, 100, 2)
+      self.assertNextEquals(blob_reader, 0, b"foo")
+      self.assertNextEquals(blob_reader, len(b"foo\n"), b"bar")
 
   def testStopAtEnd(self):
     """If we pass end position, then we don't get a record past the end."""
-    blob_reader = self.initMockedBlobstoreLineReader(
-        0, 1, False, 1, 100, "foo\nbar")
-    self.assertNextEquals(blob_reader, 0, "foo")
-    self.assertDone(blob_reader)
+    def fetch_data(blob_key, start, end):
+      return b"foo\nbar"[start:end + 1]
+    with patch.object(blobstore_internal, "fetch_data", new=fetch_data):
+      blob_reader = self.initMockedBlobstoreLineReader(
+          0, 1, 100)
+      self.assertNextEquals(blob_reader, 0, b"foo")
+      self.assertDone(blob_reader)
 
   def testDontReturnAnythingIfPassEndBeforeFirst(self):
     """Test end behavior.
@@ -1158,43 +1165,33 @@ class BlobstoreLineInputReaderTest(unittest.TestCase):
     If we pass the end position when reading to the first record,
     then we don't get a record past the end.
     """
-    blob_reader = self.initMockedBlobstoreLineReader(
-        3, 1, False, 0, 100, "foo\nbar")
-    self.assertDone(blob_reader)
+    def fetch_data(blob_key, start, end):
+      return b"foo\nbar"[start:end + 1]
+    with patch.object(blobstore_internal, "fetch_data", new=fetch_data):
+      blob_reader = self.initMockedBlobstoreLineReader(
+          3, 0, 100)
+      self.assertDone(blob_reader)
 
-  def mockOutBlobInfoSize(self, size, blob_key_str="foo"):
-    if not self.mock_out_blob_info_size_called:
-      self.mock_out_blob_info_size_called = True
-      self.mox.StubOutWithMock(blobstore, "BlobKey", use_mock_anything=True)
-      self.mox.StubOutWithMock(blobstore.BlobInfo, "get",
-                               use_mock_anything=True)
-
-    blob_key = "bar" + blob_key_str
-    blobstore.BlobKey(blob_key_str).AndReturn(blob_key)
-    blobstore.BlobInfo.get(blob_key).AndReturn(MockBlobInfo(size))
-
+  @patch.object(blobstore, 'BlobKey', new=mock.Mock)
+  @patch.object(blobstore.BlobInfo, 'get', new=mock.Mock(return_value=MockBlobInfo(200)))
   def testSplitInput(self):
-    # TODO(user): Mock out equiv
-    self.mockOutBlobInfoSize(200)
-    self.mox.ReplayAll()
     mapper_spec = model.MapperSpec.from_json({
-        "mapper_handler_spec": "FooHandler",
-        "mapper_input_reader": BLOBSTORE_READER_NAME,
-        "mapper_params": {"blob_keys": ["foo"]},
-        "mapper_shard_count": 1})
+      "mapper_handler_spec": "FooHandler",
+      "mapper_input_reader": BLOBSTORE_READER_NAME,
+      "mapper_params": {"blob_keys": ["foo%d" % i for i in range(5)]},
+      "mapper_shard_count": 1})
     blob_readers = input_readers.BlobstoreLineInputReader.split_input(
-        mapper_spec)
-    self.assertEqual([{"blob_key": "foo",
-                        "initial_position": 0,
-                        "end_position": 200}],
-                      [r.to_json() for r in blob_readers])
-    self.mox.VerifyAll()
+      mapper_spec)
+    blob_readers_json = [r.to_json() for r in blob_readers]
+    blob_readers_json.sort(key=lambda r: r["blob_key"])
+    self.assertEqual([{"blob_key": "foo%d" % i,
+              "initial_position": 0,
+              "end_position": 200} for i in range(5)],
+              blob_readers_json)
 
+  @patch.object(blobstore, 'BlobKey', new=mock.Mock)
+  @patch.object(blobstore.BlobInfo, 'get', new=mock.Mock(return_value=MockBlobInfo(200)))
   def testSplitInputMultiKey(self):
-    # TODO(user): Mock out equiv
-    for i in range(5):
-      self.mockOutBlobInfoSize(200, "foo%d" % i)
-    self.mox.ReplayAll()
     mapper_spec = model.MapperSpec.from_json({
         "mapper_handler_spec": "FooHandler",
         "mapper_input_reader": BLOBSTORE_READER_NAME,
@@ -1209,11 +1206,10 @@ class BlobstoreLineInputReaderTest(unittest.TestCase):
                         "initial_position": 0,
                         "end_position": 200} for i in range(5)],
                       blob_readers_json)
-    self.mox.VerifyAll()
 
+  @patch.object(blobstore, 'BlobKey', new=mock.Mock)
+  @patch.object(blobstore.BlobInfo, 'get', new=mock.Mock(return_value=MockBlobInfo(199)))
   def testSplitInputMultiSplit(self):
-    self.mockOutBlobInfoSize(199)
-    self.mox.ReplayAll()
     mapper_spec = model.MapperSpec.from_json({
         "mapper_handler_spec": "FooHandler",
         "mapper_input_reader": BLOBSTORE_READER_NAME,
@@ -1229,12 +1225,11 @@ class BlobstoreLineInputReaderTest(unittest.TestCase):
           "initial_position": 99,
           "end_position": 199}],
         [r.to_json() for r in blob_readers])
-    self.mox.VerifyAll()
 
+  @patch.object(blobstore, 'BlobKey', new=mock.Mock)
+  @patch.object(blobstore.BlobInfo, 'get', new=mock.Mock(return_value=MockBlobInfo(199)))
   def testShardDescription(self):
     """Tests the human-readable shard description."""
-    self.mockOutBlobInfoSize(199)
-    self.mox.ReplayAll()
     mapper_spec = model.MapperSpec.from_json({
         "mapper_handler_spec": "FooHandler",
         "mapper_input_reader": BLOBSTORE_READER_NAME,
@@ -1247,7 +1242,6 @@ class BlobstoreLineInputReaderTest(unittest.TestCase):
         ["blobstore.BlobKey('foo'):[0, 99]",
          "blobstore.BlobKey('foo'):[99, 199]"],
         stringified)
-    self.mox.VerifyAll()
 
   def testTooManyKeys(self):
     """Tests when there are too many blobkeys present as input."""
@@ -1271,21 +1265,20 @@ class BlobstoreLineInputReaderTest(unittest.TestCase):
                       input_readers.BlobstoreLineInputReader.validate,
                       mapper_spec)
 
-  def testInvalidKey(self):
+  @patch.object(blobstore, 'BlobKey')
+  @patch.object(blobstore.BlobInfo, 'get')
+  def testInvalidKey(self, mock_blob_info_get, mock_blob_key):
     """Tests when there a blobkeys in the input is invalid."""
     mapper_spec = model.MapperSpec.from_json({
         "mapper_handler_spec": "FooHandler",
         "mapper_input_reader": BLOBSTORE_READER_NAME,
         "mapper_params": {"blob_keys": ["foo", "nosuchblob"]},
         "mapper_shard_count": 2})
-    self.mockOutBlobInfoSize(100, blob_key_str="foo")
-    blobstore.BlobKey("nosuchblob").AndReturn("nosuchblob")
-    blobstore.BlobInfo.get("nosuchblob").AndReturn(None)
-    self.mox.ReplayAll()
+    mock_blob_key.side_effect = [blobstore.BlobKey("foo"), "nosuchblob"]
+    mock_blob_info_get.side_effect = [MockBlobInfo(100), None]
     self.assertRaises(input_readers.BadReaderParamsError,
                       input_readers.BlobstoreLineInputReader.validate,
                       mapper_spec)
-    self.mox.VerifyAll()
 
 
 class BlobstoreZipInputReaderTest(unittest.TestCase):
@@ -1298,7 +1291,7 @@ class BlobstoreZipInputReaderTest(unittest.TestCase):
     self.appid = "testapp"
     os.environ["APPLICATION_ID"] = self.appid
 
-    self.zipdata = io.StringIO()
+    self.zipdata = io.BytesIO()
     archive = zipfile.ZipFile(self.zipdata, "w")
     for i in range(10):
       archive.writestr("%d.txt" % i, "%d: %s" % (i, "*"*i))
@@ -1314,7 +1307,7 @@ class BlobstoreZipInputReaderTest(unittest.TestCase):
     reader = input_readers.BlobstoreZipInputReader("", 0, 1, self.mockZipReader)
     file_info, data_func = next(reader)
     self.assertEqual(file_info.filename, "0.txt")
-    self.assertEqual(data_func(), "0: ")
+    self.assertEqual(data_func(), b"0: ")
 
   def testReadLast(self):
     """Test we can read right up to the last file in the zip."""
@@ -1322,7 +1315,7 @@ class BlobstoreZipInputReaderTest(unittest.TestCase):
                                                    self.mockZipReader)
     file_info, data_func = next(reader)
     self.assertEqual(file_info.filename, "9.txt")
-    self.assertEqual(data_func(), "9: *********")
+    self.assertEqual(data_func(), b"9: *********")
 
   def testStopIteration(self):
     """Test that StopIteration is raised when we fetch past the end."""
@@ -1371,7 +1364,7 @@ class BlobstoreZipLineInputReaderTest(unittest.TestCase):
     self.zipdata = {}
     blob_keys = []
     for blob_number in range(blob_count):
-      stream = io.StringIO()
+      stream = io.BytesIO()
       archive = zipfile.ZipFile(stream, "w")
       for file_number in range(3):
         lines = []
@@ -1465,7 +1458,7 @@ class BlobstoreZipLineInputReaderTest(unittest.TestCase):
                                                        self.mockZipReader)
     offset_info, line = next(reader)
     self.assertEqual(("blob0", 0, 0), offset_info)
-    self.assertEqual("archive 0 file 0 line 0", line)
+    self.assertEqual(b"archive 0 file 0 line 0", line)
 
     # This file only has one line.
     self.assertRaises(StopIteration, reader.__next__)
@@ -1477,11 +1470,11 @@ class BlobstoreZipLineInputReaderTest(unittest.TestCase):
                                                        self.mockZipReader)
     offset_info, line = next(reader)
     self.assertEqual(("blob0", 1, 0), offset_info)
-    self.assertEqual("archive 0 file 1 line 0", line)
+    self.assertEqual(b"archive 0 file 1 line 0", line)
 
     offset_info, line = next(reader)
     self.assertEqual(("blob0", 1, 24), offset_info)
-    self.assertEqual("archive 0 file 1 line 1", line)
+    self.assertEqual(b"archive 0 file 1 line 1", line)
 
     # This file only has two lines.
     self.assertRaises(StopIteration, reader.__next__)
@@ -1493,7 +1486,7 @@ class BlobstoreZipLineInputReaderTest(unittest.TestCase):
                                                        self.mockZipReader)
     offset_info, line = next(reader)
     self.assertEqual(("blob0", 2, 24), offset_info)
-    self.assertEqual("archive 0 file 2 line 1", line)
+    self.assertEqual(b"archive 0 file 2 line 1", line)
 
     # If we persist/restore the reader, the new one should pick up where
     # we left off.
@@ -1502,7 +1495,7 @@ class BlobstoreZipLineInputReaderTest(unittest.TestCase):
 
     offset_info, line = next(reader2)
     self.assertEqual(("blob0", 2, 48), offset_info)
-    self.assertEqual("archive 0 file 2 line 2", line)
+    self.assertEqual(b"archive 0 file 2 line 2", line)
 
   def testReadAcrossFiles(self):
     """Test that we can read across all the files in the single blob."""
@@ -1515,8 +1508,7 @@ class BlobstoreZipLineInputReaderTest(unittest.TestCase):
         offset_info, line = next(reader)
         self.assertEqual("blob0", offset_info[0])
         self.assertEqual(file_number, offset_info[1])
-        self.assertEqual("archive %s file %s line %s" % (0, file_number, i),
-                         line)
+        self.assertEqual("archive {} file {} line {}".format(0, file_number, i).encode(), line)
 
     self.assertRaises(StopIteration, reader.__next__)
 
@@ -1672,12 +1664,12 @@ class NamespaceInputReaderTest(unittest.TestCase):
     namespaces = set()
     for r in readers:
       namespaces.update(list(r))
-    self.assertEqual(set([""]), namespaces)
+    self.assertEqual({""}, namespaces)
 
   def testSplitNamespacesPresent(self):
     """Test reader with multiple namespaces present."""
     testutil.TestEntity().put()
-    for i in string.letters + string.digits:
+    for i in string.ascii_letters + string.digits:
       namespace_manager.set_namespace(i)
       testutil.TestEntity().put()
     namespace_manager.set_namespace(None)
@@ -1690,7 +1682,7 @@ class NamespaceInputReaderTest(unittest.TestCase):
       namespaces.update(list(r))
 
     # test read
-    self.assertEqual(set(list(string.letters + string.digits) + [""]),
+    self.assertEqual(set(list(string.ascii_letters + string.digits) + [""]),
                       namespaces)
 
   def testValidate_Passes(self):
@@ -2050,7 +2042,7 @@ class LogInputReaderTest(unittest.TestCase):
       self.verifyLogs(expected, fetched_logs + list(reader))
 
 
-def TestCombiner(unused_key, values, left_fold):
+def FakeCombiner(unused_key, values, left_fold):
   """Test combiner for ReducerReaderTest."""
   if left_fold:
     for value in left_fold:
@@ -2063,30 +2055,33 @@ class ReducerReaderTest(testutil.HandlerTestBase):
   """Tests for _ReducerReader."""
 
   def setUp(self):
-    super(ReducerReaderTest, self).setUp()
+    super().setUp()
     # Clear any context that is set.
     context.Context._set(None)
 
-    bucket_name = "testbucket"
+    # bucket_name = "testbucket"
+    bucket_name = "byates"
     test_filename = "testfile"
-    full_filename = "/%s/%s" % (bucket_name, test_filename)
+    full_filename = "/{}/{}".format(bucket_name, test_filename)
 
-    with cloudstorage.open(full_filename, mode="w") as f:
+    bucket = storage_client.get_bucket(bucket_name)
+    blob = bucket.blob(test_filename)
+    with blob.open("wb") as f:
       with records.RecordsWriter(f) as w:
         # First key is all in one record
         proto = kv_pb.KeyValues()
-        proto.set_key("key1")
-        proto.value_list().extend(["a", "b"])
-        w.write(proto.Encode())
+        proto.key = "key1"
+        proto.value.extend(["a", "b"])
+        w.write(proto.SerializeToString())
         # Second key is split across two records
         proto = kv_pb.KeyValues()
-        proto.set_key("key2")
-        proto.value_list().extend(["c", "d"])
-        w.write(proto.Encode())
+        proto.key = "key2"
+        proto.value.extend(["c", "d"])
+        w.write(proto.SerializeToString())
         proto = kv_pb.KeyValues()
-        proto.set_key("key2")
-        proto.value_list().extend(["e", "f"])
-        w.write(proto.Encode())
+        proto.key = "key2"
+        proto.value.extend(["e", "f"])
+        w.write(proto.SerializeToString())
 
     self.bucket_name = bucket_name
     self.input_file = full_filename
@@ -2094,7 +2089,7 @@ class ReducerReaderTest(testutil.HandlerTestBase):
   def testMultipleRequests(self):
     """Tests restoring the reader state across multiple requests."""
     # Set up a combiner for the _ReducerReader to drive.
-    combiner_spec = "%s.%s" % (TestCombiner.__module__, TestCombiner.__name__)
+    combiner_spec = "{}.{}".format(FakeCombiner.__module__, FakeCombiner.__name__)
     mapreduce_spec = model.MapreduceSpec(
         "DummyMapReduceJobName",
         "DummyMapReduceJobId",
@@ -2222,9 +2217,10 @@ class GoogleCloudStorageInputTestBase(testutil.CloudStorageTestBase):
       content: the content to put in the file or if None a dummy string
         containing the filename will be used.
     """
-    test_file = cloudstorage.open(filename, mode="w")
-    test_file.write(content)
-    test_file.close()
+    bucket_name, object_name = filename.split("/", 1)[1].split("/", 1)
+    bucket = storage_client.bucket(bucket_name)
+    blob = bucket.blob(object_name)
+    blob.upload_from_string(content)
 
 
 class GoogleCloudStorageInputReaderWithDelimiterTest(
@@ -2235,10 +2231,11 @@ class GoogleCloudStorageInputReaderWithDelimiterTest(
   READER_NAME = input_readers.__name__ + "." + READER_CLS.__name__
 
   def setUp(self):
-    super(GoogleCloudStorageInputReaderWithDelimiterTest, self).setUp()
+    super().setUp()
 
     # create some test content
-    self.test_bucket = "testing"
+    # self.test_bucket = "testing"
+    self.test_bucket = "byates"
     self.test_num_files = 20
     self.test_filenames = []
     for file_num in range(self.test_num_files):
@@ -2280,7 +2277,7 @@ class GoogleCloudStorageInputReaderWithDelimiterTest(
       # Read one file and immediately serialize.
       reader = self.READER_CLS.from_json_str(reader.to_json_str())
       try:
-        result_filenames.append(reader.next().name)
+        result_filenames.append(next(reader).name)
       except StopIteration:
         break
     self.assertEqual(self.file_per_dir * 10 + self.test_num_files,
@@ -2367,10 +2364,11 @@ class GoogleCloudStorageInputReaderTest(GoogleCloudStorageInputTestBase):
   READER_NAME = input_readers.__name__ + "." + READER_CLS.__name__
 
   def setUp(self):
-    super(GoogleCloudStorageInputReaderTest, self).setUp()
+    super().setUp()
 
     # create test content
-    self.test_bucket = "testing"
+    # self.test_bucket = "testing"
+    self.test_bucket = "byates"
     self.test_content = []
     self.test_num_files = 20
     self.test_filenames = []
@@ -2557,7 +2555,7 @@ class GoogleCloudStorageInputReaderTest(GoogleCloudStorageInputTestBase):
       found_content.append(reader_file.read())
     self.assertEqual(len(self.test_content), len(found_content))
     for content in self.test_content:
-      self.assertTrue(content in found_content)
+      self.assertTrue(content.encode() in found_content)
     # Check that the counter was incremented.
     self.assertTrue(shard_state.counters_map.get(
         input_readers.COUNTER_IO_READ_MSEC) > 0)
@@ -2568,9 +2566,11 @@ class GoogleCloudStorageInputReaderTest(GoogleCloudStorageInputTestBase):
                                 input_params={"bucket_name": self.test_bucket,
                                               "objects": ["file-*"]}))
     self.assertEqual(1, len(readers))
+
+    bucket = storage_client.bucket(self.test_bucket)
     # Remove the first and second to last files.
-    cloudstorage.delete(self.test_filenames[0])
-    cloudstorage.delete(self.test_filenames[-2])
+    bucket.blob(self.test_filenames[0].lstrip(f'/{self.test_bucket}/')).delete()
+    bucket.blob(self.test_filenames[-2].lstrip(f'/{self.test_bucket}/')).delete()
     del self.test_filenames[0]
     del self.test_filenames[-2]
 
@@ -2595,7 +2595,7 @@ class GoogleCloudStorageInputReaderTest(GoogleCloudStorageInputTestBase):
       reader = self.READER_CLS.from_json(reader.to_json())
     self.assertEqual(len(self.test_content), len(found_content))
     for content in self.test_content:
-      self.assertTrue(content in found_content)
+      self.assertTrue(content.encode() in found_content)
 
     # verify a reader at EOF still raises EOF after serialization
     self.assertRaises(StopIteration, reader.__next__)
@@ -2606,7 +2606,8 @@ class GoogleCloudStorageRecordInputReaderTest(GoogleCloudStorageInputTestBase):
 
   READER_CLS = input_readers.GoogleCloudStorageRecordInputReader
   READER_NAME = input_readers.__name__ + "." + READER_CLS.__name__
-  TEST_BUCKET = "testing"
+  # TEST_BUCKET = "testing"
+  TEST_BUCKET = "byates"
 
   def create_test_file(self, filename, content):
     """Create a test LevelDB file with a RecordWriter.
@@ -2615,7 +2616,10 @@ class GoogleCloudStorageRecordInputReaderTest(GoogleCloudStorageInputTestBase):
       filename: the name of the file in the form "/bucket/object".
       content: list of content to put in file in LevelDB format.
     """
-    test_file = cloudstorage.open(filename, mode="w")
+    bucket_name, object_name = filename.split("/", 1)[1].split("/", 1)
+    bucket = storage_client.bucket(bucket_name)
+    blob = bucket.blob(object_name)
+    test_file = blob.open("wb")
     with records.RecordsWriter(test_file) as w:
       for c in content:
         w.write(c)
@@ -2630,7 +2634,7 @@ class GoogleCloudStorageRecordInputReaderTest(GoogleCloudStorageInputTestBase):
 
   def testSingleFileOneRecord(self):
     filename = "/%s/single-record-file" % self.TEST_BUCKET
-    data = "foobardata"
+    data = b"foobardata"
     self.create_test_file(filename, [data])
     reader = self.READER_CLS([filename])
 
@@ -2641,7 +2645,7 @@ class GoogleCloudStorageRecordInputReaderTest(GoogleCloudStorageInputTestBase):
     filename = "/%s/many-records-file" % self.TEST_BUCKET
     data = []
     for record_num in range(100):  # Make 100 records
-      data.append(("%03d" % record_num) * 10)  # Make each record 30 chars long
+      data.append((b"%03d" % record_num) * 10)  # Make each record 30 chars long
     self.create_test_file(filename, data)
     reader = self.READER_CLS([filename])
 
@@ -2652,23 +2656,26 @@ class GoogleCloudStorageRecordInputReaderTest(GoogleCloudStorageInputTestBase):
     self.assertRaises(StopIteration, reader.__next__)
 
   def testSingleFileManyKeyValuesRecords(self):
-    filename = "/%s/many-key-values-records-file" % self.TEST_BUCKET
+    filename = "many-key-values-records-file"
     input_data = [(str(i), ["_" + str(i), "_" + str(i)]) for i in range(100)]
 
-    with cloudstorage.open(filename, mode="w") as f:
+    bucket = storage_client.bucket(self.TEST_BUCKET)
+    blob = bucket.blob(filename)
+    with blob.open("wb") as f:
       with records.RecordsWriter(f) as w:
         for (k, v) in input_data:
           proto = kv_pb.KeyValues()
-          proto.set_key(k)
-          proto.value_list().extend(v)
-          w.write(proto.Encode())
-    reader = self.READER_CLS([filename])
+          proto.key = k
+          proto.value.extend(v)
+          b = proto.SerializeToString()
+          w.write(b)
+    reader = self.READER_CLS([f"/{self.TEST_BUCKET}/{filename}"])
 
     output_data = []
     for record in reader.__iter__():
       proto = kv_pb.KeyValues()
       proto.ParseFromString(record)
-      output_data.append((proto.key(), proto.value_list()))
+      output_data.append((proto.key, proto.value))
 
     self.assertEqual(input_data, output_data)
     self.assertRaises(StopIteration, reader.__next__)
@@ -2682,7 +2689,7 @@ class GoogleCloudStorageRecordInputReaderTest(GoogleCloudStorageInputTestBase):
       filename = "/%s/file-%03d" % (self.TEST_BUCKET, file_num)
       data_set = []
       for record_num in range(10):  # Make 10 records, each 30 chars long
-        data_set.append(("%03d" % record_num) * 10)
+        data_set.append((b"%03d" % record_num) * 10)
       self.create_test_file(filename, data_set)
       filenames.append(filename)
       all_data.append(data_set)
@@ -2700,7 +2707,7 @@ class GoogleCloudStorageRecordInputReaderTest(GoogleCloudStorageInputTestBase):
       filename = "/%s/file-%03d" % (self.TEST_BUCKET, file_num)
       data_set = []
       for record_num in range(file_num % 5):  # Make up to 4 records
-        data_set.append(("%03d" % record_num) * 10)
+        data_set.append((b"%03d" % record_num) * 10)
       self.create_test_file(filename, data_set)
       filenames.append(filename)
       all_data.append(data_set)
@@ -2718,7 +2725,7 @@ class GoogleCloudStorageRecordInputReaderTest(GoogleCloudStorageInputTestBase):
       filename = "/%s/file-%03d" % (self.TEST_BUCKET, file_num)
       data_set = []
       for record_num in range(file_num % 5):  # Make up to 4 records
-        data_set.append(("%03d" % record_num) * 10)
+        data_set.append((b"%03d" % record_num) * 10)
       self.create_test_file(filename, data_set)
       filenames.append(filename)
       all_data.append(data_set)
@@ -2745,7 +2752,7 @@ class GoogleCloudStorageRecordInputReaderTest(GoogleCloudStorageInputTestBase):
       filename = "/%s/file-%03d" % (self.TEST_BUCKET, file_num)
       data_set = []
       for record_num in range(10):  # Make 10 records, each 30 chars long
-        data_set.append(("%03d" % record_num) * 10)
+        data_set.append((b"%03d" % record_num) * 10)
       self.create_test_file(filename, data_set)
       filenames.append(filename)
       all_data.append(data_set)

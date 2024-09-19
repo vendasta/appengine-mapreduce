@@ -39,7 +39,7 @@ import time
 import unittest
 import json
 
-import mock
+from unittest import mock
 
 from google.appengine.api import apiproxy_stub_map
 from google.appengine.api import datastore
@@ -80,7 +80,7 @@ class TestHooks(hooks.Hooks):
   enqueue_kickoff_task_calls = []
 
   def __init__(self, mapper):
-    super(TestHooks, self).__init__(mapper)
+    super().__init__(mapper)
 
   def enqueue_worker_task(self, task, queue_name):
     self.enqueue_worker_task_calls.append((task, queue_name))
@@ -117,7 +117,7 @@ def TestMap(entity):
   pass
 
 
-class MockTime(object):
+class MockTime:
   """Simple class to use for mocking time() function."""
 
   now = time.time()
@@ -139,7 +139,7 @@ class TestEntity(db.Model):
   a = db.IntegerProperty(default=1)
 
 
-class TestHandler(object):
+class TestHandler:
   """Test handler which stores all processed entities keys.
 
   Properties:
@@ -229,7 +229,7 @@ class InputReader(input_readers.DatastoreInputReader):
   next_instance_id = 0
 
   def __init__(self, iterator, instance_id=None):
-    super(InputReader, self).__init__(iterator)
+    super().__init__(iterator)
     self.instance_id = instance_id
 
   def __iter__(self):
@@ -659,7 +659,7 @@ class StartJobHandlerTest(testutil.HandlerTestBase):
 
   def setUp(self):
     """Sets up the test harness."""
-    super(StartJobHandlerTest, self).setUp()
+    super().setUp()
     self.handler = handlers.StartJobHandler()
     self.handler.initialize(mock_webapp.MockRequest(),
                             mock_webapp.MockResponse())
@@ -843,7 +843,7 @@ class StartJobHandlerFunctionalTest(testutil.HandlerTestBase):
   HOOKS = __name__ + ".TestHooks"
 
   def setUp(self):
-    super(StartJobHandlerFunctionalTest, self).setUp()
+    super().setUp()
     self.mapper_spec = model.MapperSpec(
         handler_spec=self.HANLDER_SPEC,
         input_reader_spec=self.INPUT_READER_SPEC,
@@ -979,14 +979,14 @@ class KickOffJobHandlerTest(testutil.HandlerTestBase):
   HOOKS = __name__ + ".TestHooks"
 
   def setUp(self):
-    super(KickOffJobHandlerTest, self).setUp()
+    super().setUp()
     TestHooks.reset()
     InputReader.reset()
     TestOutputWriter.reset()
     self._original_reschedule = handlers.ControllerCallbackHandler.reschedule
 
   def tearDown(self):
-    super(KickOffJobHandlerTest, self).tearDown()
+    super().tearDown()
     handlers.ControllerCallbackHandler.reschedule = self._original_reschedule
 
   def createDummyHandler(self):
@@ -1199,7 +1199,7 @@ class MapperWorkerCallbackHandlerLeaseTest(testutil.HandlerTestBase):
   PREVIOUS_REQUEST_ID = "19991231a"
 
   def setUp(self):
-    super(MapperWorkerCallbackHandlerLeaseTest, self).setUp()
+    super().setUp()
     os.environ["REQUEST_LOG_ID"] = self.CURRENT_REQUEST_ID
 
     self.mr_spec = None
@@ -1219,7 +1219,7 @@ class MapperWorkerCallbackHandlerLeaseTest(testutil.HandlerTestBase):
 
   def tearDown(self):
     parameters.config._SLICE_DURATION_SEC = self._original_duration
-    super(MapperWorkerCallbackHandlerLeaseTest, self).tearDown()
+    super().tearDown()
 
   def _init_job(self, handler_spec=MAPPER_HANDLER_SPEC):
     """Init job specs."""
