@@ -158,23 +158,6 @@ def _create_entities(keys_itr,
   return entities
 
 
-class MatchesUserRPC(mock.Mock):
-  """Mox comparator for UserRPC objects."""
-
-  def __init__(self, **kwargs):
-    super().__init__()
-    self.kwargs = kwargs
-
-  def matches(self, rpc):
-    """Check to see if rpc matches arguments."""
-    if self.kwargs.get("deadline", None) != rpc.deadline:
-      return False
-    return True
-
-  def __repr__(self):
-    return "MatchesUserRPC(%s)" % self.kwargs
-
-
 class HandlerTestBase(unittest.TestCase):
   """Base class for all webapp.RequestHandler tests."""
 

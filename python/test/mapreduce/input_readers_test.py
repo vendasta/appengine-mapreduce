@@ -961,7 +961,7 @@ class BlobstoreLineInputReaderBlobstoreStubTest(unittest.TestCase):
   """Test the BlobstoreLineInputReader using the blobstore_stub.
 
   This test uses the blobstore stub to store the test data, vs the other
-  test which uses mox and the like to simulate the blobstore having data.
+  test which uses mocks and the like to simulate the blobstore having data.
   """
 
   def setUp(self):

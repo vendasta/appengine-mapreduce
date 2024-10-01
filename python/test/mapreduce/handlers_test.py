@@ -39,7 +39,7 @@ import time
 import unittest
 import json
 
-from unittest import mock
+import unittest.mock as mock
 
 from google.appengine.api import apiproxy_stub_map
 from google.appengine.api import datastore
@@ -366,22 +366,6 @@ class UnfinalizableTestOutputWriter(TestOutputWriter):
 
   def finalize(self, ctx, shard_state):
     raise Exception("This will always break")
-
-
-class MatchesContext(mox.Comparator):
-  """Mox comparator to match context instances."""
-
-  def __init__(self, **kwargs):
-    self.kwargs = kwargs
-
-  def equals(self, ctx):
-    """Check to see if ctx matches arguments."""
-    if self.kwargs.get("task_retry_count", 0) != ctx.task_retry_count:
-      return False
-    return True
-
-  def __repr__(self):
-    return "MatchesContext(%s)" % self.kwargs
 
 
 ENTITY_KIND = f"{TestEntity.__module__}.TestEntity"
@@ -2252,16 +2236,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.init(__name__ + ".test_handler_raise_exception")
     TestEntity().put()
 
-    # Stub out context._set
-    m = mox.Mox()
-    m.StubOutWithMock(context.Context, "_set", use_mock_anything=True)
-
-    # Record calls
-    context.Context._set(mox.IsA(context.Context))
-    context.Context._set(None)
-
-    m.ReplayAll()
-    try: # test, verify
+    with mock.patch.object(context.Context, "_set") as mock_set:
       self.handler.post()
       self.assertEqual(http.client.SERVICE_UNAVAILABLE,
                        self.handler.response.status)
@@ -2277,25 +2252,14 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
       tasks = self.taskqueue.GetTasks("default")
       self.assertEqual(0, len(tasks))
 
-      m.VerifyAll()
-    finally:
-      m.UnsetStubs()
+      mock_set.assert_called()
 
   def testFailJobExceptionInHandler(self):
     """Test behavior when handler throws exception."""
     self.init(__name__ + ".test_handler_raise_fail_job_exception")
     TestEntity().put()
 
-    # Stub out context._set
-    m = mox.Mox()
-    m.StubOutWithMock(context.Context, "_set", use_mock_anything=True)
-
-    # Record calls
-    context.Context._set(mox.IsA(context.Context))
-    context.Context._set(None)
-
-    m.ReplayAll()
-    try: # test, verify
+    with mock.patch.object(context.Context, "_set") as mock_set:
       self.handler.post()
 
       # slice should not be active
@@ -2312,9 +2276,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
       tasks = self.taskqueue.GetTasks("default")
       self.assertEqual(0, len(tasks))
 
-      m.VerifyAll()
-    finally:
-      m.UnsetStubs()
+      mock_set.assert_called()
 
   def testContext(self):
     """Test proper context initialization."""
@@ -2333,26 +2295,15 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     """Test context handling."""
     TestEntity().put()
 
-    # Stub out context
-    m = mox.Mox()
-    m.StubOutWithMock(context.Context, "_set", use_mock_anything=True)
-    m.StubOutWithMock(context.Context, "flush", use_mock_anything=True)
-
-    # Record calls
-    context.Context._set(mox.IsA(context.Context))
-    context.Context.flush()
-    context.Context._set(None)
-
-    m.ReplayAll()
-    try: # test, verify
+    with mock.patch.object(context.Context, "_set") as mock_set, \
+         mock.patch.object(context.Context, "flush") as mock_flush:
       self.handler.post()
 
       #  1 entity should be processed
       self.assertEqual(1, len(TestHandler.processed_keys))
 
-      m.VerifyAll()
-    finally:
-      m.UnsetStubs()
+      mock_set.assert_called()
+      mock_flush.assert_called_once()
 
   def testOperationYield(self):
     """Test yielding operations from handler."""
