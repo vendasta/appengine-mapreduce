@@ -2,8 +2,6 @@
 """Tests for mapper interface."""
 
 import collections
-from unittest import mock
-from unittest.mock import patch
 
 from google.cloud import storage
 from testlib import testutil
@@ -107,7 +105,7 @@ class MapperTest(testutil.HandlerTestBase):
                 "end_slice\n": MyMapper.slices,
                 "begin_slice\n": MyMapper.slices}
     
-    storage_client = storage.Client(project='repcore-prod')
+    storage_client = storage.Client()
     bucket = storage_client.get_bucket("byates")
     for fn in files:
         blob = bucket.blob(fn)

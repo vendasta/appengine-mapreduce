@@ -3,8 +3,6 @@
 
 # Using opensource naming conventions, pylint: disable=g-bad-name
 
-import unittest
-
 from mapreduce import model
 from mapreduce import parameters
 from mapreduce import test_support
@@ -14,7 +12,7 @@ from mapreduce.lib import input_reader
 
 from google.cloud import storage
 
-storage_client = storage.Client(project="repcore-prod")
+storage_client = storage.Client()
 
 # Global for collecting data across all map shards
 _memory_mapper_data = []
@@ -117,5 +115,4 @@ class GCSInputReaderEndToEndTest(testutil.CloudStorageTestBase):
     # Force a new slice on every item processed.
     parameters.config._SLICE_DURATION_SEC = -1
     self._run_test(num_shards=4, num_files=10, multi_slices=True)
-
 

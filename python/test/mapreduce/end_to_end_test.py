@@ -30,7 +30,7 @@ from testlib import testutil
 
 from google.cloud import exceptions, storage
 
-storage_client = storage.Client(project="repcore-prod")
+storage_client = storage.Client()
 
 def random_string(length):
   """Generate a random string of given length."""

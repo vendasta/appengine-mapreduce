@@ -27,7 +27,7 @@ from testlib import testutil
 
 from google.cloud import storage
 
-storage_client = storage.Client(project="repcore-prod")
+storage_client = storage.Client()
 
 class GCSRecordsPoolTest(testutil.CloudStorageTestBase):
   """Tests for GCSRecordsPool."""
@@ -38,7 +38,6 @@ class GCSRecordsPoolTest(testutil.CloudStorageTestBase):
     bucket_name = "byates"
     test_filename = "testfile"
 
-    storage_client = storage.Client(project="repcore-prod")
     bucket = storage_client.get_bucket(bucket_name)
     self.blob = bucket.blob(test_filename)
     if self.blob.exists():

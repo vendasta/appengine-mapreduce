@@ -167,8 +167,7 @@ class RecordsWriter:
 
     self.__writer.write(
         struct.pack(_HEADER_FORMAT, _mask_crc(crc), length, record_type))
-    if isinstance(data, str):
-      data = data.encode('utf-8')
+
     self.__writer.write(data)
     self.__position += _HEADER_LENGTH + length
 

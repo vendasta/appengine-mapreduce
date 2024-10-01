@@ -234,7 +234,7 @@ class MapreducePipeline(pipeline_base._OutputSlotsMixin,
     with pipeline.After(reducer_pipeline):
       all_temp_files = yield pipeline_common.Extend(
           map_pipeline, shuffler_pipeline)
-      yield CleanupPipeline(all_temp_files)
+      yield CleanupPipeline(mapper_params["bucket_name"], all_temp_files)
 
     yield _ReturnPipeline(map_pipeline.result_status,
                           reducer_pipeline.result_status,

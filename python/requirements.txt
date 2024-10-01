@@ -6,4 +6,4 @@ invoke
 gunicorn
 Flask
 google-cloud-storage
-GoogleAppEnginePipeline==2.0.0a0
+GoogleAppEnginePipeline==2.0.0a7

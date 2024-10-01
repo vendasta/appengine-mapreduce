@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # Copyright 2011 Google Inc. All Rights Reserved.
 
-import unittest
 
 import pipeline
 
@@ -40,7 +39,7 @@ class HashEndToEndTest(testutil.HandlerTestBase):
     test_filename = "testfile"
     full_filename = "/{}/{}".format(bucket_name, test_filename)   
 
-    storage_client = storage.Client(project='repcore-prod')
+    storage_client = storage.Client()
     bucket = storage_client.get_bucket(bucket_name)
     blob = bucket.blob(test_filename)
     

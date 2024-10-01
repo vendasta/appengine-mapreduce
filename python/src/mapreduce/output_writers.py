@@ -57,7 +57,7 @@ from mapreduce import shard_life_cycle
 from google.cloud import storage, exceptions
 from google.cloud.storage.fileio import BlobWriter
 
-storage_client = storage.Client(project='repcore-prod')
+storage_client = storage.Client()
 
 # Counter name for number of bytes written.
 COUNTER_IO_WRITE_BYTES = "io-write-bytes"

@@ -54,7 +54,7 @@ from mapreduce import util
 from google.cloud import storage
 from google.api_core.retry import Retry
 
-storage_client = storage.Client(project='repcore-prod')
+storage_client = storage.Client()
 
 class _OutputFile(db.Model):
   """Entity to store output filenames of pipelines.

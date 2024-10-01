@@ -35,7 +35,7 @@ from mapreduce.api import map_job
 
 from google.cloud import storage, exceptions
 
-storage_client = storage.Client(project="repcore-prod")
+storage_client = storage.Client()
 
 class PathFilter:
   """Path filter for GCSInputReader."""

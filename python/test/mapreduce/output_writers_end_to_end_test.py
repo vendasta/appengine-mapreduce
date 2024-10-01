@@ -21,7 +21,7 @@ from testlib import testutil
 
 from google.cloud import storage
 
-storage_client = storage.Client(project="repcore-prod")
+storage_client = storage.Client()
 
 DATASTORE_READER_NAME = (input_readers.__name__ + "." +
                          input_readers.DatastoreInputReader.__name__)

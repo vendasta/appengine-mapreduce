@@ -34,6 +34,7 @@ __all__ = [
     "strip_prefix_from_items"
     ]
 
+import base64
 import inspect
 import os
 import pickle
@@ -290,7 +291,7 @@ def try_serialize_handler(handler):
     not inspect.isfunction(handler) and
     not inspect.ismethod(handler)) and
     hasattr(handler, "__call__")):
-    return pickle.dumps(handler).decode("latin1")
+    return base64.b64encode(pickle.dumps(handler)).decode("utf-8")
   return None
 
 
@@ -304,7 +305,7 @@ def try_deserialize_handler(serialized_handler):
     handler instance or None.
   """
   if serialized_handler:
-    return pickle.loads(serialized_handler.encode("latin1"))
+    return pickle.loads(base64.b64decode(serialized_handler.encode("utf-8")))
 
 
 def is_generator(obj):

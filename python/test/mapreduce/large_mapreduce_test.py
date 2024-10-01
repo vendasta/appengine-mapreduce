@@ -22,7 +22,7 @@ from testlib import testutil
 
 from google.cloud import storage
 
-storage_client = storage.Client(project="repcore-prod")
+storage_client = storage.Client()
 
 
 class FakeEntity(db.Model):
@@ -34,12 +34,12 @@ class FakeEntity(db.Model):
 def map_yield_lots_of_values(entity):
   """Test map handler that yields lots of pairs."""
   for _ in range(50000):
-    yield (1, b" " * 100)
+    yield (1, " " * 100)
 
 
 def reduce_length(key, values):
   """Reduce function yielding a string with key and values length."""
-  yield str((key, len(values))).encode()
+  yield str((key, len(values)))
 
 
 class LargeMapreduceTest(testutil.HandlerTestBase):
@@ -95,6 +95,4 @@ class LargeMapreduceTest(testutil.HandlerTestBase):
     expected_data.sort()
     output_data.sort()
     self.assertEqual(expected_data, output_data)
-
-
 

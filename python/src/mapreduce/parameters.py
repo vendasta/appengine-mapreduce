@@ -17,6 +17,7 @@
 __all__ = ["CONFIG_NAMESPACE",
            "config"]
 
+import base64
 import pickle
 
 
@@ -164,11 +165,11 @@ class _Config(metaclass=_JobConfigMeta):
     return str(self.__dict__)
 
   def to_json(self):
-    return {"config": pickle.dumps(self).decode("latin1")}
-
+    return {"config": base64.b64encode(pickle.dumps(self)).decode("utf-8")}
+  
   @classmethod
   def from_json(cls, json):
-    return pickle.loads(json["config"].encode("latin1"))
+    return pickle.loads(base64.b64decode(json["config"].encode("utf-8")))
 
 
 # TODO(user): Make more of these private.

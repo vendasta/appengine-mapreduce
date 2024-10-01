@@ -75,7 +75,7 @@ from mapreduce import util
 
 from google.cloud import storage, exceptions
 
-storage_client = storage.Client(project='repcore-prod')
+storage_client = storage.Client()
 
 # Classes moved to errors module. Copied here for compatibility.
 Error = errors.Error

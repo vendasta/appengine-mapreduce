@@ -59,7 +59,7 @@ from mapreduce import namespace_range
 from mapreduce import records
 from testlib import testutil
 
-storage_client = storage.Client(project="repcore-prod")
+storage_client = storage.Client()
 
 class AbstractDatastoreInputReaderTest(unittest.TestCase):
   """Tests for AbstractDatastoreInputReader."""
@@ -1508,7 +1508,7 @@ class BlobstoreZipLineInputReaderTest(unittest.TestCase):
         offset_info, line = next(reader)
         self.assertEqual("blob0", offset_info[0])
         self.assertEqual(file_number, offset_info[1])
-        self.assertEqual("archive {} file {} line {}".format(0, file_number, i).encode(), line)
+        self.assertEqual(f"archive {0} file {file_number} line {i}".encode(), line)
 
     self.assertRaises(StopIteration, reader.__next__)
 
@@ -2062,7 +2062,7 @@ class ReducerReaderTest(testutil.HandlerTestBase):
     # bucket_name = "testbucket"
     bucket_name = "byates"
     test_filename = "testfile"
-    full_filename = "/{}/{}".format(bucket_name, test_filename)
+    full_filename = f"/{bucket_name}/{test_filename}"
 
     bucket = storage_client.get_bucket(bucket_name)
     blob = bucket.blob(test_filename)
@@ -2239,7 +2239,7 @@ class GoogleCloudStorageInputReaderWithDelimiterTest(
     self.test_num_files = 20
     self.test_filenames = []
     for file_num in range(self.test_num_files):
-      filename = "/%s/file-%03d" % (self.test_bucket, file_num)
+      filename = f"/{self.test_bucket}/{self._testMethodName}/file-{file_num:03d}"
       self.test_filenames.append(filename)
       self.create_test_file(filename, "foo")
 
@@ -2249,7 +2249,7 @@ class GoogleCloudStorageInputReaderWithDelimiterTest(
     self.filenames_in_first_10_dirs = []
     for d in range(self.dirs):
       for file_num in range(self.file_per_dir):
-        filename = "/%s/dir-%02d/file-%03d" % (self.test_bucket, d, file_num)
+        filename = f"/{self.test_bucket}/{self._testMethodName}/dir-{d:02d}/file-{file_num:03d}"
         if d < 10:
           self.filenames_in_first_10_dirs.append(filename)
         self.create_test_file(filename, "foo")
@@ -2375,7 +2375,7 @@ class GoogleCloudStorageInputReaderTest(GoogleCloudStorageInputTestBase):
     for file_num in range(self.test_num_files):
       content = "Dummy Content %03d" % file_num
       self.test_content.append(content)
-      filename = "/%s/file-%03d" % (self.test_bucket, file_num)
+      filename = f"/{self.test_bucket}/{self._testMethodName}/file-{file_num:03d}"
       self.test_filenames.append(filename)
       self.create_test_file(filename, content)
 
@@ -2626,14 +2626,14 @@ class GoogleCloudStorageRecordInputReaderTest(GoogleCloudStorageInputTestBase):
     test_file.close()
 
   def testSingleFileNoRecord(self):
-    filename = "/%s/empty-file" % self.TEST_BUCKET
+    filename = f"/{self.TEST_BUCKET}/{self._testMethodName}/empty-file"
     self.create_test_file(filename, [])
     reader = self.READER_CLS([filename])
 
     self.assertRaises(StopIteration, reader.__next__)
 
   def testSingleFileOneRecord(self):
-    filename = "/%s/single-record-file" % self.TEST_BUCKET
+    filename = f"/{self.TEST_BUCKET}/{self._testMethodName}/single-record-file"
     data = b"foobardata"
     self.create_test_file(filename, [data])
     reader = self.READER_CLS([filename])
@@ -2642,7 +2642,7 @@ class GoogleCloudStorageRecordInputReaderTest(GoogleCloudStorageInputTestBase):
     self.assertRaises(StopIteration, reader.__next__)
 
   def testSingleFileManyRecords(self):
-    filename = "/%s/many-records-file" % self.TEST_BUCKET
+    filename = f"/{self.TEST_BUCKET}/{self._testMethodName}/many-records-file"
     data = []
     for record_num in range(100):  # Make 100 records
       data.append((b"%03d" % record_num) * 10)  # Make each record 30 chars long
@@ -2656,7 +2656,7 @@ class GoogleCloudStorageRecordInputReaderTest(GoogleCloudStorageInputTestBase):
     self.assertRaises(StopIteration, reader.__next__)
 
   def testSingleFileManyKeyValuesRecords(self):
-    filename = "many-key-values-records-file"
+    filename = f"{self._testMethodName}/many-key-values-records-file"
     input_data = [(str(i), ["_" + str(i), "_" + str(i)]) for i in range(100)]
 
     bucket = storage_client.bucket(self.TEST_BUCKET)
@@ -2686,7 +2686,7 @@ class GoogleCloudStorageRecordInputReaderTest(GoogleCloudStorageInputTestBase):
     filenames = []
     all_data = []
     for file_num in range(10):  # Make 10 files
-      filename = "/%s/file-%03d" % (self.TEST_BUCKET, file_num)
+      filename = f"/{self.TEST_BUCKET}/{self._testMethodName}/file-{file_num:03d}"
       data_set = []
       for record_num in range(10):  # Make 10 records, each 30 chars long
         data_set.append((b"%03d" % record_num) * 10)
@@ -2704,7 +2704,7 @@ class GoogleCloudStorageRecordInputReaderTest(GoogleCloudStorageInputTestBase):
     filenames = []
     all_data = []
     for file_num in range(50):  # Make 10 files
-      filename = "/%s/file-%03d" % (self.TEST_BUCKET, file_num)
+      filename = f"/{self.TEST_BUCKET}/{self._testMethodName}/file-{file_num:03d}"
       data_set = []
       for record_num in range(file_num % 5):  # Make up to 4 records
         data_set.append((b"%03d" % record_num) * 10)
@@ -2722,7 +2722,7 @@ class GoogleCloudStorageRecordInputReaderTest(GoogleCloudStorageInputTestBase):
     filenames = []
     all_data = []
     for file_num in range(50):  # Make 10 files
-      filename = "/%s/file-%03d" % (self.TEST_BUCKET, file_num)
+      filename = f"/{self.TEST_BUCKET}/{self._testMethodName}/file-{file_num:03d}"
       data_set = []
       for record_num in range(file_num % 5):  # Make up to 4 records
         data_set.append((b"%03d" % record_num) * 10)
@@ -2749,7 +2749,7 @@ class GoogleCloudStorageRecordInputReaderTest(GoogleCloudStorageInputTestBase):
     filenames = []
     all_data = []
     for file_num in range(10):  # Make 10 files
-      filename = "/%s/file-%03d" % (self.TEST_BUCKET, file_num)
+      filename = f"/{self.TEST_BUCKET}/{self._testMethodName}/file-{file_num:03d}"
       data_set = []
       for record_num in range(10):  # Make 10 records, each 30 chars long
         data_set.append((b"%03d" % record_num) * 10)

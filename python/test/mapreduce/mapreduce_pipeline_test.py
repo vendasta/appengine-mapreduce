@@ -17,7 +17,7 @@ from testlib import testutil
 
 from google.cloud import storage
 
-storage_client = storage.Client(project="repcore-prod")
+storage_client = storage.Client()
 
 
 class FakeEntity(db.Model):

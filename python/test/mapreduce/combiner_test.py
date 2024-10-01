@@ -19,6 +19,8 @@ from mapreduce import shuffler
 from mapreduce import test_support
 from testlib import testutil
 
+from google.cloud import storage
+
 
 class FakeEntity(db.Model):
   """Test entity class."""
@@ -109,8 +111,10 @@ class CombinerTest(testutil.HandlerTestBase):
     p = mapreduce_pipeline.MapreducePipeline.from_id(p.pipeline_id)
     self.assertEqual(4, len(p.outputs.default.value))
     file_content = []
+    bucket = storage.Client().get_bucket(bucket_name)
     for input_file in p.outputs.default.value:
-      with cloudstorage.open(input_file) as infile:
+      blob = bucket.blob(input_file)
+      with blob.open("r") as infile:
         for line in infile:
           file_content.append(line.strip())
 
