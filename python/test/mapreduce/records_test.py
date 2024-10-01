@@ -72,7 +72,7 @@ class RecordsTest(unittest.TestCase):
     writer = StringWriter()
 
     with records.RecordsWriter(writer) as w:
-      w.write('')
+      w.write(b'')
       self.assertSequenceEqual(
           [
               # Record 1
@@ -101,7 +101,7 @@ class RecordsTest(unittest.TestCase):
     writer = StringWriter()
 
     with records.RecordsWriter(writer) as w:
-      w.write('1' * 13)
+      w.write(b'1' * 13)
 
       self.assertSequenceEqual(
           [
@@ -133,7 +133,7 @@ class RecordsTest(unittest.TestCase):
     writer = StringWriter()
 
     with records.RecordsWriter(writer) as w:
-      w.write('1' * 10)
+      w.write(b'1' * 10)
 
       self.assertSequenceEqual(
           [
@@ -146,7 +146,7 @@ class RecordsTest(unittest.TestCase):
           ],
           writer.tolist())
 
-      w.write('1' * 10)
+      w.write(b'1' * 10)
 
       self.assertSequenceEqual(
           [
@@ -192,7 +192,7 @@ class RecordsTest(unittest.TestCase):
     writer = StringWriter()
 
     with records.RecordsWriter(writer) as w:
-      w.write('1' * 60)
+      w.write(b'1' * 60)
 
     self.assertSequenceEqual(
         [
@@ -239,8 +239,8 @@ class RecordsTest(unittest.TestCase):
     writer = StringWriter()
 
     with records.RecordsWriter(writer) as w:
-      w.write('1' * 6)
-      w.write('1' * 10)
+      w.write(b'1' * 6)
+      w.write(b'1' * 10)
     self.assertSequenceEqual(
         [
             # Record 1
@@ -268,7 +268,7 @@ class RecordsTest(unittest.TestCase):
     writer = StringWriter()
 
     with records.RecordsWriter(writer) as w:
-      w.write('')
+      w.write(b'')
       w._pad_block()
       w._pad_block()
       w._pad_block()
@@ -283,11 +283,11 @@ class RecordsTest(unittest.TestCase):
     writer = StringWriter()
 
     with records.RecordsWriter(writer) as w:
-      w.write('')
+      w.write(b'')
       w._pad_block()
 
     with records.RecordsWriter(writer) as w:
-      w.write('')
+      w.write(b'')
 
     reader = records.RecordsReader(StringReader(writer.data))
 
@@ -301,11 +301,11 @@ class RecordsTest(unittest.TestCase):
     writer = StringWriter()
 
     with records.RecordsWriter(writer) as w:
-      w.write('1' * 13)
+      w.write(b'1' * 13)
       w._pad_block()
 
     with records.RecordsWriter(writer) as w:
-      w.write('1' * 13)
+      w.write(b'1' * 13)
 
     reader = records.RecordsReader(StringReader(writer.data))
 
@@ -318,8 +318,8 @@ class RecordsTest(unittest.TestCase):
     writer = StringWriter()
 
     with records.RecordsWriter(writer) as w:
-      w.write('1' * 10)
-      w.write('1' * 10)
+      w.write(b'1' * 10)
+      w.write(b'1' * 10)
 
     reader = records.RecordsReader(StringReader(writer.data))
 
@@ -356,8 +356,8 @@ class RecordsTest(unittest.TestCase):
     writer = StringWriter()
 
     with records.RecordsWriter(writer) as w:
-      w.write('1' * 6)
-      w.write('1' * 10)
+      w.write(b'1' * 6)
+      w.write(b'1' * 10)
 
     reader = records.RecordsReader(StringReader(writer.data))
 
@@ -371,11 +371,11 @@ class RecordsTest(unittest.TestCase):
 
     with records.RecordsWriter(writer) as w:
       # Block 1
-      w.write('1' * 2)
-      w.write('1' * 2)
+      w.write(b'1' * 2)
+      w.write(b'1' * 2)
       # Block 2
-      w.write('1' * 2)
-      w.write('1' * 2)
+      w.write(b'1' * 2)
+      w.write(b'1' * 2)
 
     data = writer.data
     data = b'_' + data[1:]
@@ -392,9 +392,9 @@ class RecordsTest(unittest.TestCase):
 
     with records.RecordsWriter(writer) as w:
       # Blocks 1-6
-      w.write('1' * 100)
+      w.write(b'1' * 100)
       # Block 7
-      w.write('1' * 2)
+      w.write(b'1' * 2)
 
     data = writer.data
     data = b'_' + data[1:]
@@ -410,11 +410,11 @@ class RecordsTest(unittest.TestCase):
 
     with records.RecordsWriter(writer) as w:
       # Block 1
-      w.write('1' * 2)
-      w.write('1' * 2)
+      w.write(b'1' * 2)
+      w.write(b'1' * 2)
       # Block 2
-      w.write('1' * 2)
-      w.write('1' * 2)
+      w.write(b'1' * 2)
+      w.write(b'1' * 2)
 
     data = writer.data
     # replace length by 65535
@@ -433,11 +433,11 @@ class RecordsTest(unittest.TestCase):
     with records.RecordsWriter(writer) as w:
       # Fake first record that should be ignored
       w._RecordsWriter__write_record(
-          records._RECORD_TYPE_FIRST, 'A' * (records._BLOCK_SIZE // 2))
+          records._RECORD_TYPE_FIRST, b'A' * (records._BLOCK_SIZE // 2))
 
       # Multi-block record. This will cause 'A' to be ignored because
       # of a repeated first record.
-      w.write('B' * 2 * records._BLOCK_SIZE)
+      w.write(b'B' * 2 * records._BLOCK_SIZE)
 
     data = writer.data
     reader = records.RecordsReader(StringReader(data))
@@ -451,10 +451,10 @@ class RecordsTest(unittest.TestCase):
     with records.RecordsWriter(writer) as w:
       # Fake first record that should be ignored
       w._RecordsWriter__write_record(
-          records._RECORD_TYPE_FIRST, 'A' * (records._BLOCK_SIZE // 2))
+          records._RECORD_TYPE_FIRST, b'A' * (records._BLOCK_SIZE // 2))
 
       # Single-block, "full" record.
-      w.write('B' * (records._BLOCK_SIZE // 4))
+      w.write(b'B' * (records._BLOCK_SIZE // 4))
 
     data = writer.data
     reader = records.RecordsReader(StringReader(data))
@@ -468,10 +468,10 @@ class RecordsTest(unittest.TestCase):
     with records.RecordsWriter(writer) as w:
       # Fake middle record that should be ignored
       w._RecordsWriter__write_record(
-        records._RECORD_TYPE_MIDDLE, 'A' * (records._BLOCK_SIZE // 2))
+        records._RECORD_TYPE_MIDDLE, b'A' * (records._BLOCK_SIZE // 2))
 
       # Single-block, "full" record.
-      w.write('B' * (records._BLOCK_SIZE // 4))
+      w.write(b'B' * (records._BLOCK_SIZE // 4))
 
     data = writer.data
     reader = records.RecordsReader(StringReader(data))
@@ -485,10 +485,10 @@ class RecordsTest(unittest.TestCase):
     with records.RecordsWriter(writer) as w:
       # Fake last record that should be ignored
       w._RecordsWriter__write_record(
-          records._RECORD_TYPE_LAST, 'A' * (records._BLOCK_SIZE // 2))
+          records._RECORD_TYPE_LAST, b'A' * (records._BLOCK_SIZE // 2))
 
       # Single-block, "full" record.
-      w.write('B' * (records._BLOCK_SIZE // 4))
+      w.write(b'B' * (records._BLOCK_SIZE // 4))
 
     data = writer.data
     reader = records.RecordsReader(StringReader(data))
@@ -500,10 +500,10 @@ class RecordsTest(unittest.TestCase):
     writer = StringWriter()
 
     with records.RecordsWriter(writer) as w:
-      w.write('1' * 1)
-      w.write('2' * 2)
-      w.write('3' * 3)
-      w.write('4' * 4)
+      w.write(b'1' * 1)
+      w.write(b'2' * 2)
+      w.write(b'3' * 3)
+      w.write(b'4' * 4)
 
     reader = records.RecordsReader(StringReader(writer.data))
     self.assertEqual([b'1', b'22', b'333', b'4444'], list(reader))
@@ -514,11 +514,11 @@ class RecordsTest(unittest.TestCase):
 
     with records.RecordsWriter(writer) as w:
       # Block 1
-      w.write('1' * 2)
-      w.write('1' * 2)
+      w.write(b'1' * 2)
+      w.write(b'1' * 2)
       # Block 2
-      w.write('1' * 2)
-      w.write('1' * 2)
+      w.write(b'1' * 2)
+      w.write(b'1' * 2)
 
     data = writer.data
 
