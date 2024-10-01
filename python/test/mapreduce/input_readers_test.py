@@ -59,7 +59,7 @@ from mapreduce import namespace_range
 from mapreduce import records
 from testlib import testutil
 
-storage_client = storage.Client()
+_storage_client = storage.Client()
 
 class AbstractDatastoreInputReaderTest(unittest.TestCase):
   """Tests for AbstractDatastoreInputReader."""
@@ -2064,7 +2064,7 @@ class ReducerReaderTest(testutil.HandlerTestBase):
     test_filename = "testfile"
     full_filename = f"/{bucket_name}/{test_filename}"
 
-    bucket = storage_client.get_bucket(bucket_name)
+    bucket = _storage_client.get_bucket(bucket_name)
     blob = bucket.blob(test_filename)
     with blob.open("wb") as f:
       with records.RecordsWriter(f) as w:
@@ -2218,7 +2218,7 @@ class GoogleCloudStorageInputTestBase(testutil.CloudStorageTestBase):
         containing the filename will be used.
     """
     bucket_name, object_name = filename.split("/", 1)[1].split("/", 1)
-    bucket = storage_client.bucket(bucket_name)
+    bucket = _storage_client.bucket(bucket_name)
     blob = bucket.blob(object_name)
     blob.upload_from_string(content)
 
@@ -2567,7 +2567,7 @@ class GoogleCloudStorageInputReaderTest(GoogleCloudStorageInputTestBase):
                                               "objects": ["file-*"]}))
     self.assertEqual(1, len(readers))
 
-    bucket = storage_client.bucket(self.test_bucket)
+    bucket = _storage_client.bucket(self.test_bucket)
     # Remove the first and second to last files.
     bucket.blob(self.test_filenames[0].lstrip(f'/{self.test_bucket}/')).delete()
     bucket.blob(self.test_filenames[-2].lstrip(f'/{self.test_bucket}/')).delete()
@@ -2617,7 +2617,7 @@ class GoogleCloudStorageRecordInputReaderTest(GoogleCloudStorageInputTestBase):
       content: list of content to put in file in LevelDB format.
     """
     bucket_name, object_name = filename.split("/", 1)[1].split("/", 1)
-    bucket = storage_client.bucket(bucket_name)
+    bucket = _storage_client.bucket(bucket_name)
     blob = bucket.blob(object_name)
     test_file = blob.open("wb")
     with records.RecordsWriter(test_file) as w:
@@ -2659,7 +2659,7 @@ class GoogleCloudStorageRecordInputReaderTest(GoogleCloudStorageInputTestBase):
     filename = f"{self._testMethodName}/many-key-values-records-file"
     input_data = [(str(i), ["_" + str(i), "_" + str(i)]) for i in range(100)]
 
-    bucket = storage_client.bucket(self.TEST_BUCKET)
+    bucket = _storage_client.bucket(self.TEST_BUCKET)
     blob = bucket.blob(filename)
     with blob.open("wb") as f:
       with records.RecordsWriter(f) as w:

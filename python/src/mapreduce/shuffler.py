@@ -54,7 +54,7 @@ from mapreduce import util
 from google.cloud import storage
 from google.api_core.retry import Retry
 
-storage_client = storage.Client()
+_storage_client = storage.Client()
 
 class _OutputFile(db.Model):
   """Entity to store output filenames of pipelines.
@@ -475,7 +475,7 @@ class _HashingGCSOutputWriter(output_writers.OutputWriter):
     filename = (mr_spec.name + "/" + mr_spec.mapreduce_id +
                 "/shard-" + str(shard_number) + "-bucket-")
     
-    bucket = storage_client.get_bucket(bucket_name)
+    bucket = _storage_client.get_bucket(bucket_name)
 
     for i in range(shards):
       full_filename = f"{filename}{i}"
@@ -722,7 +722,7 @@ class _GCSCleanupPipeline(pipeline_base.PipelineBase):
   _MAX_RETRIES = 10
 
   def delete_file_or_list(self, bucket_name, filename_or_list):
-    bucket = storage_client.get_bucket(bucket_name)
+    bucket = _storage_client.get_bucket(bucket_name)
     if isinstance(filename_or_list, list):
       for filename in filename_or_list:
         self.delete_file_or_list(bucket_name, filename)

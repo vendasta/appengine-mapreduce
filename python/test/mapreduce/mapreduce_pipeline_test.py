@@ -17,7 +17,7 @@ from testlib import testutil
 
 from google.cloud import storage
 
-storage_client = storage.Client()
+_storage_client = storage.Client()
 
 
 class FakeEntity(db.Model):
@@ -161,7 +161,7 @@ class MapreducePipelineTest(testutil.HandlerTestBase):
     self.assertEqual(model.MapreduceState.RESULT_SUCCESS,
                      p.outputs.result_status.value)
     output_data = []
-    bucket = storage_client.get_bucket(bucket_name)
+    bucket = _storage_client.get_bucket(bucket_name)
     for output_file in p.outputs.default.value:
       with bucket.blob(output_file).open() as f:
         for record in records.RecordsReader(f):
@@ -174,7 +174,7 @@ class MapreducePipelineTest(testutil.HandlerTestBase):
     self.assertEqual(expected_data, output_data)
 
     # Verify that mapreduce doesn't leave intermediate files behind.
-    temp_file_stats = storage_client.listbucket(bucket_name)
+    temp_file_stats = _storage_client.listbucket(bucket_name)
     for stat in temp_file_stats:
       if stat.filename:
         self.assertFalse(

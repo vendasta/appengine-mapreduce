@@ -35,7 +35,7 @@ from mapreduce.api import map_job
 
 from google.cloud import storage, exceptions
 
-storage_client = storage.Client()
+_storage_client = storage.Client()
 
 class PathFilter:
   """Path filter for GCSInputReader."""
@@ -157,7 +157,7 @@ class GCSInputReader(map_job.InputReader):
         return filename
       bucket_name = filename.split("/")[1]
       prefix = filename.split("/", 2)[-1]
-      self._bucket = storage_client.list_blobs(bucket_name, prefix=prefix, delimiter=self._delimiter)
+      self._bucket = _storage_client.list_blobs(bucket_name, prefix=prefix, delimiter=self._delimiter)
       self._bucket_iter = iter(self._bucket)
 
   @classmethod
@@ -179,7 +179,7 @@ class GCSInputReader(map_job.InputReader):
           "%s is required for Google Cloud Storage" %
           cls.BUCKET_NAME_PARAM)
     try:
-      storage_client.get_bucket(reader_params[cls.BUCKET_NAME_PARAM])
+      _storage_client.get_bucket(reader_params[cls.BUCKET_NAME_PARAM])
     except exceptions.NotFound as error:
         raise errors.BadReaderParamsError("Bad bucket name, %s" % (error))
 
@@ -250,7 +250,7 @@ class GCSInputReader(map_job.InputReader):
     all_filenames = []
     for filename in filenames:
         if filename.endswith("*"):
-          blobs = storage_client.list_blobs(bucket_name, prefix=filename[:-1], delimiter=delimiter)
+          blobs = _storage_client.list_blobs(bucket_name, prefix=filename[:-1], delimiter=delimiter)
           for blob in blobs:
             if not delimiter or delimiter not in blob.name:
               all_filenames.append(f"/{bucket_name}/{blob.name}")
@@ -282,7 +282,7 @@ class GCSInputReader(map_job.InputReader):
       prefix = state["bucket"]["prefix"]
       delimiter = state["bucket"]["delimiter"]
       start_offset = state["bucket"]["start_offset"]
-      obj._bucket = storage_client.list_blobs(bucket_name, prefix=prefix, delimiter=delimiter, start_offset=start_offset)
+      obj._bucket = _storage_client.list_blobs(bucket_name, prefix=prefix, delimiter=delimiter, start_offset=start_offset)
       obj._bucket_iter = iter(obj._bucket)
       # start_offset is inclusive, so we need to skip the first file
       next(obj._bucket_iter)
@@ -343,7 +343,7 @@ class GCSInputReader(map_job.InputReader):
         handle.name = filename
         bucket_name = filename.split("/")[1]
         object_name = "/".join(filename.split("/")[2:])
-        bucket = storage_client.get_bucket(bucket_name)
+        bucket = _storage_client.get_bucket(bucket_name)
         blob = bucket.blob(object_name)
         blob.download_to_file(handle)
         handle.seek(0)

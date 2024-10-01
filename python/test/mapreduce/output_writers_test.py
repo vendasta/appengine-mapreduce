@@ -27,7 +27,7 @@ from testlib import testutil
 
 from google.cloud import storage
 
-storage_client = storage.Client()
+_storage_client = storage.Client()
 
 class GCSRecordsPoolTest(testutil.CloudStorageTestBase):
   """Tests for GCSRecordsPool."""
@@ -38,7 +38,7 @@ class GCSRecordsPoolTest(testutil.CloudStorageTestBase):
     bucket_name = "byates"
     test_filename = "testfile"
 
-    bucket = storage_client.get_bucket(bucket_name)
+    bucket = _storage_client.get_bucket(bucket_name)
     self.blob = bucket.blob(test_filename)
     if self.blob.exists():
       self.blob.delete()
@@ -340,7 +340,7 @@ class GCSOutputWriterTestCommon(GCSOutputTestBase):
         filename = self.WRITER_CLS._get_filename(shard_state)
 
         self.assertNotEqual(None, filename)
-        bucket = storage_client.get_bucket(bucket_name)
+        bucket = _storage_client.get_bucket(bucket_name)
         blob = bucket.blob(filename)
         self.assertEqual(data, blob.download_as_string())
 
@@ -376,7 +376,7 @@ class GCSOutputWriterTestCommon(GCSOutputTestBase):
         writer.finalize(ctx, shard_state)
 
         # Verify the badData is not in the final file
-        bucket = storage_client.get_bucket(bucket_name)
+        bucket = _storage_client.get_bucket(bucket_name)
         blob = bucket.blob(new_filename)
 
         self.assertEqual(b"initDatagoodData", blob.download_as_bytes())
@@ -404,7 +404,7 @@ class GCSOutputWriterTestCommon(GCSOutputTestBase):
         filename = self.WRITER_CLS._get_filename(
         shard_state)
 
-        bucket = storage_client.get_bucket(bucket_name)
+        bucket = _storage_client.get_bucket(bucket_name)
         blob = bucket.blob(filename)
         blob.reload()
         self.assertEqual(test_content_type, blob.content_type)
@@ -442,7 +442,7 @@ class GCSOutputWriterTestCommon(GCSOutputTestBase):
         filename = self.WRITER_CLS._get_filename(shard_state)
 
         self.assertNotEqual(None, filename)
-        bucket = storage_client.get_bucket(self.TEST_BUCKET)
+        bucket = _storage_client.get_bucket(self.TEST_BUCKET)
         filename = filename.replace(f"/{self.TEST_BUCKET}/", "")
         blob = bucket.blob(filename)
         self.assertEqual(data + data, blob.download_as_bytes())
@@ -611,7 +611,7 @@ class GCSOutputConsistentOutputWriterTest(GCSOutputWriterTestCommon,
     writer = self.WRITER_CLS.from_json(writer.to_json())
     writer.finalize(ctx, shard_state)
 
-    names = [l.name for l in storage_client.list_blobs(self.TEST_BUCKET, prefix="DummyMapReduceJobName/DummyMapReduceJobId")]
+    names = [l.name for l in _storage_client.list_blobs(self.TEST_BUCKET, prefix="DummyMapReduceJobName/DummyMapReduceJobId")]
     self.assertEqual(
         ["DummyMapReduceJobName/DummyMapReduceJobId/output-0"], names)
 
@@ -686,7 +686,7 @@ class GCSOutputConsistentOutputWriterTest(GCSOutputWriterTestCommon,
                                     shard_state.shard_number, 0)
     writer.begin_slice(None)
 
-    bucket = storage_client.get_bucket(self.TEST_BUCKET)
+    bucket = _storage_client.get_bucket(self.TEST_BUCKET)
 
     # our shard
     our_file = "gae_mr_tmp/DummyMapReduceJobId-tmp-1-very-random"

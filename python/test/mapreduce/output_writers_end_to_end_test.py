@@ -21,7 +21,7 @@ from testlib import testutil
 
 from google.cloud import storage
 
-storage_client = storage.Client()
+_storage_client = storage.Client()
 
 DATASTORE_READER_NAME = (input_readers.__name__ + "." +
                          input_readers.DatastoreInputReader.__name__)
@@ -70,7 +70,7 @@ class GoogleCloudStorageOutputWriterEndToEndTest(testutil.CloudStorageTestBase):
     total_entries = 0
     for shard in range(num_shards):
       self.assertTrue(filenames[shard].startswith(job_name))
-      bucket = storage_client.get_bucket(self.TEST_BUCKET)
+      bucket = _storage_client.get_bucket(self.TEST_BUCKET)
       blob = bucket.blob(filenames[shard])
       data = blob.download_as_string()
       # strip() is used to remove the last newline of each file so that split()
@@ -118,7 +118,7 @@ class GCSRecordOutputWriterEndToEndTestBase(testutil.CloudStorageTestBase):
     total_entries = 0
     for shard in range(num_shards):
       self.assertTrue(filenames[shard].startswith(job_name))
-      bucket = storage_client.get_bucket(self.TEST_BUCKET)
+      bucket = _storage_client.get_bucket(self.TEST_BUCKET)
       data = b"".join([_ for _ in records.RecordsReader(
           bucket.blob(filenames[shard]).open("rb"))])
       # strip() is used to remove the last newline of each file so that split()
@@ -185,13 +185,13 @@ class GoogleCloudStorageConsistentOutputWriterEndToEndTest(
 
     self.assertEqual(num_shards, len(set(filenames)))
     total_entries = 0
+    bucket = _storage_client.get_bucket(self.TEST_BUCKET)
     for shard in range(num_shards):
-      self.assertTrue(filenames[shard].startswith("/{}/{}".format(self.TEST_BUCKET,
-                                                              job_name)))
-      data = cloudstorage.open(filenames[shard]).read()
+      self.assertTrue(filenames[shard].startswith(job_name))
+      data = bucket.blob(filenames[shard]).download_as_bytes()
       # strip() is used to remove the last newline of each file so that split()
       # does not retrun extraneous empty entries.
-      total_entries += len(data.strip().split("\n"))
+      total_entries += len(data.strip().split(b"\n"))
     self.assertEqual(entity_count, total_entries)
 
     # no files left in tmpbucket

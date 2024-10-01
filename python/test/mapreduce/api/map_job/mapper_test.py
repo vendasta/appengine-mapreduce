@@ -105,8 +105,8 @@ class MapperTest(testutil.HandlerTestBase):
                 "end_slice\n": MyMapper.slices,
                 "begin_slice\n": MyMapper.slices}
     
-    storage_client = storage.Client()
-    bucket = storage_client.get_bucket("byates")
+    _storage_client = storage.Client()
+    bucket = _storage_client.get_bucket("byates")
     for fn in files:
         blob = bucket.blob(fn)
         content = blob.download_as_text()

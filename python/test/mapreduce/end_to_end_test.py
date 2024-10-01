@@ -30,7 +30,7 @@ from testlib import testutil
 
 from google.cloud import exceptions, storage
 
-storage_client = storage.Client()
+_storage_client = storage.Client()
 
 def random_string(length):
   """Generate a random string of given length."""
@@ -304,7 +304,7 @@ class EndToEndTest(testutil.HandlerTestBase):
     bucket_name = "byates"
     test_filename = "testfile"
 
-    bucket = storage_client.get_bucket(bucket_name)
+    bucket = _storage_client.get_bucket(bucket_name)
     blob = bucket.blob(test_filename)
 
     with blob.open("wb") as f:
@@ -335,7 +335,7 @@ class EndToEndTest(testutil.HandlerTestBase):
     bucket_name = "byates"
     test_filename = "testfile"
 
-    bucket = storage_client.get_bucket(bucket_name)
+    bucket = _storage_client.get_bucket(bucket_name)
     blob = bucket.blob(test_filename)
     
     with blob.open("wb") as f:
@@ -370,7 +370,7 @@ class EndToEndTest(testutil.HandlerTestBase):
     bucket_name = "byates"
     test_filename = "testfile"
 
-    bucket = storage_client.get_bucket(bucket_name)
+    bucket = _storage_client.get_bucket(bucket_name)
     blob = bucket.blob(test_filename)
 
     with blob.open("wb") as f:

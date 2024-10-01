@@ -15,7 +15,7 @@ from testlib import testutil
 
 from google.cloud import storage
 
-storage_client = storage.Client()
+_storage_client = storage.Client()
 
 
 # Global for collecting data across all map shards
@@ -50,7 +50,7 @@ class GoogleCloudStorageInputReaderEndToEndTest(testutil.CloudStorageTestBase):
     Returns:
       A list with each element containing the data in one of the created files.
     """
-    bucket = storage_client.get_bucket(bucket_name)
+    bucket = _storage_client.get_bucket(bucket_name)
     created_content = []
     for file_num in range(num_files):
         content = "Dummy Content %d" % file_num
@@ -95,7 +95,7 @@ class GoogleCloudStorageInputReaderEndToEndTest(testutil.CloudStorageTestBase):
   def testStrict(self):
     """Tests that fail_on_missing_input works properly."""
     gcs_files = []
-    bucket = storage_client.get_bucket("byates")
+    bucket = _storage_client.get_bucket("byates")
     for num in range(10):
         gcs_file = f"file{num}"
         blob = bucket.blob(gcs_file)

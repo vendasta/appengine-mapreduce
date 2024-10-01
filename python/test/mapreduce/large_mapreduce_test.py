@@ -22,7 +22,7 @@ from testlib import testutil
 
 from google.cloud import storage
 
-storage_client = storage.Client()
+_storage_client = storage.Client()
 
 
 class FakeEntity(db.Model):
@@ -85,7 +85,7 @@ class LargeMapreduceTest(testutil.HandlerTestBase):
     # Verify reduce output.
     p = mapreduce_pipeline.MapreducePipeline.from_id(p.pipeline_id)
     output_data = []
-    bucket = storage_client.get_bucket(bucket_name)
+    bucket = _storage_client.get_bucket(bucket_name)
     for output_file in p.outputs.default.value:
       with bucket.blob(output_file).open("r") as f:
         for record in records.RecordsReader(f):

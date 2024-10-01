@@ -38,8 +38,8 @@ class HashEndToEndTest(testutil.HandlerTestBase):
     test_filename = f"{self._testMethodName}/testfile"
     full_filename = f"/{bucket_name}/{test_filename}"
 
-    storage_client = storage.Client()
-    bucket = storage_client.get_bucket(bucket_name)
+    _storage_client = storage.Client()
+    bucket = _storage_client.get_bucket(bucket_name)
     blob = bucket.blob(test_filename)
     
     with blob.open("wb") as f:

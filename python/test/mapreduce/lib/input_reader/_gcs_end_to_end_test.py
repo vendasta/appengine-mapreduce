@@ -12,7 +12,7 @@ from mapreduce.lib import input_reader
 
 from google.cloud import storage
 
-storage_client = storage.Client()
+_storage_client = storage.Client()
 
 # Global for collecting data across all map shards
 _memory_mapper_data = []
@@ -63,7 +63,7 @@ class GCSInputReaderEndToEndTest(testutil.CloudStorageTestBase):
       A list with each element containing the data in one of the created files.
     """
     created_content = []
-    bucket = storage_client.get_bucket(bucket_name)
+    bucket = _storage_client.get_bucket(bucket_name)
     created_content = []
     for file_num in range(num_files):
         content = f"Dummy Content {file_num}"

@@ -57,7 +57,7 @@ from mapreduce import shard_life_cycle
 from google.cloud import storage, exceptions
 from google.cloud.storage.fileio import BlobWriter
 
-storage_client = storage.Client()
+_storage_client = storage.Client()
 
 # Counter name for number of bytes written.
 COUNTER_IO_WRITE_BYTES = "io-write-bytes"
@@ -573,7 +573,7 @@ class _GoogleCloudStorageOutputWriterBase(_GoogleCloudStorageBase):
           "%s is required for Google Cloud Storage" %
           cls.BUCKET_NAME_PARAM)
     try:
-        storage_client.get_bucket(cls._get_gcs_bucket(writer_spec))
+        _storage_client.get_bucket(cls._get_gcs_bucket(writer_spec))
     except (exceptions.NotFound, exceptions.Forbidden, ValueError) as error:
         raise errors.BadWriterParamsError("Bad bucket name, %s" % (error))
 
@@ -589,7 +589,7 @@ class _GoogleCloudStorageOutputWriterBase(_GoogleCloudStorageBase):
     else:
         bucket_name = cls._get_gcs_bucket(writer_spec)
 
-    bucket = storage_client.get_bucket(bucket_name)
+    bucket = _storage_client.get_bucket(bucket_name)
     blob = bucket.blob(filename_suffix)
     content_type = writer_spec.get(cls.CONTENT_TYPE_PARAM, None)
 
@@ -939,7 +939,7 @@ class GoogleCloudStorageConsistentOutputWriter(
     if not filename:
       return
     try:
-      bucket = storage_client.get_bucket(self._get_tmp_gcs_bucket(writer_spec))
+      bucket = _storage_client.get_bucket(self._get_tmp_gcs_bucket(writer_spec))
       blob = bucket.blob(filename)
       blob.delete()
     except exceptions.NotFound:
@@ -1066,7 +1066,7 @@ class GoogleCloudStorageConsistentOutputWriter(
     prefix = tmpl.substitute(
         id=self.status.mapreduce_id, shard=self.status.shard)
     bucket_name = self._get_tmp_gcs_bucket(writer_spec)
-    bucket = storage_client.get_bucket(bucket_name)
+    bucket = _storage_client.get_bucket(bucket_name)
 
     blobs = bucket.list_blobs(prefix=prefix)
 
