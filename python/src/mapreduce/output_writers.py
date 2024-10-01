@@ -654,9 +654,10 @@ class ExtendedBlobWriter(BlobWriter):
   @classmethod
   def from_dict(cls, state):
     name = state["name"]
-    blob = storage.Blob.from_string(name, client=storage_client)
+    blob = storage.Blob.from_string(name, client=_storage_client)
     result = cls(blob)
     if blob.exists():
+      # TODO: This is an expensive hack to replicate the behavior of the cloudstorage API. Fix with a better solution.
       data = blob.download_as_bytes()
       result.write(data)
     if state["closed"]:
