@@ -2665,7 +2665,7 @@ class _ReducerReader(_GoogleCloudStorageRecordInputReader):
             yield ALLOW_CHECKPOINT
         else:
           # Without combiner we just accumulate values.
-          self.current_values.extend(proto.value_list())
+          self.current_values.extend(proto.value)
 
         if to_yield:
           yield to_yield

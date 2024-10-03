@@ -24,7 +24,10 @@
 # os_compat must be first to ensure timezones are UTC.
 # pylint: disable=unused-import
 # pylint: disable=g-bad-import-order
+from flask import Flask, Request
 from google.appengine.tools import os_compat
+import werkzeug
+import werkzeug.exceptions
 # testutil must be imported before mock.
 # pylint: disable=g-bad-import-order
 from testlib import testutil
@@ -427,9 +430,9 @@ class MapreduceHandlerTestBase(testutil.HandlerTestBase):
       eta_sec = time.mktime(time.strptime(task["eta"], "%Y/%m/%d %H:%M:%S"))
       self.assertTrue(expected_etc_sec < eta_sec + 10)
 
-    request = mock_webapp.MockRequest()
-    request.body = base64.b64decode(task["body"])
-    request.headers = dict(task["headers"])
+    request = Request()
+    request.data = base64.b64decode(task["body"])
+    request.headers = dict(task["headers"])    
 
     payload = model.HugeTask.decode_payload(request)
     self.assertEqual(str(shard_id), payload["shard_id"])
@@ -516,8 +519,8 @@ class MapreduceHandlerTestBase(testutil.HandlerTestBase):
     """
     self.assertEqual("POST", task["method"])
 
-    request = mock_webapp.MockRequest()
-    request.body = base64.b64decode(task["body"])
+    request = Request()
+    request.data = base64.b64decode(task["body"])
     request.headers = dict(task["headers"])
 
     payload = model.HugeTask.decode_payload(request)
@@ -976,24 +979,26 @@ class KickOffJobHandlerTest(testutil.HandlerTestBase):
   def createDummyHandler(self):
     self.handler = handlers.KickOffJobHandler()
     self.mapreduce_id = "foo_id"
-    request = mock_webapp.MockRequest()
-    request.headers["X-AppEngine-QueueName"] = self.QUEUE
-    request.path = "/mapreduce/kickoff_callback/" + self.mapreduce_id
-    self.handler.initialize(request,
-                            mock_webapp.MockResponse())
 
   def testInvalidMRState(self):
     self.createDummyHandler()
     # No mr_state exists.
-    self.handler.request.set("mapreduce_id", self.mapreduce_id)
-    self.handler.post()
+    with self.app.test_request_context(
+      query_string={"mapreduce_id": self.mapreduce_id},
+      headers={"X-AppEngine-QueueName": self.QUEUE}):
+      self.handler.post()
+
     self.assertEqual(0, len(self.taskqueue.GetTasks(self.QUEUE)))
 
     # mr_state is not active.
     state = model.MapreduceState.create_new(self.mapreduce_id)
     state.active = False
     state.put()
-    self.handler.post()
+
+    with self.app.test_request_context(
+      query_string={"mapreduce_id": self.mapreduce_id},
+      headers={"X-AppEngine-QueueName": self.QUEUE}):
+      self.handler.post()
     self.assertEqual(0, len(self.taskqueue.GetTasks(self.QUEUE)))
 
   def setUpValidState(self, hooks_class_name=None):
@@ -1248,13 +1253,12 @@ class MapperWorkerCallbackHandlerLeaseTest(testutil.HandlerTestBase):
 
     # Create worker handler.
     handler = handlers.MapperWorkerCallbackHandler()
-    request = mock_webapp.MockRequest()
+    request = Request()
     request.headers[model.HugeTask.PAYLOAD_VERSION_HEADER] = (
         model.HugeTask.PAYLOAD_VERSION)
     request.headers["X-AppEngine-QueueName"] = "default"
     request.headers[util._MR_ID_TASK_HEADER] = self.mr_spec.mapreduce_id
     request.headers[util._MR_SHARD_ID_TASK_HEADER] = self.shard_id
-    handler.initialize(request, mock_webapp.MockResponse())
 
     # Create transient shard state.
     tstate = model.TransientShardState(
@@ -1553,7 +1557,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
 
     self.handler = handlers.MapperWorkerCallbackHandler()
     self.handler._time = MockTime.time
-    request = mock_webapp.MockRequest()
+    request = Request()
     request.headers["X-AppEngine-QueueName"] = "default"
     request.headers["X-AppEngine-TaskName"] = "foo-task-name"
     request.path = "/mapreduce/worker_callback/" + self.shard_id
@@ -1563,8 +1567,6 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
         model.HugeTask.PAYLOAD_VERSION)
 
     self.request = request
-    self.response = mock_webapp.MockResponse()
-    self.handler.initialize(self.request, self.response)
 
     worker_params = self.transient_state.to_dict()
     for param_name in worker_params:
@@ -2355,7 +2357,7 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
 
     self.handler = handlers.ControllerCallbackHandler()
     self.handler._time = MockTime.time
-    request = mock_webapp.MockRequest()
+    request = Request()
     request.headers["X-AppEngine-QueueName"] = "default"
     request.headers["X-AppEngine-TaskName"] = "foo-task-name"
     request.headers[util._MR_ID_TASK_HEADER] = self.mapreduce_id
@@ -2364,8 +2366,6 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     request.path = "/mapreduce/controller_callback"
 
     self.request = request
-    self.response = mock_webapp.MockResponse()
-    self.handler.initialize(self.request, self.response)
     self.handler.request.set("mapreduce_spec", mapreduce_spec.to_json_str())
     self.handler.request.set("serial_id", "1234")
 
@@ -2764,11 +2764,6 @@ class CleanUpJobTest(testutil.HandlerTestBase):
         4)
 
     self.handler = handlers.CleanUpJobHandler()
-    self.handler.initialize(mock_webapp.MockRequest(),
-                            mock_webapp.MockResponse())
-    self.handler.request.path = "/mapreduce/command/clean_up_job"
-
-    self.handler.request.headers["X-Requested-With"] = "XMLHttpRequest"
 
   def KickOffMapreduce(self):
     """Executes pending kickoff task."""
@@ -2776,9 +2771,9 @@ class CleanUpJobTest(testutil.HandlerTestBase):
 
   def testCSRF(self):
     """Test that we check the X-Requested-With header."""
-    del self.handler.request.headers["X-Requested-With"]
-    self.handler.post()
-    self.assertEqual(http.client.FORBIDDEN, self.handler.response.status)
+    with self.app.test_request_context():
+      with self.assertRaises(werkzeug.exceptions.Forbidden):
+        self.handler.post()
 
   def testBasic(self):
     """Tests cleaning up the job.
@@ -2789,9 +2784,14 @@ class CleanUpJobTest(testutil.HandlerTestBase):
     self.KickOffMapreduce()
     key = model.MapreduceState.get_key_by_job_id(self.mapreduce_id)
     self.assertTrue(db.get(key))
-    self.handler.request.set("mapreduce_id", self.mapreduce_id)
-    self.handler.post()
-    result = json.loads(self.handler.response.out.getvalue())
+
+    with self.app.test_request_context(
+        headers={"X-Requested-With": "XMLHttpRequest"},
+        query_string={"mapreduce_id": self.mapreduce_id}
+    ):
+      response = self.handler.post()
+
+    result = json.loads(response.get_data(as_text=True))
     self.assertEqual({"status": ("Job %s successfully cleaned up." %
                                   self.mapreduce_id) },
                       result)
@@ -2799,5 +2799,4 @@ class CleanUpJobTest(testutil.HandlerTestBase):
     state = model.MapreduceState.get_by_job_id(self.mapreduce_id)
     self.assertFalse(state)
     self.assertFalse(list(model.ShardState.find_all_by_mapreduce_state(state)))
-
 

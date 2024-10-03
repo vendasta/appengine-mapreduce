@@ -299,7 +299,7 @@ class EndToEndTest(testutil.HandlerTestBase):
 
   def testRecordsReader(self):
     """End-to-end test for records reader."""
-    input_data = [str(i) for i in range(100)]
+    input_data = [str(i).encode() for i in range(100)]
 
     bucket_name = "byates"
     test_filename = "testfile"
@@ -330,7 +330,7 @@ class EndToEndTest(testutil.HandlerTestBase):
 
   def testHugeTaskPayloadTest(self):
     """Test map job with huge parameter values."""
-    input_data = [str(i) for i in range(100)]
+    input_data = [str(i).encode() for i in range(100)]
 
     bucket_name = "byates"
     test_filename = "testfile"
@@ -365,7 +365,7 @@ class EndToEndTest(testutil.HandlerTestBase):
 
   def testHugeTaskUseDatastore(self):
     """Test map job with huge parameter values."""
-    input_data = [str(i) for i in range(100)]
+    input_data = [str(i).encode() for i in range(100)]
 
     bucket_name = "byates"
     test_filename = "testfile"
@@ -405,7 +405,6 @@ class GCSOutputWriterTestBase(testutil.CloudStorageTestBase):
   def setUp(self):
     super().setUp()
     self.original_slice_duration = parameters.config._SLICE_DURATION_SEC
-    self.original_block_size = storage_api.StreamingBuffer._blocksize
     # Use this to adjust what is printed for debugging purpose.
     logging.getLogger().setLevel(logging.CRITICAL)
     self.writer_cls = output_writers._GoogleCloudStorageOutputWriter
@@ -422,7 +421,6 @@ class GCSOutputWriterTestBase(testutil.CloudStorageTestBase):
     self.processing_rate = 5
 
   def tearDown(self):
-    storage_api.StreamingBuffer._blocksize = self.original_block_size
     parameters.config._SLICE_DURATION_SEC = self.original_slice_duration
     super().tearDown()
 
@@ -431,10 +429,6 @@ class GCSOutputWriterNoDupModeTest(GCSOutputWriterTestBase):
   """Test GCS output writer slice recovery."""
 
   def testSliceRecoveryWithForcedFlushing(self):
-    # Force a flush to GCS on every character wrote.
-    storage_api.StreamingBuffer._blocksize = 1
-    storage_api.StreamingBuffer._flushsize = 1
-
     mr_id = control.start_map(
         "test_map",
         __name__ + ".FaultyHandler",
@@ -444,7 +438,7 @@ class GCSOutputWriterNoDupModeTest(GCSOutputWriterTestBase):
                 "entity_kind": __name__ + "." + FakeEntity.__name__,
             },
             "output_writer": {
-                "bucket_name": "bucket",
+                "bucket_name": self.TEST_BUCKET,
                 "no_duplicate": True,
             },
             "processing_rate": self.processing_rate,
@@ -471,16 +465,13 @@ class GCSOutputWriterNoDupModeTest(GCSOutputWriterTestBase):
     self._assertOutputEqual(seg_prefix, last_seg_index)
 
     # Check there are indeed duplicated data.
-    f1 = {line for line in cloudstorage.open(seg_prefix + "0")}
-    f2 = {line for line in cloudstorage.open(seg_prefix + "1")}
+    bucket = _storage_client.get_bucket(self.TEST_BUCKET)
+    f1 = {line for line in bucket.blob(seg_prefix + "0").open("rb")}
+    f2 = {line for line in bucket.blob(seg_prefix + "1").open("rb")}
     common = f1.intersection(f2)
     self.assertEqual({"10\n", "11\n"}, common)
 
   def testSliceRecoveryWithFrequentFlushing(self):
-    # Force a flush to GCS on every 8 chars.
-    storage_api.StreamingBuffer._blocksize = 8
-    storage_api.StreamingBuffer._flushsize = 8
-
     mr_id = control.start_map(
         "test_map",
         __name__ + ".FaultyHandler",

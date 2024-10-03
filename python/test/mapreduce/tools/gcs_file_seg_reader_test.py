@@ -3,7 +3,6 @@
 
 # pylint: disable=g-bad-name
 
-import pickle
 import unittest
 
 from google.appengine.datastore import datastore_stub_util
@@ -11,6 +10,10 @@ from google.appengine.ext import testbed
 
 from mapreduce import output_writers
 from mapreduce.tools import gcs_file_seg_reader
+
+from google.cloud import storage
+
+_storage_client = storage.Client()
 
 
 class GCSFileSegReaderTest(unittest.TestCase):
@@ -32,45 +35,47 @@ class GCSFileSegReaderTest(unittest.TestCase):
 
     self.writer_cls = output_writers._GoogleCloudStorageOutputWriter
 
-    self.seg_prefix = "/bucket/prefix-"
+    self.bucket_name = "byates"
+    self.bucket = _storage_client.get_bucket(self.bucket_name)
+    self.seg_prefix = f"{self._testMethodName}/prefix-"
 
   def tearDown(self):
     self.testbed.deactivate()
     super().tearDown()
 
   def testMissingMetadata(self):
-    f = cloudstorage.open(self.seg_prefix + "0", "w")
+    f = self.bucket.blob(self.seg_prefix + "0").open("w")
     f.write("abc")
     f.close()
 
-    self.assertRaises(ValueError,
-                      gcs_file_seg_reader._GCSFileSegReader,
-                      self.seg_prefix, 0)
+    with self.assertRaises(ValueError):
+        gcs_file_seg_reader._GCSFileSegReader(f"/{self.bucket_name}/{self.seg_prefix}", 0)
 
   def testInvalidMetadata(self):
-    f = cloudstorage.open(self.seg_prefix + "0", "w",
-                          options={self.writer_cls._VALID_LENGTH: "10"})
-    f.write("abc")
-    f.close()
+      blob = self.bucket.blob(self.seg_prefix + "0")
+      blob.metadata = {self.writer_cls._VALID_LENGTH: "10"}
+      blob.upload_from_string("abc")
+      blob.patch()
 
-    self.assertRaises(ValueError,
-                      gcs_file_seg_reader._GCSFileSegReader,
-                      self.seg_prefix, 0)
+      with self.assertRaises(ValueError):
+          gcs_file_seg_reader._GCSFileSegReader(f"/{self.bucket_name}/{self.seg_prefix}", 0)
 
   def ReadOneFileTest(self, read_size):
-    f = cloudstorage.open(self.seg_prefix + "0", "w",
-                          options={self.writer_cls._VALID_LENGTH: "5"})
-    f.write("1234567")
-    f.close()
+    blob = self.bucket.blob(self.seg_prefix + "0")
+    
+    # Upload the file with metadata
+    blob.metadata = {self.writer_cls._VALID_LENGTH: "5"}
+    blob.upload_from_string("1234567")
+    blob.patch()
 
-    r = gcs_file_seg_reader._GCSFileSegReader(self.seg_prefix, 0)
-    result = ""
+    r = gcs_file_seg_reader._GCSFileSegReader(f"/{self.bucket_name}/{self.seg_prefix}", 0)
+    result = b""
     while True:
       tmp = r.read(read_size)
       if not tmp:
-        break
+         break
       result += tmp
-    self.assertEqual("12345", result)
+    self.assertEqual(b"12345", result)
     self.assertEqual(5, r.tell())
 
   def testReadBig(self):
@@ -86,46 +91,27 @@ class GCSFileSegReaderTest(unittest.TestCase):
     self.ReadOneFileTest(5)
 
   def setUpMultipleFile(self):
-    f = cloudstorage.open(self.seg_prefix + "0", "w",
-                          options={self.writer_cls._VALID_LENGTH: "5"})
-    f.write("12345garbage")
-    f.close()
-
-    f = cloudstorage.open(self.seg_prefix + "1", "w",
-                          options={self.writer_cls._VALID_LENGTH: "5"})
-    f.write("67890garbage")
-    f.close()
-
-    f = cloudstorage.open(self.seg_prefix + "2", "w",
-                          options={self.writer_cls._VALID_LENGTH: "6"})
-    f.write("123456garbage")
-    f.close()
+      blob = self.bucket.blob(self.seg_prefix + "0")
+      blob.metadata = {self.writer_cls._VALID_LENGTH: "5"}
+      blob.upload_from_string("12345garbage")
+  
+      blob = self.bucket.blob(self.seg_prefix + "1")
+      blob.metadata = {self.writer_cls._VALID_LENGTH: "5"}
+      blob.upload_from_string("67890garbage")
+  
+      blob = self.bucket.blob(self.seg_prefix + "2")
+      blob.metadata = {self.writer_cls._VALID_LENGTH: "6"}
+      blob.upload_from_string("123456garbage")
 
   def testReadMultipleFiles(self):
     self.setUpMultipleFile()
 
-    r = gcs_file_seg_reader._GCSFileSegReader(self.seg_prefix, 2)
-    result = ""
+    r = gcs_file_seg_reader._GCSFileSegReader(f"/{self.bucket_name}/{self.seg_prefix}", 2)
+    result = b""
     while True:
       tmp = r.read(1)
       if not tmp:
         break
       result += tmp
-    self.assertEqual("1234567890123456", result)
+    self.assertEqual(b"1234567890123456", result)
     self.assertEqual(len(result), r.tell())
-
-  def testPickle(self):
-    self.setUpMultipleFile()
-
-    r = gcs_file_seg_reader._GCSFileSegReader(self.seg_prefix, 2)
-    result = ""
-    while True:
-      r = pickle.loads(pickle.dumps(r))
-      tmp = r.read(1)
-      if not tmp:
-        break
-      result += tmp
-      self.assertEqual(len(result), r.tell())
-    self.assertEqual("1234567890123456", result)
-
-

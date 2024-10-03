@@ -37,7 +37,8 @@ __all__ = [
     "KeyRangeModelIterator",
     "KeyRangeEntityIterator",
     "KeyRangeKeyIterator",
-    "KeyRangeEntityProtoIterator"]
+    "KeyRangeEntityProtoIterator",
+    "Cursor",]
 
 
 class RangeIteratorFactory:

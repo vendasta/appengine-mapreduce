@@ -2,6 +2,7 @@
 # Copyright 2011 Google Inc. All Rights Reserved.
 
 
+import io
 import pipeline
 
 from mapreduce import base_handler
@@ -14,6 +15,9 @@ from mapreduce import test_support
 from testlib import testutil
 
 from google.cloud import storage
+
+
+_storage_client = storage.Client()
 
 
 class HashEndToEndTest(testutil.HandlerTestBase):
@@ -38,7 +42,6 @@ class HashEndToEndTest(testutil.HandlerTestBase):
     test_filename = f"{self._testMethodName}/testfile"
     full_filename = f"/{bucket_name}/{test_filename}"
 
-    _storage_client = storage.Client()
     bucket = _storage_client.get_bucket(bucket_name)
     blob = bucket.blob(test_filename)
     
@@ -50,7 +53,7 @@ class HashEndToEndTest(testutil.HandlerTestBase):
           proto.value = v
           w.write(proto.SerializeToString())
 
-    p = shuffler._HashPipeline("testjob", bucket_name,
+    p = shuffler._HashPipeline(self._testMethodName, bucket_name,
                                [full_filename, full_filename, full_filename])
     p.start()
     test_support.execute_until_empty(self.taskqueue)
@@ -61,11 +64,11 @@ class HashEndToEndTest(testutil.HandlerTestBase):
     for output_files in list_of_output_files:
       for output_file in output_files:
         blob = bucket.blob(output_file)
-        with blob.open() as f:
+        with blob.open("rb") as f:
           for binary_record in records.RecordsReader(f):
             proto = kv_pb.KeyValue()
             proto.ParseFromString(binary_record)
-            output_data.append((proto.key(), proto.value()))
+            output_data.append((proto.key, proto.value))
 
     output_data.sort()
     self.assertEqual(300, len(output_data))
@@ -91,20 +94,21 @@ class SortFileEndToEndTest(testutil.HandlerTestBase):
 
   def testSortFile(self):
     """Test sorting a file."""
-    bucket_name = "testbucket"
+    bucket_name = "byates"
     test_filename = f"{self._testMethodName}/testfile"
     full_filename = f"/{bucket_name}/{test_filename}"
 
     input_data = [
         (str(i), "_" + str(i)) for i in range(100)]
 
-    with cloudstorage.open(full_filename, mode="w") as f:
+    bucket = _storage_client.get_bucket(bucket_name)
+    with bucket.blob(test_filename).open("wb") as f:
       with records.RecordsWriter(f) as w:
         for (k, v) in input_data:
           proto = kv_pb.KeyValue()
-          proto.set_key(k)
-          proto.set_value(v)
-          w.write(proto.Encode())
+          proto.key = k
+          proto.value = v
+          w.write(proto.SerializeToString())
 
     p = shuffler._SortChunksPipeline("testjob", bucket_name, [[full_filename]])
     p.start()
@@ -115,11 +119,12 @@ class SortFileEndToEndTest(testutil.HandlerTestBase):
     output_files = p.outputs.default.value[0]
     output_data = []
     for output_file in output_files:
-      with cloudstorage.open(output_file) as f:
+      output_file = output_file[len(f"/{bucket_name}/"):]
+      with bucket.blob(output_file).open("rb") as f:
         for binary_record in records.RecordsReader(f):
           proto = kv_pb.KeyValue()
           proto.ParseFromString(binary_record)
-          output_data.append((proto.key(), proto.value()))
+          output_data.append((proto.key, proto.value))
 
     self.assertEqual(input_data, output_data)
     self.assertEqual(1, len(self.emails))
@@ -148,7 +153,7 @@ class FakeMergePipeline(base_handler.PipelineBase):
   def run(self, bucket_name, filenames):
     yield mapreduce_pipeline.MapperPipeline(
         "sort",
-        __name__ + ".test_handler_yield_str",
+        __name__ + ".fake_handler_yield_str",
         shuffler.__name__ + "._MergingReader",
         output_writers.__name__ + "._GoogleCloudStorageRecordOutputWriter",
         params={
@@ -182,27 +187,27 @@ class MergingReaderEndToEndTest(testutil.HandlerTestBase):
     input_data = [(str(i), "_" + str(i)) for i in range(100)]
     input_data.sort()
 
-    bucket_name = "testbucket"
+    bucket_name = "byates"
     test_filename = f"{self._testMethodName}/testfile"
-    full_filename = f"/{bucket_name}/{test_filename}"
 
-    with cloudstorage.open(full_filename, mode="w") as f:
+    bucket = _storage_client.get_bucket(bucket_name)
+    with bucket.blob(test_filename).open("wb") as f:
       with records.RecordsWriter(f) as w:
         for (k, v) in input_data:
           proto = kv_pb.KeyValue()
-          proto.set_key(k)
-          proto.set_value(v)
-          w.write(proto.Encode())
+          proto.key = k
+          proto.value = v
+          w.write(proto.SerializeToString())
 
     p = FakeMergePipeline(bucket_name,
-                          [full_filename, full_filename, full_filename])
+                          [test_filename, test_filename, test_filename])
     p.start()
     test_support.execute_until_empty(self.taskqueue)
     p = FakeMergePipeline.from_id(p.pipeline_id)
 
     output_file = p.outputs.default.value[0]
     output_data = []
-    with cloudstorage.open(output_file) as f:
+    with bucket.blob(output_file).open("rb") as f:
       for record in records.RecordsReader(f):
         output_data.append(record)
 
@@ -229,9 +234,9 @@ class MergingReaderEndToEndTest(testutil.HandlerTestBase):
         with records.RecordsWriter(f) as w:
           for (k, v) in input_data:
             proto = kv_pb.KeyValue()
-            proto.set_key(k)
-            proto.set_value(v)
-            w.write(proto.Encode())
+          proto.key = k
+          proto.value = v
+          w.write(proto.SerializeToString())
 
       p = FakeMergePipeline(bucket_name,
                             [full_filename, full_filename, full_filename])
@@ -317,9 +322,9 @@ class ShuffleEndToEndTest(testutil.HandlerTestBase):
       with records.RecordsWriter(f) as w:
         for (k, v) in input_data:
           proto = kv_pb.KeyValue()
-          proto.set_key(k)
-          proto.set_value(v)
-          w.write(proto.Encode())
+          proto.key = k
+          proto.value = v
+          w.write(proto.SerializeToString())
 
     p = shuffler.ShufflePipeline("testjob", {"bucket_name": bucket_name},
                                  [full_filename, full_filename, full_filename])
@@ -334,7 +339,7 @@ class ShuffleEndToEndTest(testutil.HandlerTestBase):
         for record in records.RecordsReader(f):
           proto = kv_pb.KeyValues()
           proto.ParseFromString(record)
-          output_data.append((proto.key(), proto.value_list()))
+          output_data.append((proto.key, proto.value_list))
     output_data.sort()
 
     expected_data = sorted([

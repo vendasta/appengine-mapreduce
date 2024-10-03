@@ -23,16 +23,14 @@
 
 __all__ = [
     "ShufflePipeline",
+    "Retry",
     ]
 
 # Using opensource naming conventions, pylint: disable=g-bad-name
 
-import base64
 import gc
 import heapq
-import io
 import logging
-import pickle
 import time
 
 import pipeline
@@ -49,6 +47,7 @@ from mapreduce import output_writers
 from mapreduce import pipeline_base
 from mapreduce import records
 from mapreduce import util
+from functools import cmp_to_key
 
 
 from google.cloud import storage
@@ -82,7 +81,12 @@ class _OutputFile(db.Model):
 
 def _compare_keys(key_record1, key_record2):
   """Compare two (key, records) protos by key."""
-  return cmp(key_record1[0], key_record2[0])
+  if key_record1[0] < key_record2[0]:
+    return -1
+  elif key_record1[0] > key_record2[0]:
+    return 1
+  else:
+    return 0
 
 
 class _BatchGCSRecordsReader(
@@ -132,10 +136,10 @@ def _sort_records_map(records):
   for i in range(l):
     proto = kv_pb.KeyValue()
     proto.ParseFromString(records[i])
-    key_records[i] = (proto.key(), records[i])
+    key_records[i] = (proto.key, records[i])
 
   logging.debug("Sorting")
-  key_records.sort(cmp=_compare_keys)
+  key_records.sort(key=cmp_to_key(_compare_keys))
 
   logging.debug("Writing")
   mapper_spec = ctx.mapreduce_spec.mapper
@@ -144,7 +148,7 @@ def _sort_records_map(records):
   filename = (ctx.mapreduce_spec.name + "/" + ctx.mapreduce_id + "/output-" +
               ctx.shard_id + "-" + str(int(time.time())))
   full_filename = "/{}/{}".format(bucket_name, filename)
-  filehandle = cloudstorage.open(full_filename, mode="w")
+  filehandle = _storage_client.bucket(bucket_name).blob(filename).open("wb")
   with output_writers.GCSRecordsPool(filehandle, ctx=ctx) as pool:
     for key_record in key_records:
       pool.append(key_record[1])
@@ -281,6 +285,9 @@ class _MergingReader(input_readers.InputReader):
     mapper_spec = ctx.mapreduce_spec.mapper
     shard_number = ctx._shard_state.shard_number
     filenames = mapper_spec.params[self.FILES_PARAM][shard_number]
+    bucket_name = mapper_spec.params["output_writer"]["bucket_name"]
+    filenames_only = (
+        util.strip_prefix_from_items("/%s/" % bucket_name, filenames))
 
     if len(filenames) != len(self._offsets):
       raise Exception("Files list and offsets do not match.")
@@ -289,12 +296,13 @@ class _MergingReader(input_readers.InputReader):
     readers = []
 
     # Initialize heap
-    for (i, filename) in enumerate(filenames):
+    bucket = _storage_client.get_bucket(bucket_name)
+    for (i, filename) in enumerate(filenames_only):
       offset = self._offsets[i]
       # TODO(user): Shrinking the buffer size is a workaround until
       # a tiered/segmented merge is implemented.
-      reader = records.RecordsReader(
-          cloudstorage.open(filename, read_buffer_size=self.GCS_BUFFER_SIZE))
+      fh = bucket.blob(filename).open("rb", chunk_size=self.GCS_BUFFER_SIZE)
+      reader = records.RecordsReader(fh)
       reader.seek(offset)
       readers.append((None, None, i, reader))
 
@@ -354,7 +362,7 @@ class _MergingReader(input_readers.InputReader):
         proto.ParseFromString(binary_record)
         # Put read data back into heap.
         heapq.heapreplace(readers,
-                          (proto.key(), proto.value(), index, reader))
+                          (proto.key, proto.value, index, reader))
       except EOFError:
         heapq.heappop(readers)
 
@@ -446,8 +454,16 @@ class _HashingGCSOutputWriter(output_writers.OutputWriter):
     Returns:
       An instance of the OutputWriter configured using the values of json.
     """
-    return cls(pickle.loads(base64.b64decode(json["filehandles"].encode())))
-
+    blob_urls = json["blob_urls"]
+    filehandles = []
+    for blob_url in blob_urls:
+      blob = storage.Blob.from_string(blob_url, client=_storage_client)
+      content = blob.download_as_bytes()
+      fh = blob.open("wb")
+      fh.write(content)
+      filehandles.append(fh)
+    return cls(filehandles)
+  
   def to_json(self):
     """Returns writer state to serialize in json.
 
@@ -461,7 +477,11 @@ class _HashingGCSOutputWriter(output_writers.OutputWriter):
       if pool is not None:
         pool.flush(True)
     open_filehandles = [fh for fh in self._filehandles if not fh.closed]
-    return {"filehandles": base64.b64encode(pickle.dumps(open_filehandles)).decode()}
+    for fh in open_filehandles:
+      fh.close()
+    return {
+      "blob_urls": [f"gs://{fh._blob.bucket.name}/{fh._blob.name}" for fh in self._filehandles],
+    }
 
   @classmethod
   def create(cls, mr_spec, shard_number, shard_attempt, _writer_state=None):
@@ -480,9 +500,7 @@ class _HashingGCSOutputWriter(output_writers.OutputWriter):
     for i in range(shards):
       full_filename = f"{filename}{i}"
       blob = bucket.blob(full_filename)
-      buffer = io.BytesIO()
-      buffer.name = full_filename
-      blob.upload_from_file(buffer)
+      buffer = blob.open("wb")
       filehandles.append(buffer)
     return cls(filehandles)
 
@@ -504,7 +522,7 @@ class _HashingGCSOutputWriter(output_writers.OutputWriter):
     """See parent class."""
     filenames = []
     for filehandle in self._filehandles:
-      filenames.append(filehandle.name)
+      filenames.append(filehandle._blob.name)
       filehandle.close()
     shard_state.writer_state = {"shard_filenames": filenames}
 
@@ -573,9 +591,9 @@ def _merge_map(key, values, partial):
     The proto.
   """
   proto = kv_pb.KeyValues()
-  proto.set_key(key)
-  proto.value_list().extend(values)
-  yield proto.Encode()
+  proto.key = key
+  proto.value.extend(values)
+  yield proto.SerializeToString()
 
 
 class _MergePipeline(pipeline_base.PipelineBase):

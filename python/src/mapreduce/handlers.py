@@ -26,14 +26,13 @@ import logging
 import math
 import os
 import random
-import sys
 import time
 import traceback
 import zlib
 import json
 
+from flask import request
 from google.appengine.ext import ndb
-
 from google.appengine import runtime
 from google.appengine.api import datastore_errors
 from google.appengine.api import taskqueue
@@ -1566,7 +1565,7 @@ class StartJobHandler(base_handler.PostJsonHandler):
     mapreduce_name = self._get_required_param("name")
     mapper_input_reader_spec = self._get_required_param("mapper_input_reader")
     mapper_handler_spec = self._get_required_param("mapper_handler")
-    mapper_output_writer_spec = self.request.get("mapper_output_writer")
+    mapper_output_writer_spec = request.values.get("mapper_output_writer")
     mapper_params = self._get_params(
         "mapper_params_validator", "mapper_params.")
     params = self._get_params(
@@ -1613,25 +1612,17 @@ class StartJobHandler(base_handler.PostJsonHandler):
     Returns:
       The user parameters.
     """
-    params_validator = self.request.get(validator_parameter)
+    params_validator = request.values.get(validator_parameter)
 
     user_params = {}
-    for key in self.request.args:
-      if key.startswith(name_prefix):
-        values = self.request.args.getlist(key)
-        adjusted_key = key[len(name_prefix):]
-        if len(values) == 1:
-          user_params[adjusted_key] = values[0]
-        else:
-          user_params[adjusted_key] = values
-    for key in self.request.form:
-      if key.startswith(name_prefix):
-        values = self.request.form.getlist(key)
-        adjusted_key = key[len(name_prefix):]
-        if len(values) == 1:
-          user_params[adjusted_key] = values[0]
-        else:
-          user_params[adjusted_key] = values
+    for key in request.values:
+        if key.startswith(name_prefix):
+            values = request.values.getlist(key)
+            adjusted_key = key[len(name_prefix):]
+            if len(values) == 1:
+                user_params[adjusted_key] = values[0]
+            else:
+                user_params[adjusted_key] = values
 
     if params_validator:
       resolved_validator = util.for_name(params_validator)
@@ -1651,7 +1642,7 @@ class StartJobHandler(base_handler.PostJsonHandler):
     Raises:
       errors.NotEnoughArgumentsError: if parameter is not specified.
     """
-    value = self.request.get(param_name)
+    value = request.values.get(param_name)
     if not value:
       raise errors.NotEnoughArgumentsError(param_name + " not specified")
     return value
@@ -1818,7 +1809,7 @@ class CleanUpJobHandler(base_handler.PostJsonHandler):
   """Command to kick off tasks to clean up a job's data."""
 
   def handle(self):
-    mapreduce_id = self.request.get("mapreduce_id")
+    mapreduce_id = request.values.get("mapreduce_id")
 
     mapreduce_state = model.MapreduceState.get_by_job_id(mapreduce_id)
     if mapreduce_state:
@@ -1834,6 +1825,6 @@ class AbortJobHandler(base_handler.PostJsonHandler):
   """Command to abort a running job."""
 
   def handle(self):
-    mapreduce_id = self.request.get("mapreduce_id")
+    mapreduce_id = request.values.get("mapreduce_id")
     model.MapreduceControl.abort(mapreduce_id)
     self.json_response["status"] = "Abort signal sent."

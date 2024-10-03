@@ -28,7 +28,6 @@ __all__ = [
     "GCSRecordsPool",
     "BlobWriter", 
     "DEFAULT_RETRY_IF_GENERATION_SPECIFIED", 
-    "ExtendedBlobWriter", 
     "storage_client",
     ]
 
@@ -418,7 +417,7 @@ class GCSRecordsPool(_RecordsPoolBase):
       extra_padding = self._buf_size % self._GCS_BLOCK_SIZE
       if extra_padding > 0:
         self._write(b"\x00" * (self._GCS_BLOCK_SIZE - extra_padding))
-    self._filehandle.flush()
+    self._filehandle.close()
 
 
 class _GoogleCloudStorageBase(shard_life_cycle._ShardLifeCycle,
@@ -593,7 +592,7 @@ class _GoogleCloudStorageOutputWriterBase(_GoogleCloudStorageBase):
     blob = bucket.blob(filename_suffix)
     content_type = writer_spec.get(cls.CONTENT_TYPE_PARAM, None)
 
-    return ExtendedBlobWriter(blob, content_type=content_type)
+    return blob.open("wb", content_type=content_type)
 
   @classmethod
   def _get_filename(cls, shard_state):
@@ -618,6 +617,8 @@ class _GoogleCloudStorageOutputWriterBase(_GoogleCloudStorageBase):
       data: string containing the data to be written.
     """
     start_time = time.time()
+    if isinstance(data, str):
+      data = data.encode("utf-8")
     self._get_write_buffer().write(data)
     ctx = context.get()
     operation.counters.Increment(COUNTER_IO_WRITE_BYTES, len(data))(ctx)
@@ -628,28 +629,6 @@ class _GoogleCloudStorageOutputWriterBase(_GoogleCloudStorageBase):
   def _supports_shard_retry(self, tstate):
     return True
 
-
-class ExtendedBlobWriter(BlobWriter):
-  """BlobWriter with additional methods for compatibility."""
-
-  def _get_offset_from_gcs(self):
-    """Returns the current offset of the file in GCS."""
-    self._blob.reload()
-    return self._blob.size
-
-  def __init__(self, blob, **upload_kwargs):
-    super().__init__(blob, ignore_flush=True, **upload_kwargs)
-    self._blob = blob
-
-  @property
-  def name(self):
-    return self._blob.name
-
-  def to_dict(self):
-    return {
-      "name": f"gs://{self._blob.bucket.name}/{self._blob.name}",
-      "closed": self.closed
-    }
 
   @classmethod
   def from_dict(cls, state):
@@ -748,7 +727,11 @@ class _GoogleCloudStorageOutputWriter(_GoogleCloudStorageOutputWriterBase):
 
     @classmethod
     def from_json(cls, state):
-        _streaming_buffer = ExtendedBlobWriter.from_dict(state[cls._JSON_GCS_BUFFER])
+        gcs_url = state["gcs_url"]
+        blob = storage.Blob.from_string(gcs_url, client=_storage_client)
+        contents = blob.download_as_bytes()
+        _streaming_buffer = blob.open("wb")
+        _streaming_buffer.write(contents)
         writer = cls(_streaming_buffer)
         no_dup = state.get(cls._JSON_NO_DUP, False)
         writer._no_dup = no_dup
@@ -759,11 +742,11 @@ class _GoogleCloudStorageOutputWriter(_GoogleCloudStorageOutputWriterBase):
 
     def end_slice(self, slice_ctx):
       if not self._streaming_buffer.closed:
-          self._streaming_buffer.flush()
+          self._streaming_buffer.close()
 
     def to_json(self):
       result = {
-        self._JSON_GCS_BUFFER: self._streaming_buffer.to_dict(),
+        "gcs_url": f"gs://{self._streaming_buffer._blob.bucket.name}/{self._streaming_buffer._blob.name}",
         self._JSON_NO_DUP: self._no_dup
       }
       if self._no_dup:
@@ -807,7 +790,7 @@ class _GoogleCloudStorageOutputWriter(_GoogleCloudStorageOutputWriterBase):
                                   "filename": filename}
         else:
             self._streaming_buffer.close()
-            shard_state.writer_state = {"filename": self._streaming_buffer.name}
+            shard_state.writer_state = {"filename": self._streaming_buffer._blob.name}
 
     def _supports_slice_recovery(self, mapper_spec):
         writer_spec = self.get_params(mapper_spec, allow_old=False)

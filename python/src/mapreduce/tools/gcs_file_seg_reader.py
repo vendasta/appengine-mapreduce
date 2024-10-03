@@ -16,6 +16,10 @@
 
 from mapreduce import output_writers
 
+from google.cloud import storage
+
+_storage_client = storage.Client()
+
 # pylint: disable=protected-access
 # pylint: disable=invalid-name
 
@@ -58,17 +62,17 @@ class _GCSFileSegReader:
       some bytes. May be smaller than n bytes. "" when no more data is left.
     """
     if self._EOF:
-      return ""
+      return b""
 
     while self._seg_index <= self._last_seg_index:
       result = self._read_from_seg(n)
-      if result != "":
+      if result != b"":
         return result
       else:
         self._next_seg()
 
     self._EOF = True
-    return ""
+    return b""
 
   def close(self):
     if self._seg:
@@ -88,18 +92,18 @@ class _GCSFileSegReader:
       return
 
     filename = self._seg_prefix + str(self._seg_index)
-    stat = cloudstorage.stat(filename)
+    bucket_name, blob_name = filename[1:].split("/", 1)
+    bucket = _storage_client.bucket(bucket_name)
+    blob = bucket.blob(blob_name)
+    blob.reload()
+
     writer = output_writers._GoogleCloudStorageOutputWriter
-    if writer._VALID_LENGTH not in stat.metadata:
-      raise ValueError(
-          "Expect %s in metadata for file %s." %
-          (writer._VALID_LENGTH, filename))
-    self._seg_valid_length = int(stat.metadata[writer._VALID_LENGTH])
-    if self._seg_valid_length > stat.st_size:
-      raise ValueError(
-          "Valid length %s is too big for file %s of length %s" %
-          (self._seg_valid_length, filename, stat.st_size))
-    self._seg = cloudstorage.open(filename)
+    if blob.metadata is None or writer._VALID_LENGTH not in blob.metadata:
+      raise ValueError("Expect %s in metadata for file %s." % (writer._VALID_LENGTH, filename))
+    self._seg_valid_length = int(blob.metadata[writer._VALID_LENGTH])
+    if self._seg_valid_length > blob.size:
+      raise ValueError("Valid length %s is too big for file %s of length %s" % (self._seg_valid_length, filename, blob.size))
+    self._seg = blob.open("rb")
 
   def _read_from_seg(self, n):
     """Read from current seg.
@@ -111,7 +115,7 @@ class _GCSFileSegReader:
       valid bytes from the current seg. "" if no more is left.
     """
     result = self._seg.read(size=n)
-    if result == "":
+    if result == b"":
       return result
     offset = self._seg.tell()
     if offset > self._seg_valid_length:

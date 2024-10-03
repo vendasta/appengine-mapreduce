@@ -6,20 +6,14 @@
 
 # Using opensource naming conventions, pylint: disable=g-bad-name
 
-import unittest
 
 import pipeline
 from google.appengine.ext import db
-
-from mapreduce import input_readers
-from mapreduce import mapreduce_pipeline
-from mapreduce import operation
-from mapreduce import output_writers
-from mapreduce import shuffler
-from mapreduce import test_support
+from google.cloud import storage
 from testlib import testutil
 
-from google.cloud import storage
+from mapreduce import (input_readers, mapreduce_pipeline, operation,
+                       output_writers, shuffler, test_support)
 
 
 class FakeEntity(db.Model):
@@ -114,20 +108,21 @@ class CombinerTest(testutil.HandlerTestBase):
     bucket = storage.Client().get_bucket(bucket_name)
     for input_file in p.outputs.default.value:
       blob = bucket.blob(input_file)
-      with blob.open("r") as infile:
+      with blob.open("rb") as infile:
         for line in infile:
           file_content.append(line.strip())
 
     file_content = sorted(file_content)
 
     self.assertEqual(
-        ["('0', 9800)", "('1', 9900)", "('2', 10000)", "('3', 10100)"],
+        [b"('0', 9800)", b"('1', 9900)", b"('2', 10000)", b"('3', 10100)"],
         file_content)
 
   def testCombiner(self):
     """Test running with low values count but with combiner."""
     # Prepare test data
     entity_count = 200
+    bucket_name = "byates"
 
     for i in range(entity_count):
       FakeEntity(data=str(i)).put()
@@ -142,12 +137,12 @@ class CombinerTest(testutil.HandlerTestBase):
         output_writer_spec=
         output_writers.__name__ + ".GoogleCloudStorageOutputWriter",
         mapper_params={
-          "bucket_name": "byates",
+          "bucket_name": bucket_name,
           "entity_kind": __name__ + ".FakeEntity",
         },
         reducer_params={
             "output_writer": {
-                "bucket_name": "byates"
+                "bucket_name": bucket_name
             },
         },
         shards=4)
@@ -157,15 +152,17 @@ class CombinerTest(testutil.HandlerTestBase):
     p = mapreduce_pipeline.MapreducePipeline.from_id(p.pipeline_id)
     self.assertEqual(4, len(p.outputs.default.value))
     file_content = []
+    bucket = storage.Client().get_bucket(bucket_name)
     for input_file in p.outputs.default.value:
-      with cloudstorage.open(input_file) as infile:
+      blob = bucket.blob(input_file)
+      with blob.open("rb") as infile:
         for line in infile:
           file_content.append(line.strip())
 
     file_content = sorted(file_content)
 
     self.assertEqual(
-        ["('0', 9800)", "('1', 9900)", "('2', 10000)", "('3', 10100)"],
+        [b"('0', 9800)", b"('1', 9900)", b"('2', 10000)", b"('3', 10100)"],
         file_content)
 
     self.assertTrue(FakeCombiner.invocations)

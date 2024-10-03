@@ -97,7 +97,7 @@ class GoogleCloudStorageInputReaderEndToEndTest(testutil.CloudStorageTestBase):
     gcs_files = []
     bucket = _storage_client.get_bucket("byates")
     for num in range(10):
-        gcs_file = f"file{num}"
+        gcs_file = f"{self._testMethodName}/file{num}"
         blob = bucket.blob(gcs_file)
         blob.upload_from_string(str(num + 100))
         gcs_files.append(gcs_file)
@@ -138,7 +138,7 @@ class GoogleCloudStorageInputReaderEndToEndTest(testutil.CloudStorageTestBase):
                      sorted(_memory_mapper_data))
 
     # Now remove a file.
-    bucket.delete_blob("file5")
+    bucket.delete_blob(f"{self._testMethodName}/file5")
 
     # Non-strict MR still works but some output is not there.
     mr_id = _RunMR(False)
