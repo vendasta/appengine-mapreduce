@@ -26,7 +26,7 @@ def _input_reader_memory_mapper(data):
   _memory_mapper_data.append(data.read())
 
 
-class GoogleCloudStorageInputReaderEndToEndTest(testutil.CloudStorageTestBase):
+class GoogleCloudStorageInputReaderEndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
   """End-to-end tests for GoogleCloudStorageInputReader."""
 
   def _ClearMapperData(self):
@@ -62,8 +62,8 @@ class GoogleCloudStorageInputReaderEndToEndTest(testutil.CloudStorageTestBase):
   def _run_test(self, num_shards, num_files):
     # bucket_name = "testing"
     bucket_name = "byates"
-    object_prefix = "file-"
-    job_name = "test_map"
+    object_prefix = f"{self.gcsPrefix}/file-"
+    job_name = self.gcsPrefix
     input_class = (input_readers.__name__ + "." +
                    input_readers._GoogleCloudStorageInputReader.__name__)
 
@@ -97,7 +97,7 @@ class GoogleCloudStorageInputReaderEndToEndTest(testutil.CloudStorageTestBase):
     gcs_files = []
     bucket = _storage_client.get_bucket("byates")
     for num in range(10):
-        gcs_file = f"{self._testMethodName}/file{num}"
+        gcs_file = f"{self.gcsPrefix}/file{num}"
         blob = bucket.blob(gcs_file)
         blob.upload_from_string(str(num + 100))
         gcs_files.append(gcs_file)
@@ -138,7 +138,7 @@ class GoogleCloudStorageInputReaderEndToEndTest(testutil.CloudStorageTestBase):
                      sorted(_memory_mapper_data))
 
     # Now remove a file.
-    bucket.delete_blob(f"{self._testMethodName}/file5")
+    bucket.delete_blob(f"{self.gcsPrefix}/file5")
 
     # Non-strict MR still works but some output is not there.
     mr_id = _RunMR(False)

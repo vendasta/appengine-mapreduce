@@ -15,8 +15,7 @@ import datastore_input_reader_base_test
 from mapreduce.api.map_job import datastore_input_reader
 
 
-class DatastoreInputReaderTest(datastore_input_reader_base_test
-                               .DatastoreInputReaderBaseTest):
+class DatastoreInputReaderTest(testutil.CloudStorageTestBase, datastore_input_reader_base_test.DatastoreInputReaderBaseTest):
   """DatastoreInputReader specific tests."""
 
   @property
@@ -32,7 +31,7 @@ class DatastoreInputReaderTest(datastore_input_reader_base_test
     new = datetime.datetime.now()
     old = new.replace(year=new.year-1)
     conf = map_job.JobConfig(
-        job_name=self.TEST_JOB_NAME,
+        job_name=self.gcsPrefix,
         mapper=map_job.Mapper,
         input_reader_cls=self.reader_cls,
         input_reader_params=params,
@@ -55,7 +54,7 @@ class DatastoreInputReaderTest(datastore_input_reader_base_test
         "namespace": "",
         }
     conf = map_job.JobConfig(
-        job_name=self.TEST_JOB_NAME,
+        job_name=self.gcsPrefix,
         mapper=map_job.Mapper,
         input_reader_cls=self.reader_cls,
         input_reader_params=params,
@@ -78,7 +77,7 @@ class DatastoreInputReaderTest(datastore_input_reader_base_test
         "_app": OTHER_APP,
     }
     conf = map_job.JobConfig(
-        job_name=self.TEST_JOB_NAME,
+        job_name=self.gcsPrefix,
         mapper=map_job.Mapper,
         input_reader_cls=self.reader_cls,
         input_reader_params=params,

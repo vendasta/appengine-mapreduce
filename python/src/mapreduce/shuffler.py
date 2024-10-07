@@ -47,7 +47,6 @@ from mapreduce import output_writers
 from mapreduce import pipeline_base
 from mapreduce import records
 from mapreduce import util
-from functools import cmp_to_key
 
 
 from google.cloud import storage
@@ -77,16 +76,6 @@ class _OutputFile(db.Model):
       root key for a given job id to store output file entities.
     """
     return db.Key.from_path(cls.kind(), job_id)
-
-
-def _compare_keys(key_record1, key_record2):
-  """Compare two (key, records) protos by key."""
-  if key_record1[0] < key_record2[0]:
-    return -1
-  elif key_record1[0] > key_record2[0]:
-    return 1
-  else:
-    return 0
 
 
 class _BatchGCSRecordsReader(
@@ -139,7 +128,7 @@ def _sort_records_map(records):
     key_records[i] = (proto.key, records[i])
 
   logging.debug("Sorting")
-  key_records.sort(key=cmp_to_key(_compare_keys))
+  key_records.sort(key=lambda x: x[0])
 
   logging.debug("Writing")
   mapper_spec = ctx.mapreduce_spec.mapper

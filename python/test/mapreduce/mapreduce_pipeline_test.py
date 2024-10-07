@@ -96,7 +96,7 @@ class MapreducePipelineTest(testutil.HandlerTestBase):
         FakeEntity(data=str(i)).put()
 
       p = mapreduce_pipeline.MapreducePipeline(
-          "test",
+          self.gcsPrefix,
           __name__ + ".test_failed_map",
           __name__ + ".test_mapreduce_reduce",
           input_reader_spec=input_readers.__name__ + ".DatastoreInputReader",
@@ -124,7 +124,7 @@ class MapreducePipelineTest(testutil.HandlerTestBase):
     # Prepare test data
     # bucket_name = "testbucket"
     bucket_name = "byates"
-    job_name = "test_job"
+    job_name = self.gcsPrefix
     entity_count = 200
 
     for i in range(entity_count):

@@ -43,7 +43,10 @@ from mapreduce import model
 import mapreduce
 
 from flask import Flask
-from unittest import mock
+
+from google.cloud import storage
+
+_storage_client = storage.Client()
 
 
 class TestJsonType:
@@ -248,3 +251,14 @@ class CloudStorageTestBase(HandlerTestBase):
   TEST_BUCKET = "byates"
   TEST_TMP_BUCKET = "byates"
 
+  @property
+  def gcsPrefix(self):
+    return f"{self.__module__}/{self.__class__.__name__}/{self._testMethodName}"
+
+  @property
+  def bucket(self):
+    return _storage_client.get_bucket(self.TEST_BUCKET)
+  
+  @property
+  def tmp_bucket(self):
+    return _storage_client.get_bucket(self.TEST_TMP_BUCKET)

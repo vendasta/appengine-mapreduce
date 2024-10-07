@@ -20,7 +20,7 @@ from google.cloud import storage
 _storage_client = storage.Client()
 
 
-class HashEndToEndTest(testutil.HandlerTestBase):
+class HashEndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
   """End-to-end test for _HashPipeline."""
 
   def setUp(self):
@@ -39,7 +39,7 @@ class HashEndToEndTest(testutil.HandlerTestBase):
     input_data.sort()
 
     bucket_name = "byates"
-    test_filename = f"{self._testMethodName}/testfile"
+    test_filename = f"{self.gcsPrefix}/testfile"
     full_filename = f"/{bucket_name}/{test_filename}"
 
     bucket = _storage_client.get_bucket(bucket_name)
@@ -53,7 +53,7 @@ class HashEndToEndTest(testutil.HandlerTestBase):
           proto.value = v
           w.write(proto.SerializeToString())
 
-    p = shuffler._HashPipeline(self._testMethodName, bucket_name,
+    p = shuffler._HashPipeline(self.gcsPrefix, bucket_name,
                                [full_filename, full_filename, full_filename])
     p.start()
     test_support.execute_until_empty(self.taskqueue)
@@ -79,7 +79,7 @@ class HashEndToEndTest(testutil.HandlerTestBase):
     self.assertEqual(1, len(self.emails))
 
 
-class SortFileEndToEndTest(testutil.HandlerTestBase):
+class SortFileEndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
   """End-to-end test for _SortFilePipeline."""
 
   def setUp(self):
@@ -95,7 +95,7 @@ class SortFileEndToEndTest(testutil.HandlerTestBase):
   def testSortFile(self):
     """Test sorting a file."""
     bucket_name = "byates"
-    test_filename = f"{self._testMethodName}/testfile"
+    test_filename = f"{self.gcsPrefix}/testfile"
     full_filename = f"/{bucket_name}/{test_filename}"
 
     input_data = [
@@ -110,7 +110,7 @@ class SortFileEndToEndTest(testutil.HandlerTestBase):
           proto.value = v
           w.write(proto.SerializeToString())
 
-    p = shuffler._SortChunksPipeline("testjob", bucket_name, [[full_filename]])
+    p = shuffler._SortChunksPipeline(self.gcsPrefix, bucket_name, [[full_filename]])
     p.start()
     test_support.execute_until_empty(self.taskqueue)
     p = shuffler._SortChunksPipeline.from_id(p.pipeline_id)
@@ -150,9 +150,9 @@ class FakeMergePipeline(base_handler.PipelineBase):
     str((key, values)) obtained from MergingReader.
   """
 
-  def run(self, bucket_name, filenames):
+  def run(self, name, bucket_name, filenames):
     yield mapreduce_pipeline.MapperPipeline(
-        "sort",
+        name,
         __name__ + ".fake_handler_yield_str",
         shuffler.__name__ + "._MergingReader",
         output_writers.__name__ + "._GoogleCloudStorageRecordOutputWriter",
@@ -169,7 +169,7 @@ class FakeMergePipeline(base_handler.PipelineBase):
         )
 
 
-class MergingReaderEndToEndTest(testutil.HandlerTestBase):
+class MergingReaderEndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
   """End-to-end test for MergingReader."""
 
   def setUp(self):
@@ -187,10 +187,10 @@ class MergingReaderEndToEndTest(testutil.HandlerTestBase):
     input_data = [(str(i), "_" + str(i)) for i in range(100)]
     input_data.sort()
 
-    bucket_name = "byates"
-    test_filename = f"{self._testMethodName}/testfile"
+    test_filename = f"{self.gcsPrefix}/testfile"
+    full_filename = f"/{self.TEST_BUCKET}/{test_filename}"
 
-    bucket = _storage_client.get_bucket(bucket_name)
+    bucket = _storage_client.get_bucket(self.TEST_BUCKET)
     with bucket.blob(test_filename).open("wb") as f:
       with records.RecordsWriter(f) as w:
         for (k, v) in input_data:
@@ -199,8 +199,8 @@ class MergingReaderEndToEndTest(testutil.HandlerTestBase):
           proto.value = v
           w.write(proto.SerializeToString())
 
-    p = FakeMergePipeline(bucket_name,
-                          [test_filename, test_filename, test_filename])
+    p = FakeMergePipeline(self.gcsPrefix, self.TEST_BUCKET,
+                          [full_filename, full_filename, full_filename])
     p.start()
     test_support.execute_until_empty(self.taskqueue)
     p = FakeMergePipeline.from_id(p.pipeline_id)
@@ -226,11 +226,11 @@ class MergingReaderEndToEndTest(testutil.HandlerTestBase):
       input_data = [("1", "a"), ("2", "b"), ("3", "c")]
       input_data.sort()
 
-      bucket_name = "testbucket"
-      test_filename = f"{self._testMethodName}/testfile"
-      full_filename = f"/{bucket_name}/{test_filename}"
+      test_filename = f"{self.gcsPrefix}/testfile"
+      full_filename = f"/{self.TEST_BUCKET}/{test_filename}"
 
-      with cloudstorage.open(full_filename, mode="w") as f:
+      blob = self.bucket.blob(test_filename)
+      with blob.open("wb") as f:
         with records.RecordsWriter(f) as w:
           for (k, v) in input_data:
             proto = kv_pb.KeyValue()
@@ -238,7 +238,7 @@ class MergingReaderEndToEndTest(testutil.HandlerTestBase):
           proto.value = v
           w.write(proto.SerializeToString())
 
-      p = FakeMergePipeline(bucket_name,
+      p = FakeMergePipeline(self.gcsPrefix, self.TEST_BUCKET,
                             [full_filename, full_filename, full_filename])
       p.start()
       test_support.execute_until_empty(self.taskqueue)
@@ -246,7 +246,8 @@ class MergingReaderEndToEndTest(testutil.HandlerTestBase):
 
       output_file = p.outputs.default.value[0]
       output_data = []
-      with cloudstorage.open(output_file) as f:
+      blob = self.bucket.blob(output_file)
+      with blob.open("rb") as f:
         for record in records.RecordsReader(f):
           output_data.append(record)
 
@@ -267,7 +268,7 @@ class MergingReaderEndToEndTest(testutil.HandlerTestBase):
     self.assertEqual(1, len(self.emails))
 
 
-class ShuffleEndToEndTest(testutil.HandlerTestBase):
+class ShuffleEndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
   """End-to-end test for ShufflePipeline."""
 
   def setUp(self):
@@ -281,32 +282,36 @@ class ShuffleEndToEndTest(testutil.HandlerTestBase):
     self.emails.append((sender, subject, body, html))
 
   def testShuffleNoData(self):
-    bucket_name = "testbucket"
-    test_filename = f"{self._testMethodName}/testfile"
-    full_filename = f"/{bucket_name}/{test_filename}"
+    test_filename = f"{self.gcsPrefix}/testfile"
+    full_filename = f"/{self.TEST_BUCKET}/{test_filename}"
 
-    gcs_file = cloudstorage.open(full_filename, mode="w")
+    blob = self.bucket.blob(test_filename)
+    gcs_file = blob.open("wb")
+    gcs_file.write(b"")
     gcs_file.close()
 
-    p = shuffler.ShufflePipeline("testjob", {"bucket_name": bucket_name},
+    p = shuffler.ShufflePipeline(self.gcsPrefix, {"bucket_name": self.TEST_BUCKET},
                                  [full_filename, full_filename, full_filename])
     p.start()
     test_support.execute_until_empty(self.taskqueue)
 
     p = shuffler.ShufflePipeline.from_id(p.pipeline_id)
     for filename in p.outputs.default.value:
-      self.assertEqual(0, cloudstorage.stat(filename).st_size)
+      blob = self.bucket.blob(filename)
+      blob.reload()
+      self.assertEqual(0, blob.size)
     self.assertEqual(1, len(self.emails))
 
   def testShuffleNoFile(self):
-    bucket_name = "testbucket"
-    p = shuffler.ShufflePipeline("testjob", {"bucket_name": bucket_name}, [])
+    p = shuffler.ShufflePipeline(self.gcsPrefix, {"bucket_name": self.TEST_BUCKET}, [])
     p.start()
     test_support.execute_until_empty(self.taskqueue)
 
     p = shuffler.ShufflePipeline.from_id(p.pipeline_id)
     for filename in p.outputs.default.value:
-      self.assertEqual(0, cloudstorage.stat(filename).st_size)
+      blob = self.bucket.blob(filename)
+      blob.reload()
+      self.assertEqual(0, blob.size)
     self.assertEqual(1, len(self.emails))
 
   def testShuffleFiles(self):
@@ -314,11 +319,11 @@ class ShuffleEndToEndTest(testutil.HandlerTestBase):
     input_data = [(str(i), str(i)) for i in range(100)]
     input_data.sort()
 
-    bucket_name = "testbucket"
-    test_filename = f"{self._testMethodName}/testfile"
-    full_filename = f"/{bucket_name}/{test_filename}"
+    test_filename = f"{self.gcsPrefix}/testfile"
+    full_filename = f"/{self.TEST_BUCKET}/{test_filename}"
 
-    with cloudstorage.open(full_filename, mode="w") as f:
+    blob = self.bucket.blob(test_filename)
+    with blob.open("wb") as f:
       with records.RecordsWriter(f) as w:
         for (k, v) in input_data:
           proto = kv_pb.KeyValue()
@@ -326,7 +331,7 @@ class ShuffleEndToEndTest(testutil.HandlerTestBase):
           proto.value = v
           w.write(proto.SerializeToString())
 
-    p = shuffler.ShufflePipeline("testjob", {"bucket_name": bucket_name},
+    p = shuffler.ShufflePipeline(self.gcsPrefix, {"bucket_name": self.TEST_BUCKET},
                                  [full_filename, full_filename, full_filename])
     p.start()
     test_support.execute_until_empty(self.taskqueue)
@@ -335,16 +340,16 @@ class ShuffleEndToEndTest(testutil.HandlerTestBase):
     output_files = p.outputs.default.value
     output_data = []
     for output_file in output_files:
-      with cloudstorage.open(output_file) as f:
+      blob = self.bucket.blob(output_file)
+      with blob.open("rb") as f:
         for record in records.RecordsReader(f):
           proto = kv_pb.KeyValues()
           proto.ParseFromString(record)
-          output_data.append((proto.key, proto.value_list))
+          output_data.append((proto.key, proto.value))
     output_data.sort()
 
     expected_data = sorted([
         (str(k), [str(v), str(v), str(v)]) for (k, v) in input_data])
     self.assertEqual(expected_data, output_data)
     self.assertEqual(1, len(self.emails))
-
 

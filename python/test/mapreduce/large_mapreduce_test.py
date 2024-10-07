@@ -59,7 +59,7 @@ class LargeMapreduceTest(testutil.HandlerTestBase):
     FakeEntity(data=str(1)).put()
     # Run Mapreduce
     p = mapreduce_pipeline.MapreducePipeline(
-        "test",
+        self.gcsPrefix,
         __name__ + ".map_yield_lots_of_values",
         __name__ + ".reduce_length",
         input_reader_spec=input_readers.__name__ + ".DatastoreInputReader",
@@ -87,11 +87,11 @@ class LargeMapreduceTest(testutil.HandlerTestBase):
     output_data = []
     bucket = _storage_client.get_bucket(bucket_name)
     for output_file in p.outputs.default.value:
-      with bucket.blob(output_file).open("r") as f:
+      with bucket.blob(output_file).open("rb") as f:
         for record in records.RecordsReader(f):
           output_data.append(record)
 
-    expected_data = ["('1', 50000)"]
+    expected_data = [b"('1', 50000)"]
     expected_data.sort()
     output_data.sort()
     self.assertEqual(expected_data, output_data)

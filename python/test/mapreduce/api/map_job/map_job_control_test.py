@@ -27,14 +27,14 @@ class FakeHooks(hooks.Hooks):
     task.add(queue_name=queue_name)
 
 
-class MapJobStartTest(testutil.HandlerTestBase):
+class MapJobStartTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
   """Test For start."""
 
   def setUp(self):
     super().setUp()
     FakeHooks.enqueue_kickoff_task_calls = []
     self.config = map_job.JobConfig(
-        job_name="test_map",
+        job_name=self.gcsPrefix,
         shard_count=1,
         mapper=map_job.Mapper,
         input_reader_cls=sample_input_reader.SampleInputReader,
@@ -111,13 +111,13 @@ class MapJobStartTest(testutil.HandlerTestBase):
     self.validate_map_started()
 
 
-class MapJobStatusTest(testutil.HandlerTestBase):
+class MapJobStatusTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
   """Test For Job status."""
 
   def setUp(self):
     super().setUp()
     self.config = map_job.JobConfig(
-        job_name="test_map",
+        job_name=self.gcsPrefix,
         shard_count=1,
         mapper=map_job.Mapper,
         input_reader_cls=sample_input_reader.SampleInputReader,

@@ -29,14 +29,14 @@ from google.cloud import storage
 
 _storage_client = storage.Client()
 
-class GCSRecordsPoolTest(testutil.CloudStorageTestBase):
+class GCSRecordsPoolTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
   """Tests for GCSRecordsPool."""
 
   def setUp(self):
     super().setUp()
     # bucket_name = "testbucket"
     bucket_name = "byates"
-    test_filename = "testfile"
+    test_filename = f"{self.gcsPrefix}/testfile"
 
     bucket = _storage_client.get_bucket(bucket_name)
     self.blob = bucket.blob(test_filename)
@@ -47,9 +47,9 @@ class GCSRecordsPoolTest(testutil.CloudStorageTestBase):
                                               flush_size_chars=30)
 
   def testAppendAndFlush(self):
-    self.pool.append("a")
+    self.pool.append(b"a")
     self.assertFalse(self.blob.exists())
-    self.pool.append("b")
+    self.pool.append(b"b")
     self.assertFalse(self.blob.exists())
     self.pool.flush()
     self.assertFalse(self.blob.exists())
@@ -63,9 +63,9 @@ class GCSRecordsPoolTest(testutil.CloudStorageTestBase):
         list(records.RecordsReader(self.filehandle)))
 
   def testAppendAndForceFlush(self):
-    self.pool.append("a")
+    self.pool.append(b"a")
     self.assertFalse(self.blob.exists())
-    self.pool.append("b")
+    self.pool.append(b"b")
     self.assertFalse(self.blob.exists())
     self.pool.flush(True)
     self.assertFalse(self.blob.exists())
@@ -125,7 +125,7 @@ class GCSOutputTestBase:
       a model.MapreduceSpec with default settings and specified output_params.
     """
     mapreduce_spec = model.MapreduceSpec(
-        "DummyMapReduceJobName",
+        f"{self.gcsPrefix}/DummyMapReduceJobName",
         "DummyMapReduceJobId",
         self.create_mapper_spec(output_params=output_params).to_json())
     mapreduce_state = model.MapreduceState.create_new("DummyMapReduceJobId")
@@ -135,7 +135,7 @@ class GCSOutputTestBase:
 
 
 class GCSOutputWriterNoDupModeTest(GCSOutputTestBase,
-                                   testutil.CloudStorageTestBase):
+                                   testutil.CloudStorageTestBase, testutil.HandlerTestBase):
 
   WRITER_CLS = output_writers.GoogleCloudStorageOutputWriter
   WRITER_NAME = output_writers.__name__ + "." + WRITER_CLS.__name__
@@ -170,14 +170,14 @@ class GCSOutputWriterNoDupModeTest(GCSOutputTestBase,
       writer = self.WRITER_CLS.create(self.mr_state.mapreduce_spec,
                                       shard.shard_number, 0)
       # Verify files are created under tmp dir.
-      tmp_file = writer._streaming_buffer.name
+      tmp_file = writer._streaming_buffer._blob.name
       self.assertTrue(self.WRITER_CLS._MR_TMP in tmp_file)
       tmp_files.add(tmp_file)
       cxt = context.Context(self.mr_state.mapreduce_spec, shard)
       writer.finalize(cxt, shard)
       # Verify the integrity of writer state.
       self.assertEqual(
-          writer._streaming_buffer.name,
+          writer._streaming_buffer._blob.name,
           (shard.writer_state[self.WRITER_CLS._SEG_PREFIX] +
            str(shard.writer_state[self.WRITER_CLS._LAST_SEG_INDEX])))
       final_file = shard.writer_state["filename"]
@@ -242,9 +242,9 @@ class GCSOutputWriterNoDupModeTest(GCSOutputTestBase,
 
     # Verify filenames.
     self.assertTrue(
-        writer._streaming_buffer.name.endswith(str(writer._seg_index)))
+        writer._streaming_buffer._blob.name.endswith(str(writer._seg_index)))
     self.assertTrue(
-        new_writer._streaming_buffer.name.endswith(str(new_writer._seg_index)))
+        new_writer._streaming_buffer._blob.name.endswith(str(new_writer._seg_index)))
 
 
 class GCSOutputWriterTestCommon(GCSOutputTestBase):
@@ -442,9 +442,8 @@ class GCSOutputWriterTestCommon(GCSOutputTestBase):
         filename = self.WRITER_CLS._get_filename(shard_state)
 
         self.assertNotEqual(None, filename)
-        bucket = _storage_client.get_bucket(self.TEST_BUCKET)
-        filename = filename.replace(f"/{self.TEST_BUCKET}/", "")
-        blob = bucket.blob(filename)
+        filename = filename.removeprefix(f"/{self.TEST_BUCKET}/")
+        blob = self.bucket.blob(filename)
         self.assertEqual(data + data, blob.download_as_bytes())
 
     def testWriterCounters(self):
@@ -550,28 +549,28 @@ class GCSRecordOutputWriterTestBase(GCSOutputTestBase):
 
 
 class GCSRecordOutputWriterTest(GCSRecordOutputWriterTestBase,
-                                testutil.CloudStorageTestBase):
+                                testutil.CloudStorageTestBase, testutil.HandlerTestBase):
 
   WRITER_CLS = output_writers.GoogleCloudStorageRecordOutputWriter
   WRITER_NAME = output_writers.__name__ + "." + WRITER_CLS.__name__
 
 
 class GCSConsistentRecordOutputWriterTest(GCSRecordOutputWriterTestBase,
-                                          testutil.CloudStorageTestBase):
+                                          testutil.CloudStorageTestBase, testutil.HandlerTestBase):
 
   WRITER_CLS = output_writers.GoogleCloudStorageConsistentRecordOutputWriter
   WRITER_NAME = output_writers.__name__ + "." + WRITER_CLS.__name__
 
 
 class GCSOutputWriterTest(GCSOutputWriterTestCommon,
-                          testutil.CloudStorageTestBase):
+                          testutil.CloudStorageTestBase, testutil.HandlerTestBase):
 
   WRITER_CLS = output_writers.GoogleCloudStorageOutputWriter
   WRITER_NAME = output_writers.__name__ + "." + WRITER_CLS.__name__
 
 
 class GCSOutputConsistentOutputWriterTest(GCSOutputWriterTestCommon,
-                                          testutil.CloudStorageTestBase):
+                                          testutil.CloudStorageTestBase, testutil.HandlerTestBase):
 
   WRITER_CLS = output_writers.GoogleCloudStorageConsistentOutputWriter
   WRITER_NAME = output_writers.__name__ + "." + WRITER_CLS.__name__
@@ -639,7 +638,7 @@ class GCSOutputConsistentOutputWriterTest(GCSOutputWriterTestCommon,
     writer.begin_slice(None)
 
     prefix = "gae_mr_tmp/DummyMapReduceJobId-tmp-19-"
-    tmpfile_name = writer.status.tmpfile.name
+    tmpfile_name = writer.status.tmpfile._blob.name
     self.assertTrue(tmpfile_name.startswith(prefix),
                     "Test file name is: %s" % tmpfile_name)
 
@@ -686,38 +685,36 @@ class GCSOutputConsistentOutputWriterTest(GCSOutputWriterTestCommon,
                                     shard_state.shard_number, 0)
     writer.begin_slice(None)
 
-    bucket = _storage_client.get_bucket(self.TEST_BUCKET)
-
     # our shard
     our_file = "gae_mr_tmp/DummyMapReduceJobId-tmp-1-very-random"
-    blob = bucket.blob(our_file)
+    blob = self.bucket.blob(our_file)
     blob.upload_from_string("foo?")
 
     # not our shard
     their_file = "gae_mr_tmp/DummyMapReduceJobId-tmp-3-very-random"
-    blob = bucket.blob(their_file)
+    blob = self.bucket.blob(their_file)
     blob.upload_from_string("bar?")
 
     # unrelated file
     real_file = "this_things_should_survive"
-    blob = bucket.blob(real_file)
+    blob = self.bucket.blob(real_file)
     blob.upload_from_string("yes, foobar!")
 
     # Make sure bogus file still exists
-    self.assertTrue(bucket.blob(our_file).exists())
-    self.assertTrue(bucket.blob(their_file).exists())
-    self.assertTrue(bucket.blob(real_file).exists())
+    self.assertTrue(self.bucket.blob(our_file).exists())
+    self.assertTrue(self.bucket.blob(their_file).exists())
+    self.assertTrue(self.bucket.blob(real_file).exists())
 
     # slice end should clean up the garbage
     writer = self._serialize_and_deserialize(writer)
 
-    self.assertFalse(bucket.blob(our_file).exists())
-    self.assertTrue(bucket.blob(their_file).exists())
-    self.assertTrue(bucket.blob(real_file).exists())
+    self.assertFalse(self.bucket.blob(our_file).exists())
+    self.assertTrue(self.bucket.blob(their_file).exists())
+    self.assertTrue(self.bucket.blob(real_file).exists())
 
     # finalize shouldn't change anything
     writer.finalize(ctx, shard_state)
 
-    self.assertFalse(bucket.blob(our_file).exists())
-    self.assertTrue(bucket.blob(their_file).exists())
-    self.assertTrue(bucket.blob(real_file).exists())
+    self.assertFalse(self.bucket.blob(our_file).exists())
+    self.assertTrue(self.bucket.blob(their_file).exists())
+    self.assertTrue(self.bucket.blob(real_file).exists())

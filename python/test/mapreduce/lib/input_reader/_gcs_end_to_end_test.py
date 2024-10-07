@@ -35,7 +35,7 @@ class _MyPathFilter(input_reader.PathFilter):
     return True
 
 
-class GCSInputReaderEndToEndTest(testutil.CloudStorageTestBase):
+class GCSInputReaderEndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
   """End-to-end tests for GoogleCloudStorageInputReader."""
 
   def setUp(self):
@@ -75,8 +75,8 @@ class GCSInputReaderEndToEndTest(testutil.CloudStorageTestBase):
   def _run_test(self, num_shards, num_files, multi_slices=False):
     # bucket_name = "testing"
     bucket_name = "byates"
-    object_prefix = "file-"
-    job_name = "test_map"
+    object_prefix = f"{self.gcsPrefix}/file-"
+    job_name = self.gcsPrefix
     expected_content = self.create_test_content(bucket_name,
                                                 object_prefix,
                                                 num_files)

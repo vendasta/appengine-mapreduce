@@ -28,8 +28,6 @@ class SkipTestsMeta(type):
 class DatastoreInputReaderBaseTest(unittest.TestCase, metaclass=SkipTestsMeta):
   """Base test class used by concrete DatastoreInputReaders."""
 
-  TEST_JOB_NAME = "TestJobHandlerName"
-
   # Subclass should override with its own create entities function.
   @property
   def _create_entities(self):
@@ -127,7 +125,7 @@ class DatastoreInputReaderBaseTest(unittest.TestCase, metaclass=SkipTestsMeta):
         "namespace": "f",
         }
     conf = map_job.JobConfig(
-        job_name=self.TEST_JOB_NAME,
+        job_name=self.gcsPrefix,
         mapper=map_job.Mapper,
         input_reader_cls=self.reader_cls,
         input_reader_params=params,
@@ -143,7 +141,7 @@ class DatastoreInputReaderBaseTest(unittest.TestCase, metaclass=SkipTestsMeta):
         "namespace": "f",
         }
     conf = map_job.JobConfig(
-        job_name=self.TEST_JOB_NAME,
+        job_name=self.gcsPrefix,
         mapper=map_job.Mapper,
         input_reader_cls=self.reader_cls,
         input_reader_params=params,
@@ -157,7 +155,7 @@ class DatastoreInputReaderBaseTest(unittest.TestCase, metaclass=SkipTestsMeta):
         "entity_kind": self.entity_kind,
         }
     conf = map_job.JobConfig(
-        job_name=self.TEST_JOB_NAME,
+        job_name=self.gcsPrefix,
         mapper=map_job.Mapper,
         input_reader_cls=self.reader_cls,
         input_reader_params=params,
@@ -172,7 +170,7 @@ class DatastoreInputReaderBaseTest(unittest.TestCase, metaclass=SkipTestsMeta):
         "entity_kind": self.entity_kind,
         }
     conf = map_job.JobConfig(
-        job_name=self.TEST_JOB_NAME,
+        job_name=self.gcsPrefix,
         mapper=map_job.Mapper,
         input_reader_cls=self.reader_cls,
         input_reader_params=params,
@@ -189,7 +187,7 @@ class DatastoreInputReaderBaseTest(unittest.TestCase, metaclass=SkipTestsMeta):
         "entity_kind": self.entity_kind,
         }
     conf = map_job.JobConfig(
-        job_name=self.TEST_JOB_NAME,
+        job_name=self.gcsPrefix,
         mapper=map_job.Mapper,
         input_reader_cls=self.reader_cls,
         input_reader_params=params,
@@ -207,7 +205,7 @@ class DatastoreInputReaderBaseTest(unittest.TestCase, metaclass=SkipTestsMeta):
         "entity_kind": self.entity_kind,
         }
     conf = map_job.JobConfig(
-        job_name=self.TEST_JOB_NAME,
+        job_name=self.gcsPrefix,
         mapper=map_job.Mapper,
         input_reader_cls=self.reader_cls,
         input_reader_params=params,
@@ -241,7 +239,7 @@ class DatastoreInputReaderBaseTest(unittest.TestCase, metaclass=SkipTestsMeta):
         "entity_kind": self.entity_kind,
         "namespace": None}
     conf = map_job.JobConfig(
-        job_name=self.TEST_JOB_NAME,
+        job_name=self.gcsPrefix,
         mapper=map_job.Mapper,
         input_reader_cls=self.reader_cls,
         input_reader_params=params,

@@ -151,7 +151,7 @@ class FakeOutputWriter(output_writers.OutputWriter):
     pass
 
 
-class EndToEndTest(testutil.HandlerTestBase):
+class EndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
   """Test mapreduce functionality end to end."""
 
   def setUp(self):
@@ -302,7 +302,7 @@ class EndToEndTest(testutil.HandlerTestBase):
     input_data = [str(i).encode() for i in range(100)]
 
     bucket_name = "byates"
-    test_filename = "testfile"
+    test_filename = f"{self.gcsPrefix}/testfile"
 
     bucket = _storage_client.get_bucket(bucket_name)
     blob = bucket.blob(test_filename)
@@ -333,7 +333,7 @@ class EndToEndTest(testutil.HandlerTestBase):
     input_data = [str(i).encode() for i in range(100)]
 
     bucket_name = "byates"
-    test_filename = "testfile"
+    test_filename = f"{self.gcsPrefix}/testfile"
 
     bucket = _storage_client.get_bucket(bucket_name)
     blob = bucket.blob(test_filename)
@@ -368,7 +368,7 @@ class EndToEndTest(testutil.HandlerTestBase):
     input_data = [str(i).encode() for i in range(100)]
 
     bucket_name = "byates"
-    test_filename = "testfile"
+    test_filename = f"{self.gcsPrefix}/testfile"
 
     bucket = _storage_client.get_bucket(bucket_name)
     blob = bucket.blob(test_filename)
@@ -399,14 +399,12 @@ class EndToEndTest(testutil.HandlerTestBase):
     self.assertEqual([], model._HugeTaskPayload.all().fetch(100))
 
 
-class GCSOutputWriterTestBase(testutil.CloudStorageTestBase):
+class GCSOutputWriterTestBase(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
   """Base class for all GCS output writer tests."""
 
   def setUp(self):
     super().setUp()
     self.original_slice_duration = parameters.config._SLICE_DURATION_SEC
-    # Use this to adjust what is printed for debugging purpose.
-    logging.getLogger().setLevel(logging.CRITICAL)
     self.writer_cls = output_writers._GoogleCloudStorageOutputWriter
 
     # Populate datastore with inputs.
@@ -430,7 +428,7 @@ class GCSOutputWriterNoDupModeTest(GCSOutputWriterTestBase):
 
   def testSliceRecoveryWithForcedFlushing(self):
     mr_id = control.start_map(
-        "test_map",
+        self.gcsPrefix,
         __name__ + ".FaultyHandler",
         input_readers.__name__ + ".DatastoreInputReader",
         {
@@ -465,15 +463,14 @@ class GCSOutputWriterNoDupModeTest(GCSOutputWriterTestBase):
     self._assertOutputEqual(seg_prefix, last_seg_index)
 
     # Check there are indeed duplicated data.
-    bucket = _storage_client.get_bucket(self.TEST_BUCKET)
-    f1 = {line for line in bucket.blob(seg_prefix + "0").open("rb")}
-    f2 = {line for line in bucket.blob(seg_prefix + "1").open("rb")}
+    f1 = {line for line in self.bucket.blob(seg_prefix + "0").open("rb")}
+    f2 = {line for line in self.bucket.blob(seg_prefix + "1").open("rb")}
     common = f1.intersection(f2)
     self.assertEqual({"10\n", "11\n"}, common)
 
   def testSliceRecoveryWithFrequentFlushing(self):
     mr_id = control.start_map(
-        "test_map",
+        self.gcsPrefix,
         __name__ + ".FaultyHandler",
         input_readers.__name__ + ".DatastoreInputReader",
         {
@@ -510,7 +507,7 @@ class GCSOutputWriterNoDupModeTest(GCSOutputWriterTestBase):
   def testSliceRecoveryWithNoFlushing(self):
     # Flushing is done every 256K, which means never until slice recovery.
     mr_id = control.start_map(
-        "test_map",
+        self.gcsPrefix,
         __name__ + ".FaultyHandler",
         input_readers.__name__ + ".DatastoreInputReader",
         {

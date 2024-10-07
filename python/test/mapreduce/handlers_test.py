@@ -2356,18 +2356,6 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.mapreduce_state.put()
 
     self.handler = handlers.ControllerCallbackHandler()
-    self.handler._time = MockTime.time
-    request = Request()
-    request.headers["X-AppEngine-QueueName"] = "default"
-    request.headers["X-AppEngine-TaskName"] = "foo-task-name"
-    request.headers[util._MR_ID_TASK_HEADER] = self.mapreduce_id
-    request.headers[model.HugeTask.PAYLOAD_VERSION_HEADER] = (
-        model.HugeTask.PAYLOAD_VERSION)
-    request.path = "/mapreduce/controller_callback"
-
-    self.request = request
-    self.handler.request.set("mapreduce_spec", mapreduce_spec.to_json_str())
-    self.handler.request.set("serial_id", "1234")
 
     self.verify_mapreduce_state(self.mapreduce_state, shard_count=3)
 
@@ -2420,7 +2408,21 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     # New controller task will drop itself because it detected that
     # mapreduce_state.active is False.
     # It will enqueue a finalizejob callback to cleanup garbage.
-    self.handler.post()
+    with self.app.test_request_context(
+      "/mapreduce/controller_callback",
+      headers={
+        "X-AppEngine-QueueName": "default",
+        "X-AppEngine-TaskName": "foo-task-name",
+        util._MR_ID_TASK_HEADER: self.mapreduce_id,
+        model.HugeTask.PAYLOAD_VERSION_HEADER: model.HugeTask.PAYLOAD_VERSION
+      },
+      method="POST",
+      data={
+        "mapreduce_spec": mapreduce_state.mapreduce_spec.to_json_str(),
+        "serial_id": "1234",
+      },
+    ):
+      self.handler.dispatch_request()
     tasks = self.taskqueue.GetTasks("default")
     self.assertEqual(1, len(tasks))
     self.assertEqual("/mapreduce/finalizejob_callback/" + self.mapreduce_id,
@@ -2430,9 +2432,20 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     for i in range(3):
       self.create_and_store_shard_state(self.mapreduce_id, i)
 
-    del self.request.headers[model.HugeTask.PAYLOAD_VERSION_HEADER]
-    self.handler.initialize(self.request, self.response)
-    self.handler.post()
+    with self.app.test_request_context(
+      "/mapreduce/controller_callback",
+      headers={
+        "X-AppEngine-QueueName": "default",
+        "X-AppEngine-TaskName": "foo-task-name",
+        util._MR_ID_TASK_HEADER: self.mapreduce_id,
+      },
+      method="POST",
+      data={
+        "mapreduce_spec": self.mapreduce_state.mapreduce_spec.to_json_str(),
+        "serial_id": "1234",
+      },
+    ):
+      self.handler.dispatch_request()
 
     state = model.MapreduceState.get_by_job_id(self.mapreduce_id)
     self.assertFalse(state.active)
@@ -2453,10 +2466,21 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     shard_states[0].set_for_failure()
     shard_states[0].put()
 
-    del self.request.headers[model.HugeTask.PAYLOAD_VERSION_HEADER]
-    self.handler.initialize(self.request, self.response)
-    self.handler.post()
-    self.handler.post()
+    with self.app.test_request_context(
+      "/mapreduce/controller_callback",
+      headers={
+        "X-AppEngine-QueueName": "default",
+        "X-AppEngine-TaskName": "foo-task-name",
+        util._MR_ID_TASK_HEADER: self.mapreduce_id,
+      },
+      method="POST",
+      data={
+        "mapreduce_spec": state.mapreduce_spec.to_json_str(),
+        "serial_id": "1234",
+      },
+    ):
+      self.handler.dispatch_request()
+      self.handler.dispatch_request()
 
     state = model.MapreduceState.get_by_job_id(self.mapreduce_id)
     self.assertFalse(state.active)

@@ -276,7 +276,7 @@ class GCSInputReader(map_job.InputReader):
     obj = pickle.loads(base64.b64decode(state[cls._JSON_PICKLE]))
     # fail_on_missing_input might not be set - default to False.
     obj._fail_on_missing_input = state.get(
-        cls._JSON_FAIL_ON_MISSING_INPUT, False)
+        "fail_on_missing_input", False)
     if state.get("bucket", None):
       bucket_name = state["bucket"]["name"]
       prefix = state["bucket"]["prefix"]

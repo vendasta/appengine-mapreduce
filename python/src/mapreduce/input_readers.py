@@ -37,7 +37,6 @@ __all__ = [
     "InputReader",
     "LogInputReader",
     "NamespaceInputReader",
-    "storage_client",
     ]
 
 # pylint: disable=g-bad-name
@@ -2507,27 +2506,27 @@ class _GoogleCloudStorageInputReader(InputReader):
       filename = self._next_file()
       if filename is None:
         raise StopIteration()
-      try:
-        start_time = time.time()
-        bucket_name = filename.split("/")[1]
-        object_name = "/".join(filename.split("/")[2:])
-        bucket = _storage_client.get_bucket(bucket_name)
-        blob = bucket.blob(object_name)
 
-        ctx = context.get()
-        if ctx:
-          operation.counters.Increment(
-              COUNTER_IO_READ_MSEC, int((time.time() - start_time) * 1000))(ctx)
+      start_time = time.time()
+      bucket_name = filename.split("/")[1]
+      object_name = "/".join(filename.split("/")[2:])
+      bucket = _storage_client.get_bucket(bucket_name)
+      blob = bucket.blob(object_name)
 
-        return blob.open("rb")
-      except exceptions.NotFound:
-        # Fail the job if we're strict on missing input.
+      ctx = context.get()
+      if ctx:
+        operation.counters.Increment(
+            COUNTER_IO_READ_MSEC, int((time.time() - start_time) * 1000))(ctx)
+
+      if not blob.exists():
         if getattr(self, "_fail_on_missing_input", False):
           raise errors.FailJobError(
               "File missing in GCS, aborting: %s" % filename)
-        # Move on otherwise.
         logging.warning("File %s may have been removed. Skipping file.",
                         filename)
+        continue
+
+      return blob.open("rb")
 
   def __str__(self):
     # Only show a limited number of files individually for readability

@@ -17,10 +17,8 @@ from mapreduce.api.map_job import abstract_datastore_input_reader
 # pylint: disable=invalid-name
 
 
-class AbstractDatastoreInputReaderTest(unittest.TestCase):
+class AbstractDatastoreInputReaderTest(testutil.CloudStorageTestBase, unittest.TestCase):
   """Tests for AbstractDatastoreInputReader."""
-
-  TEST_JOB_NAME = "TestJobHandlerName"
 
   @property
   def reader_cls(self):
@@ -48,7 +46,7 @@ class AbstractDatastoreInputReaderTest(unittest.TestCase):
         "entity_kind": testutil.ENTITY_KIND,
         }
     conf = map_job.JobConfig(
-        job_name=self.TEST_JOB_NAME,
+        job_name=self.gcsPrefix,
         mapper=map_job.Mapper,
         input_reader_cls=self.reader_cls,
         input_reader_params=params,
@@ -59,7 +57,7 @@ class AbstractDatastoreInputReaderTest(unittest.TestCase):
     """Test validate function raises exception with no entity parameter."""
     params = {}
     conf = map_job.JobConfig(
-        job_name=self.TEST_JOB_NAME,
+        job_name=self.gcsPrefix,
         mapper=map_job.Mapper,
         input_reader_cls=self.reader_cls,
         input_reader_params=params,
@@ -74,7 +72,7 @@ class AbstractDatastoreInputReaderTest(unittest.TestCase):
         "entity_kind": "foo",
         }
     conf = map_job.JobConfig(
-        job_name=self.TEST_JOB_NAME,
+        job_name=self.gcsPrefix,
         mapper=map_job.Mapper,
         input_reader_cls=self.reader_cls,
         input_reader_params=params,
@@ -88,7 +86,7 @@ class AbstractDatastoreInputReaderTest(unittest.TestCase):
         "batch_size": "xxx"
         }
     conf = map_job.JobConfig(
-        job_name=self.TEST_JOB_NAME,
+        job_name=self.gcsPrefix,
         mapper=map_job.Mapper,
         input_reader_cls=self.reader_cls,
         input_reader_params=params,
@@ -102,7 +100,7 @@ class AbstractDatastoreInputReaderTest(unittest.TestCase):
         "batch_size": "0"
         }
     conf = map_job.JobConfig(
-        job_name=self.TEST_JOB_NAME,
+        job_name=self.gcsPrefix,
         mapper=map_job.Mapper,
         input_reader_cls=self.reader_cls,
         input_reader_params=params,
@@ -117,7 +115,7 @@ class AbstractDatastoreInputReaderTest(unittest.TestCase):
         "batch_size": "-1"
         }
     conf = map_job.JobConfig(
-        job_name=self.TEST_JOB_NAME,
+        job_name=self.gcsPrefix,
         mapper=map_job.Mapper,
         input_reader_cls=self.reader_cls,
         input_reader_params=params,
@@ -133,7 +131,7 @@ class AbstractDatastoreInputReaderTest(unittest.TestCase):
         "namespace": 5
         }
     conf = map_job.JobConfig(
-        job_name=self.TEST_JOB_NAME,
+        job_name=self.gcsPrefix,
         mapper=map_job.Mapper,
         input_reader_cls=self.reader_cls,
         input_reader_params=params,

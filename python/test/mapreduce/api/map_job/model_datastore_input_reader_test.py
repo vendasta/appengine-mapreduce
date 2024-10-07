@@ -18,8 +18,7 @@ from mapreduce.api.map_job import model_datastore_input_reader
 # pylint: disable=invalid-name
 
 
-class ModelDBDatastoreInputReaderTest(datastore_input_reader_base_test
-                                      .DatastoreInputReaderBaseTest):
+class ModelDBDatastoreInputReaderTest(testutil.CloudStorageTestBase, datastore_input_reader_base_test.DatastoreInputReaderBaseTest):
   """Test ModelDatastoreInputReader using Model.db."""
 
   @property
@@ -36,7 +35,7 @@ class ModelDBDatastoreInputReaderTest(datastore_input_reader_base_test
         "entity_kind": "foo",
         }
     conf = map_job.JobConfig(
-        job_name=self.TEST_JOB_NAME,
+        job_name=self.gcsPrefix,
         mapper=map_job.Mapper,
         input_reader_cls=self.reader_cls,
         input_reader_params=params,
@@ -54,7 +53,7 @@ class ModelDBDatastoreInputReaderTest(datastore_input_reader_base_test
     new = datetime.datetime.now()
     old = new.replace(year=new.year-1)
     conf = map_job.JobConfig(
-        job_name=self.TEST_JOB_NAME,
+        job_name=self.gcsPrefix,
         mapper=map_job.Mapper,
         input_reader_cls=self.reader_cls,
         input_reader_params=params,
@@ -121,7 +120,7 @@ class ModelDBDatastoreInputReaderTest(datastore_input_reader_base_test
                     ("b", "=", 1)],
         }
     conf = map_job.JobConfig(
-        job_name=self.TEST_JOB_NAME,
+        job_name=self.gcsPrefix,
         mapper=map_job.Mapper,
         input_reader_cls=self.reader_cls,
         input_reader_params=params,
@@ -138,7 +137,7 @@ class ModelDBDatastoreInputReaderTest(datastore_input_reader_base_test
         "filters": [("a", ">", 0), ("a", "<=", 3), ("b", "=", 1)]
         }
     conf = map_job.JobConfig(
-        job_name=self.TEST_JOB_NAME,
+        job_name=self.gcsPrefix,
         mapper=map_job.Mapper,
         input_reader_cls=self.reader_cls,
         input_reader_params=params,
@@ -158,7 +157,7 @@ class ModelDBDatastoreInputReaderTest(datastore_input_reader_base_test
         "filters": [("a", ">", 0), ("a", "<=", 3), ("b", "=", 1)]
         }
     conf = map_job.JobConfig(
-        job_name=self.TEST_JOB_NAME,
+        job_name=self.gcsPrefix,
         mapper=map_job.Mapper,
         input_reader_cls=self.reader_cls,
         input_reader_params=params,
@@ -185,7 +184,7 @@ class ModelDBDatastoreInputReaderTest(datastore_input_reader_base_test
         "filters": [("a", ">", 0), ("a", "<=", 3), ("b", "=", 1)]
         }
     conf = map_job.JobConfig(
-        job_name=self.TEST_JOB_NAME,
+        job_name=self.gcsPrefix,
         mapper=map_job.Mapper,
         input_reader_cls=self.reader_cls,
         input_reader_params=params,
@@ -197,8 +196,7 @@ class ModelDBDatastoreInputReaderTest(datastore_input_reader_base_test
     self._assertEquals_splitInput(results[2], ["27", "29", "31"])
 
 
-class ModelNDBDatastoreInputReaderTest(datastore_input_reader_base_test
-                                       .DatastoreInputReaderBaseTest):
+class ModelNDBDatastoreInputReaderTest(testutil.CloudStorageTestBase, datastore_input_reader_base_test.DatastoreInputReaderBaseTest):
   """Test ModelDatastoreInputReader using Model.ndb."""
 
   @property

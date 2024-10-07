@@ -55,7 +55,7 @@ class MyMapper(map_job.Mapper):
     assert ctx.attempt is not None
 
 
-class MapperTest(testutil.HandlerTestBase):
+class MapperTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
   """Test mapper interface."""
 
   def setUp(self):
@@ -71,7 +71,7 @@ class MapperTest(testutil.HandlerTestBase):
     parameters.config._SLICE_DURATION_SEC = 0
 
     job_config = map_job.JobConfig(
-        job_name="test_map",
+        job_name=self.gcsPrefix,
         mapper=MyMapper,
         input_reader_cls=sample_input_reader.SampleInputReader,
         input_reader_params={"count": TEST_SAMPLE_INPUT_READER_COUNT},

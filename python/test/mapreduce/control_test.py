@@ -55,7 +55,7 @@ def fake_handler(entity):
   pass
 
 
-class ControlTest(testutil.HandlerTestBase):
+class ControlTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
   """Tests for control module."""
 
   QUEUE_NAME = "crazy-queue"
@@ -103,7 +103,7 @@ class ControlTest(testutil.HandlerTestBase):
 
     shard_count = 4
     mapreduce_id = control.start_map(
-        "test_map",
+        self.gcsPrefix,
         __name__ + ".fake_handler",
         "mapreduce.input_readers.DatastoreInputReader",
         {
@@ -128,7 +128,7 @@ class ControlTest(testutil.HandlerTestBase):
 
     shard_count = 4
     mapreduce_id = control.start_map(
-        "test_map",
+        self.gcsPrefix,
         __name__ + ".fake_handler",
         "mapreduce.input_readers.DatastoreInputReader",
         {
@@ -156,7 +156,7 @@ class ControlTest(testutil.HandlerTestBase):
 
     shard_count = 4
     mapreduce_id = control.start_map(
-        "test_map",
+        self.gcsPrefix,
         __name__ + ".fake_handler",
         "mapreduce.input_readers.DatastoreInputReader",
         {
@@ -285,7 +285,7 @@ class ControlTest(testutil.HandlerTestBase):
       some_entity = FakeEntity()
       some_entity.put()
       return control.start_map(
-          "test_map",
+          self.gcsPrefix,
           __name__ + ".fake_handler",
           "mapreduce.input_readers.DatastoreInputReader",
           {
@@ -314,7 +314,7 @@ class ControlTest(testutil.HandlerTestBase):
       some_entity = FakeEntity()
       some_entity.put()
       return control.start_map(
-          "test_map",
+          self.gcsPrefix,
           __name__ + ".fake_handler",
           "mapreduce.input_readers.DatastoreInputReader",
           {

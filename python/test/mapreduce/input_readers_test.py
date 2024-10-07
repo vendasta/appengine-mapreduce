@@ -2061,7 +2061,7 @@ class ReducerReaderTest(testutil.HandlerTestBase):
 
     # bucket_name = "testbucket"
     bucket_name = "byates"
-    test_filename = "testfile"
+    test_filename = f"{self.gcsPrefix}/testfile"
     full_filename = f"/{bucket_name}/{test_filename}"
 
     bucket = _storage_client.get_bucket(bucket_name)
@@ -2091,7 +2091,7 @@ class ReducerReaderTest(testutil.HandlerTestBase):
     # Set up a combiner for the _ReducerReader to drive.
     combiner_spec = "{}.{}".format(FakeCombiner.__module__, FakeCombiner.__name__)
     mapreduce_spec = model.MapreduceSpec(
-        "DummyMapReduceJobName",
+        self.gcsPrefix,
         "DummyMapReduceJobId",
         model.MapperSpec(
             "DummyHandler",
@@ -2180,7 +2180,7 @@ class ReducerReaderTest(testutil.HandlerTestBase):
       pass
 
 
-class GoogleCloudStorageInputTestBase(testutil.CloudStorageTestBase):
+class GoogleCloudStorageInputTestBase(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
   """Base class for running input tests with Google Cloud Storage.
 
   Subclasses must define READER_NAME and may redefine NUM_SHARDS.
@@ -2239,7 +2239,7 @@ class GoogleCloudStorageInputReaderWithDelimiterTest(
     self.test_num_files = 20
     self.test_filenames = []
     for file_num in range(self.test_num_files):
-      filename = f"/{self.test_bucket}/{self._testMethodName}/file-{file_num:03d}"
+      filename = f"/{self.test_bucket}/{self.gcsPrefix}/file-{file_num:03d}"
       self.test_filenames.append(filename)
       self.create_test_file(filename, "foo")
 
@@ -2249,7 +2249,7 @@ class GoogleCloudStorageInputReaderWithDelimiterTest(
     self.filenames_in_first_10_dirs = []
     for d in range(self.dirs):
       for file_num in range(self.file_per_dir):
-        filename = f"/{self.test_bucket}/{self._testMethodName}/dir-{d:02d}/file-{file_num:03d}"
+        filename = f"/{self.test_bucket}/{self.gcsPrefix}/dir-{d:02d}/file-{file_num:03d}"
         if d < 10:
           self.filenames_in_first_10_dirs.append(filename)
         self.create_test_file(filename, "foo")
@@ -2375,7 +2375,7 @@ class GoogleCloudStorageInputReaderTest(GoogleCloudStorageInputTestBase):
     for file_num in range(self.test_num_files):
       content = "Dummy Content %03d" % file_num
       self.test_content.append(content)
-      filename = f"/{self.test_bucket}/{self._testMethodName}/file-{file_num:03d}"
+      filename = f"/{self.test_bucket}/{self.gcsPrefix}/file-{file_num:03d}"
       self.test_filenames.append(filename)
       self.create_test_file(filename, content)
 
@@ -2509,7 +2509,7 @@ class GoogleCloudStorageInputReaderTest(GoogleCloudStorageInputTestBase):
     readers = self.READER_CLS.split_input(
         self.create_mapper_spec(num_shards=1,
                                 input_params={"bucket_name": self.test_bucket,
-                                              "objects": ["file-*"]}))
+                                              "objects": [f"{self.gcsPrefix}/file-*"]}))
     self.assertEqual(1, len(readers))
     self.assertEqual(self.test_num_files, len(readers[0]._filenames))
 
@@ -2519,7 +2519,7 @@ class GoogleCloudStorageInputReaderTest(GoogleCloudStorageInputTestBase):
     readers = self.READER_CLS.split_input(
         self.create_mapper_spec(num_shards=1,
                                 input_params={"bucket_name": self.test_bucket,
-                                              "objects": ["file-00*"]}))
+                                              "objects": [f"{self.gcsPrefix}/file-00*"]}))
     self.assertEqual(1, len(readers))
     self.assertEqual(10, len(readers[0]._filenames))
 
@@ -2527,16 +2527,16 @@ class GoogleCloudStorageInputReaderTest(GoogleCloudStorageInputTestBase):
     readers = self.READER_CLS.split_input(
         self.create_mapper_spec(num_shards=1,
                                 input_params={"bucket_name": self.test_bucket,
-                                              "objects": ["badprefix*"]}))
+                                              "objects": [f"{self.gcsPrefix}/badprefix*"]}))
     self.assertEqual(0, len(readers))
 
   def testNext(self):
     mapper_spec = self.create_mapper_spec(num_shards=1,
                                           input_params={"bucket_name":
                                                         self.test_bucket,
-                                                        "objects": ["file-*"]})
+                                                        "objects": [f"{self.gcsPrefix}/file-*"]})
     mapreduce_spec = model.MapreduceSpec(
-        "DummyMapReduceJobName",
+        self.gcsPrefix,
         "DummyMapReduceJobId",
         mapper_spec.to_json())
     shard_state = self.create_shard_state(0)
@@ -2564,25 +2564,25 @@ class GoogleCloudStorageInputReaderTest(GoogleCloudStorageInputTestBase):
     readers = self.READER_CLS.split_input(
         self.create_mapper_spec(num_shards=1,
                                 input_params={"bucket_name": self.test_bucket,
-                                              "objects": ["file-*"]}))
+                                              "objects": [f"{self.gcsPrefix}/file-*"]}))
     self.assertEqual(1, len(readers))
 
     bucket = _storage_client.bucket(self.test_bucket)
     # Remove the first and second to last files.
-    bucket.blob(self.test_filenames[0].lstrip(f'/{self.test_bucket}/')).delete()
-    bucket.blob(self.test_filenames[-2].lstrip(f'/{self.test_bucket}/')).delete()
+    bucket.blob(self.test_filenames[0].removeprefix(f'/{self.test_bucket}/')).delete()
+    bucket.blob(self.test_filenames[-2].removeprefix(f'/{self.test_bucket}/')).delete()
     del self.test_filenames[0]
     del self.test_filenames[-2]
 
     reader_files = list(readers[0])
     self.assertEqual(len(self.test_filenames), len(reader_files))
-    self.assertEqual(self.test_filenames, [f.name for f in reader_files])
+    self.assertEqual(self.test_filenames, [f"/{f._blob.bucket.name}/{f._blob.name}" for f in reader_files])
 
   def testSerialization(self):
     readers = self.READER_CLS.split_input(
         self.create_mapper_spec(num_shards=1,
                                 input_params={"bucket_name": self.test_bucket,
-                                              "objects": ["file-*"]}))
+                                              "objects": [f"{self.gcsPrefix}/file-*"]}))
     self.assertEqual(1, len(readers))
     # serialize/deserialize unused reader
     reader = self.READER_CLS.from_json(readers[0].to_json())
@@ -2626,14 +2626,14 @@ class GoogleCloudStorageRecordInputReaderTest(GoogleCloudStorageInputTestBase):
     test_file.close()
 
   def testSingleFileNoRecord(self):
-    filename = f"/{self.TEST_BUCKET}/{self._testMethodName}/empty-file"
+    filename = f"/{self.TEST_BUCKET}/{self.gcsPrefix}/empty-file"
     self.create_test_file(filename, [])
     reader = self.READER_CLS([filename])
 
     self.assertRaises(StopIteration, reader.__next__)
 
   def testSingleFileOneRecord(self):
-    filename = f"/{self.TEST_BUCKET}/{self._testMethodName}/single-record-file"
+    filename = f"/{self.TEST_BUCKET}/{self.gcsPrefix}/single-record-file"
     data = b"foobardata"
     self.create_test_file(filename, [data])
     reader = self.READER_CLS([filename])
@@ -2642,7 +2642,7 @@ class GoogleCloudStorageRecordInputReaderTest(GoogleCloudStorageInputTestBase):
     self.assertRaises(StopIteration, reader.__next__)
 
   def testSingleFileManyRecords(self):
-    filename = f"/{self.TEST_BUCKET}/{self._testMethodName}/many-records-file"
+    filename = f"/{self.TEST_BUCKET}/{self.gcsPrefix}/many-records-file"
     data = []
     for record_num in range(100):  # Make 100 records
       data.append((b"%03d" % record_num) * 10)  # Make each record 30 chars long
@@ -2656,7 +2656,7 @@ class GoogleCloudStorageRecordInputReaderTest(GoogleCloudStorageInputTestBase):
     self.assertRaises(StopIteration, reader.__next__)
 
   def testSingleFileManyKeyValuesRecords(self):
-    filename = f"{self._testMethodName}/many-key-values-records-file"
+    filename = f"{self.gcsPrefix}/many-key-values-records-file"
     input_data = [(str(i), ["_" + str(i), "_" + str(i)]) for i in range(100)]
 
     bucket = _storage_client.bucket(self.TEST_BUCKET)
@@ -2686,7 +2686,7 @@ class GoogleCloudStorageRecordInputReaderTest(GoogleCloudStorageInputTestBase):
     filenames = []
     all_data = []
     for file_num in range(10):  # Make 10 files
-      filename = f"/{self.TEST_BUCKET}/{self._testMethodName}/file-{file_num:03d}"
+      filename = f"/{self.TEST_BUCKET}/{self.gcsPrefix}/file-{file_num:03d}"
       data_set = []
       for record_num in range(10):  # Make 10 records, each 30 chars long
         data_set.append((b"%03d" % record_num) * 10)
@@ -2704,7 +2704,7 @@ class GoogleCloudStorageRecordInputReaderTest(GoogleCloudStorageInputTestBase):
     filenames = []
     all_data = []
     for file_num in range(50):  # Make 10 files
-      filename = f"/{self.TEST_BUCKET}/{self._testMethodName}/file-{file_num:03d}"
+      filename = f"/{self.TEST_BUCKET}/{self.gcsPrefix}/file-{file_num:03d}"
       data_set = []
       for record_num in range(file_num % 5):  # Make up to 4 records
         data_set.append((b"%03d" % record_num) * 10)
@@ -2722,7 +2722,7 @@ class GoogleCloudStorageRecordInputReaderTest(GoogleCloudStorageInputTestBase):
     filenames = []
     all_data = []
     for file_num in range(50):  # Make 10 files
-      filename = f"/{self.TEST_BUCKET}/{self._testMethodName}/file-{file_num:03d}"
+      filename = f"/{self.TEST_BUCKET}/{self.gcsPrefix}/file-{file_num:03d}"
       data_set = []
       for record_num in range(file_num % 5):  # Make up to 4 records
         data_set.append((b"%03d" % record_num) * 10)
@@ -2749,7 +2749,7 @@ class GoogleCloudStorageRecordInputReaderTest(GoogleCloudStorageInputTestBase):
     filenames = []
     all_data = []
     for file_num in range(10):  # Make 10 files
-      filename = f"/{self.TEST_BUCKET}/{self._testMethodName}/file-{file_num:03d}"
+      filename = f"/{self.TEST_BUCKET}/{self.gcsPrefix}/file-{file_num:03d}"
       data_set = []
       for record_num in range(10):  # Make 10 records, each 30 chars long
         data_set.append((b"%03d" % record_num) * 10)

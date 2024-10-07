@@ -37,7 +37,7 @@ class GCSFileSegReaderTest(unittest.TestCase):
 
     self.bucket_name = "byates"
     self.bucket = _storage_client.get_bucket(self.bucket_name)
-    self.seg_prefix = f"{self._testMethodName}/prefix-"
+    self.seg_prefix = f"{self.gcsPrefix}/prefix-"
 
   def tearDown(self):
     self.testbed.deactivate()

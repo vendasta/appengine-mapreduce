@@ -36,7 +36,7 @@ def fake_handler_yield_key_str(entity):
   yield f"{entity.key}\n".encode()
 
 
-class GoogleCloudStorageOutputWriterEndToEndTest(testutil.CloudStorageTestBase):
+class GoogleCloudStorageOutputWriterEndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
   """End-to-end tests for CloudStorageOutputWriter."""
 
   WRITER_CLS = output_writers._GoogleCloudStorageOutputWriter
@@ -44,7 +44,7 @@ class GoogleCloudStorageOutputWriterEndToEndTest(testutil.CloudStorageTestBase):
 
   def _runTest(self, num_shards):
     entity_count = 1000
-    job_name = "test_map"
+    job_name = self.gcsPrefix
 
     for _ in range(entity_count):
       FakeEntity().put()
@@ -70,8 +70,7 @@ class GoogleCloudStorageOutputWriterEndToEndTest(testutil.CloudStorageTestBase):
     total_entries = 0
     for shard in range(num_shards):
       self.assertTrue(filenames[shard].startswith(job_name))
-      bucket = _storage_client.get_bucket(self.TEST_BUCKET)
-      blob = bucket.blob(filenames[shard])
+      blob = self.bucket.blob(filenames[shard])
       data = blob.download_as_string()
       # strip() is used to remove the last newline of each file so that split()
       # does not retrun extraneous empty entries.
@@ -85,14 +84,14 @@ class GoogleCloudStorageOutputWriterEndToEndTest(testutil.CloudStorageTestBase):
     self._runTest(num_shards=4)
 
 
-class GCSRecordOutputWriterEndToEndTestBase(testutil.CloudStorageTestBase):
+class GCSRecordOutputWriterEndToEndTestBase(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
 
   WRITER_CLS = output_writers._GoogleCloudStorageRecordOutputWriter
   WRITER_NAME = output_writers.__name__ + "." + WRITER_CLS.__name__
 
   def _runTest(self, num_shards):
     entity_count = 1000
-    job_name = "test_map"
+    job_name = self.gcsPrefix
 
     for _ in range(entity_count):
       FakeEntity().put()
@@ -118,9 +117,8 @@ class GCSRecordOutputWriterEndToEndTestBase(testutil.CloudStorageTestBase):
     total_entries = 0
     for shard in range(num_shards):
       self.assertTrue(filenames[shard].startswith(job_name))
-      bucket = _storage_client.get_bucket(self.TEST_BUCKET)
       data = b"".join([_ for _ in records.RecordsReader(
-          bucket.blob(filenames[shard]).open("rb"))])
+          self.bucket.blob(filenames[shard]).open("rb"))])
       # strip() is used to remove the last newline of each file so that split()
       # does not return extraneous empty entries.
       total_entries += len(data.strip().split(b"\n"))
@@ -135,7 +133,7 @@ class GCSRecordOutputWriterEndToEndTestBase(testutil.CloudStorageTestBase):
 
 class GoogleCloudStorageRecordOutputWriterEndToEndTest(
     GCSRecordOutputWriterEndToEndTestBase,
-    testutil.CloudStorageTestBase):
+    testutil.CloudStorageTestBase, testutil.HandlerTestBase):
   """End-to-end tests for CloudStorageRecordOutputWriter."""
 
   WRITER_CLS = output_writers._GoogleCloudStorageRecordOutputWriter
@@ -144,7 +142,7 @@ class GoogleCloudStorageRecordOutputWriterEndToEndTest(
 
 class GoogleCloudStorageConsistentRecordOutputWriterEndToEndTest(
     GCSRecordOutputWriterEndToEndTestBase,
-    testutil.CloudStorageTestBase):
+    testutil.CloudStorageTestBase, testutil.HandlerTestBase):
   """End-to-end tests for CloudStorageConsistentRecordOutputWriter."""
 
   WRITER_CLS = output_writers.GoogleCloudStorageConsistentRecordOutputWriter
@@ -152,7 +150,7 @@ class GoogleCloudStorageConsistentRecordOutputWriterEndToEndTest(
 
 
 class GoogleCloudStorageConsistentOutputWriterEndToEndTest(
-    testutil.CloudStorageTestBase):
+    testutil.CloudStorageTestBase, testutil.HandlerTestBase):
   """End-to-end tests for CloudStorageOutputWriter."""
 
   WRITER_CLS = output_writers.GoogleCloudStorageConsistentOutputWriter
@@ -160,7 +158,7 @@ class GoogleCloudStorageConsistentOutputWriterEndToEndTest(
 
   def _runTest(self, num_shards):
     entity_count = 1000
-    job_name = "test_map"
+    job_name = self.gcsPrefix
 
     for _ in range(entity_count):
       FakeEntity().put()
@@ -185,20 +183,23 @@ class GoogleCloudStorageConsistentOutputWriterEndToEndTest(
 
     self.assertEqual(num_shards, len(set(filenames)))
     total_entries = 0
-    bucket = _storage_client.get_bucket(self.TEST_BUCKET)
     for shard in range(num_shards):
       self.assertTrue(filenames[shard].startswith(job_name))
-      data = bucket.blob(filenames[shard]).download_as_bytes()
+      data = self.bucket.blob(filenames[shard]).download_as_bytes()
       # strip() is used to remove the last newline of each file so that split()
       # does not retrun extraneous empty entries.
       total_entries += len(data.strip().split(b"\n"))
     self.assertEqual(entity_count, total_entries)
 
     # no files left in tmpbucket
-    self.assertFalse(list(cloudstorage.listbucket("/%s" % self.TEST_BUCKET)))
+    bucket = _storage_client.bucket(self.TEST_TMP_BUCKET)
+    blobs = list(bucket.list_blobs())
+    self.assertFalse(blobs)
+
     # and only expected files in regular bucket
-    files_in_bucket = [
-        f.filename for f in cloudstorage.listbucket("/%s" % bucket_name)]
+    bucket = _storage_client.bucket(self.TEST_BUCKET)
+    blobs = list(bucket.list_blobs())
+    files_in_bucket = [blob.name for blob in blobs]
     self.assertEqual(filenames, files_in_bucket)
 
   def testSingleShard(self):
