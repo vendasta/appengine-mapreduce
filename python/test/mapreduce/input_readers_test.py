@@ -48,7 +48,6 @@ from google.appengine.ext import blobstore
 from google.appengine.ext import key_range
 from google.appengine.ext import testbed
 from google.appengine.ext.blobstore import blobstore as blobstore_internal
-from google.cloud import storage
 
 from mapreduce import context
 from mapreduce import errors
@@ -59,7 +58,6 @@ from mapreduce import namespace_range
 from mapreduce import records
 from testlib import testutil
 
-_storage_client = storage.Client()
 
 class AbstractDatastoreInputReaderTest(unittest.TestCase):
   """Tests for AbstractDatastoreInputReader."""
@@ -2051,7 +2049,7 @@ def FakeCombiner(unused_key, values, left_fold):
     yield ord(value)
 
 
-class ReducerReaderTest(testutil.HandlerTestBase):
+class ReducerReaderTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
   """Tests for _ReducerReader."""
 
   def setUp(self):
@@ -2059,13 +2057,10 @@ class ReducerReaderTest(testutil.HandlerTestBase):
     # Clear any context that is set.
     context.Context._set(None)
 
-    # bucket_name = "testbucket"
-    bucket_name = "byates"
     test_filename = f"{self.gcsPrefix}/testfile"
-    full_filename = f"/{bucket_name}/{test_filename}"
+    full_filename = f"/{self.TEST_BUCKET}/{test_filename}"
 
-    bucket = _storage_client.get_bucket(bucket_name)
-    blob = bucket.blob(test_filename)
+    blob = self.bucket.blob(test_filename)
     with blob.open("wb") as f:
       with records.RecordsWriter(f) as w:
         # First key is all in one record
@@ -2083,7 +2078,6 @@ class ReducerReaderTest(testutil.HandlerTestBase):
         proto.value.extend(["e", "f"])
         w.write(proto.SerializeToString())
 
-    self.bucket_name = bucket_name
     self.input_file = full_filename
 
   def testMultipleRequests(self):
@@ -2097,7 +2091,7 @@ class ReducerReaderTest(testutil.HandlerTestBase):
             "DummyHandler",
             "DummyInputReader",
             dict(combiner_spec=combiner_spec,
-                 bucket_name=self.bucket_name),
+                 bucket_name=self.TEST_BUCKET),
             1).to_json())
     shard_state = self.create_shard_state(0)
     ctx = context.Context(mapreduce_spec, shard_state)
@@ -2217,9 +2211,8 @@ class GoogleCloudStorageInputTestBase(testutil.CloudStorageTestBase, testutil.Ha
       content: the content to put in the file or if None a dummy string
         containing the filename will be used.
     """
-    bucket_name, object_name = filename.split("/", 1)[1].split("/", 1)
-    bucket = _storage_client.bucket(bucket_name)
-    blob = bucket.blob(object_name)
+    _, object_name = filename.split("/", 1)[1].split("/", 1)
+    blob = self.bucket.blob(object_name)
     blob.upload_from_string(content)
 
 
@@ -2234,8 +2227,6 @@ class GoogleCloudStorageInputReaderWithDelimiterTest(
     super().setUp()
 
     # create some test content
-    # self.test_bucket = "testing"
-    self.test_bucket = "byates"
     self.test_num_files = 20
     self.test_filenames = []
     for file_num in range(self.test_num_files):
@@ -2367,15 +2358,13 @@ class GoogleCloudStorageInputReaderTest(GoogleCloudStorageInputTestBase):
     super().setUp()
 
     # create test content
-    # self.test_bucket = "testing"
-    self.test_bucket = "byates"
     self.test_content = []
     self.test_num_files = 20
     self.test_filenames = []
     for file_num in range(self.test_num_files):
       content = "Dummy Content %03d" % file_num
       self.test_content.append(content)
-      filename = f"/{self.test_bucket}/{self.gcsPrefix}/file-{file_num:03d}"
+      filename = f"/{self.TEST_BUCKET}/{self.gcsPrefix}/file-{file_num:03d}"
       self.test_filenames.append(filename)
       self.create_test_file(filename, content)
 
@@ -2395,19 +2384,19 @@ class GoogleCloudStorageInputReaderTest(GoogleCloudStorageInputTestBase):
     self.assertRaises(
         errors.BadReaderParamsError,
         self.READER_CLS.validate,
-        self.create_mapper_spec(input_params={"bucket_name": self.test_bucket}))
+        self.create_mapper_spec(input_params={"bucket_name": self.TEST_BUCKET}))
 
   def testValidate_NonList(self):
     self.assertRaises(
         errors.BadReaderParamsError,
         self.READER_CLS.validate,
-        self.create_mapper_spec(input_params={"bucket_name": self.test_bucket,
+        self.create_mapper_spec(input_params={"bucket_name": self.TEST_BUCKET,
                                               "objects": "1"}))
 
   def testValidate_SingleObject(self):
     # expect no errors are raised
     self.READER_CLS.validate(
-        self.create_mapper_spec(input_params={"bucket_name": self.test_bucket,
+        self.create_mapper_spec(input_params={"bucket_name": self.TEST_BUCKET,
                                               "objects": ["1"]}))
 
   def testValidate_PassesWithBucketFromMapperSpec(self):
@@ -2416,7 +2405,7 @@ class GoogleCloudStorageInputReaderTest(GoogleCloudStorageInputTestBase):
         model.MapperSpec(
             "DummyHandler",
             self.READER_NAME,
-            {"bucket_name": self.test_bucket,
+            {"bucket_name": self.TEST_BUCKET,
              "input_reader": {"objects": ["1", "2", "3"]}},
             self.NUM_SHARDS))
 
@@ -2435,27 +2424,27 @@ class GoogleCloudStorageInputReaderTest(GoogleCloudStorageInputTestBase):
   def testValidate_ObjectList(self):
     # expect no errors are raised
     self.READER_CLS.validate(
-        self.create_mapper_spec(input_params={"bucket_name": self.test_bucket,
+        self.create_mapper_spec(input_params={"bucket_name": self.TEST_BUCKET,
                                               "objects": ["1", "2", "3"]}))
 
   def testValidate_ObjectListNonString(self):
     self.assertRaises(
         errors.BadReaderParamsError,
         self.READER_CLS.validate,
-        self.create_mapper_spec(input_params={"bucket_name": self.test_bucket,
+        self.create_mapper_spec(input_params={"bucket_name": self.TEST_BUCKET,
                                               "objects": ["1", ["2", "3"]]}))
 
   def testSplit_NoObjectSingleShard(self):
     readers = self.READER_CLS.split_input(
         self.create_mapper_spec(num_shards=1,
-                                input_params={"bucket_name": self.test_bucket,
+                                input_params={"bucket_name": self.TEST_BUCKET,
                                               "objects": []}))
     self.assertFalse(readers)
 
   def testSplit_SingleObjectSingleShard(self):
     readers = self.READER_CLS.split_input(
         self.create_mapper_spec(num_shards=1,
-                                input_params={"bucket_name": self.test_bucket,
+                                input_params={"bucket_name": self.TEST_BUCKET,
                                               "objects": ["1"]}))
     self.assertEqual(1, len(readers))
     self.assertEqual(1, len(readers[0]._filenames))
@@ -2463,7 +2452,7 @@ class GoogleCloudStorageInputReaderTest(GoogleCloudStorageInputTestBase):
   def testSplit_SingleObjectManyShards(self):
     readers = self.READER_CLS.split_input(
         self.create_mapper_spec(num_shards=10,
-                                input_params={"bucket_name": self.test_bucket,
+                                input_params={"bucket_name": self.TEST_BUCKET,
                                               "objects": ["1"]}))
     self.assertEqual(1, len(readers))
     self.assertEqual(1, len(readers[0]._filenames))
@@ -2474,7 +2463,7 @@ class GoogleCloudStorageInputReaderTest(GoogleCloudStorageInputTestBase):
     filenames = ["f-%d" % f for f in range(num_shards * files_per_shard)]
     readers = self.READER_CLS.split_input(
         self.create_mapper_spec(num_shards=num_shards,
-                                input_params={"bucket_name": self.test_bucket,
+                                input_params={"bucket_name": self.TEST_BUCKET,
                                               "objects": filenames}))
     self.assertEqual(num_shards, len(readers))
     for reader in readers:
@@ -2486,7 +2475,7 @@ class GoogleCloudStorageInputReaderTest(GoogleCloudStorageInputTestBase):
     filenames = ["f-%d" % f for f in range(total_files)]
     readers = self.READER_CLS.split_input(
         self.create_mapper_spec(num_shards=num_shards,
-                                input_params={"bucket_name": self.test_bucket,
+                                input_params={"bucket_name": self.TEST_BUCKET,
                                               "objects": filenames}))
     self.assertEqual(num_shards, len(readers))
     found_files = 0
@@ -2508,7 +2497,7 @@ class GoogleCloudStorageInputReaderTest(GoogleCloudStorageInputTestBase):
     # test prefix matching all files
     readers = self.READER_CLS.split_input(
         self.create_mapper_spec(num_shards=1,
-                                input_params={"bucket_name": self.test_bucket,
+                                input_params={"bucket_name": self.TEST_BUCKET,
                                               "objects": [f"{self.gcsPrefix}/file-*"]}))
     self.assertEqual(1, len(readers))
     self.assertEqual(self.test_num_files, len(readers[0]._filenames))
@@ -2518,7 +2507,7 @@ class GoogleCloudStorageInputReaderTest(GoogleCloudStorageInputTestBase):
                     msg="More than 10 files required for testing")
     readers = self.READER_CLS.split_input(
         self.create_mapper_spec(num_shards=1,
-                                input_params={"bucket_name": self.test_bucket,
+                                input_params={"bucket_name": self.TEST_BUCKET,
                                               "objects": [f"{self.gcsPrefix}/file-00*"]}))
     self.assertEqual(1, len(readers))
     self.assertEqual(10, len(readers[0]._filenames))
@@ -2526,14 +2515,14 @@ class GoogleCloudStorageInputReaderTest(GoogleCloudStorageInputTestBase):
     # test prefix matching no files
     readers = self.READER_CLS.split_input(
         self.create_mapper_spec(num_shards=1,
-                                input_params={"bucket_name": self.test_bucket,
+                                input_params={"bucket_name": self.TEST_BUCKET,
                                               "objects": [f"{self.gcsPrefix}/badprefix*"]}))
     self.assertEqual(0, len(readers))
 
   def testNext(self):
     mapper_spec = self.create_mapper_spec(num_shards=1,
                                           input_params={"bucket_name":
-                                                        self.test_bucket,
+                                                        self.TEST_BUCKET,
                                                         "objects": [f"{self.gcsPrefix}/file-*"]})
     mapreduce_spec = model.MapreduceSpec(
         self.gcsPrefix,
@@ -2567,10 +2556,9 @@ class GoogleCloudStorageInputReaderTest(GoogleCloudStorageInputTestBase):
                                               "objects": [f"{self.gcsPrefix}/file-*"]}))
     self.assertEqual(1, len(readers))
 
-    bucket = _storage_client.bucket(self.test_bucket)
     # Remove the first and second to last files.
-    bucket.blob(self.test_filenames[0].removeprefix(f'/{self.test_bucket}/')).delete()
-    bucket.blob(self.test_filenames[-2].removeprefix(f'/{self.test_bucket}/')).delete()
+    self.bucket.blob(self.test_filenames[0].removeprefix(f'/{self.test_bucket}/')).delete()
+    self.bucket.blob(self.test_filenames[-2].removeprefix(f'/{self.test_bucket}/')).delete()
     del self.test_filenames[0]
     del self.test_filenames[-2]
 
@@ -2606,8 +2594,6 @@ class GoogleCloudStorageRecordInputReaderTest(GoogleCloudStorageInputTestBase):
 
   READER_CLS = input_readers.GoogleCloudStorageRecordInputReader
   READER_NAME = input_readers.__name__ + "." + READER_CLS.__name__
-  # TEST_BUCKET = "testing"
-  TEST_BUCKET = "byates"
 
   def create_test_file(self, filename, content):
     """Create a test LevelDB file with a RecordWriter.
@@ -2616,9 +2602,8 @@ class GoogleCloudStorageRecordInputReaderTest(GoogleCloudStorageInputTestBase):
       filename: the name of the file in the form "/bucket/object".
       content: list of content to put in file in LevelDB format.
     """
-    bucket_name, object_name = filename.split("/", 1)[1].split("/", 1)
-    bucket = _storage_client.bucket(bucket_name)
-    blob = bucket.blob(object_name)
+    _, object_name = filename.split("/", 1)[1].split("/", 1)
+    blob = self.bucket.blob(object_name)
     test_file = blob.open("wb")
     with records.RecordsWriter(test_file) as w:
       for c in content:
@@ -2659,8 +2644,7 @@ class GoogleCloudStorageRecordInputReaderTest(GoogleCloudStorageInputTestBase):
     filename = f"{self.gcsPrefix}/many-key-values-records-file"
     input_data = [(str(i), ["_" + str(i), "_" + str(i)]) for i in range(100)]
 
-    bucket = _storage_client.bucket(self.TEST_BUCKET)
-    blob = bucket.blob(filename)
+    blob = self.bucket.blob(filename)
     with blob.open("wb") as f:
       with records.RecordsWriter(f) as w:
         for (k, v) in input_data:

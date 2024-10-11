@@ -51,7 +51,7 @@ class TaskQueueHandlerTest(unittest.TestCase):
             }
         ):
             with self.assertRaises(NotImplementedError):
-                self.handler.dispatch_request()
+                self.handler.handle()
             self.assertEqual(0, self.handler.task_retry_count())
 
         with app.test_request_context(
@@ -63,7 +63,7 @@ class TaskQueueHandlerTest(unittest.TestCase):
             }
         ):
             with self.assertRaises(NotImplementedError):
-                self.handler.dispatch_request()
+                self.handler.handle()
             self.assertEqual(5, self.handler.task_retry_count())
 
 

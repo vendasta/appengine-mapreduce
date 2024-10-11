@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 # Copyright 2011 Google Inc. All Rights Reserved.
 
-import unittest
-
 import pipeline
 from google.appengine.ext import db
 
@@ -15,9 +13,6 @@ from mapreduce import records
 from mapreduce import test_support
 from testlib import testutil
 
-from google.cloud import storage
-
-_storage_client = storage.Client()
 
 
 class FakeEntity(db.Model):
@@ -68,7 +63,7 @@ class FakeFileRecordsOutputWriter(
     super().finalize(ctx, shard_state)
 
 
-class MapreducePipelineTest(testutil.HandlerTestBase):
+class MapreducePipelineTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
   """Tests for MapreducePipeline."""
 
   def setUp(self):
@@ -122,8 +117,6 @@ class MapreducePipelineTest(testutil.HandlerTestBase):
 
   def testMapReduce(self):
     # Prepare test data
-    # bucket_name = "testbucket"
-    bucket_name = "byates"
     job_name = self.gcsPrefix
     entity_count = 200
 
@@ -141,11 +134,11 @@ class MapreducePipelineTest(testutil.HandlerTestBase):
             output_writers.__name__ + "._GoogleCloudStorageRecordOutputWriter"),
         mapper_params={
             "entity_kind": __name__ + "." + FakeEntity.__name__,
-            "bucket_name": bucket_name
+            "bucket_name": self.TEST_BUCKET
         },
         reducer_params={
             "output_writer": {
-                "bucket_name": bucket_name
+                "bucket_name": self.TEST_BUCKET
             },
         },
         shards=16)
@@ -161,9 +154,8 @@ class MapreducePipelineTest(testutil.HandlerTestBase):
     self.assertEqual(model.MapreduceState.RESULT_SUCCESS,
                      p.outputs.result_status.value)
     output_data = []
-    bucket = _storage_client.get_bucket(bucket_name)
     for output_file in p.outputs.default.value:
-      with bucket.blob(output_file).open() as f:
+      with self.bucket.blob(output_file).open() as f:
         for record in records.RecordsReader(f):
           output_data.append(record)
 

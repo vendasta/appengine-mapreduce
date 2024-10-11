@@ -124,8 +124,8 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
     Set current shard_state to failed. Controller logic will take care of
     other shards and the entire MR.
     """
-    shard_id = self.request.headers.get(util._MR_SHARD_ID_TASK_HEADER)
-    mr_id = self.request.headers.get(util._MR_ID_TASK_HEADER)
+    shard_id = request.headers.get(util._MR_SHARD_ID_TASK_HEADER)
+    mr_id = request.headers.get(util._MR_ID_TASK_HEADER)
     shard_state, mr_state = db.get([
         model.ShardState.get_key_by_shard_id(shard_id),
         model.MapreduceState.get_key_by_job_id(mr_id)])
@@ -521,6 +521,8 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
     while True:
       try:
         entity = next(iterator)
+        if not entity:
+          break
       except StopIteration:
         break
       # Reading input got exception. If we assume
@@ -1027,7 +1029,7 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
     want the tasks to stop badly, and if force_writes was False,
     the job would have never been started.
     """
-    mr_id = self.request.headers.get(util._MR_ID_TASK_HEADER)
+    mr_id = request.headers.get(util._MR_ID_TASK_HEADER)
     state = model.MapreduceState.get_by_job_id(mr_id)
     if not state or not state.active:
       return
@@ -1367,7 +1369,7 @@ class KickOffJobHandler(base_handler.TaskQueueHandler):
 
   def _drop_gracefully(self):
     """See parent."""
-    mr_id = self.request.get("mapreduce_id")
+    mr_id = request.values.get("mapreduce_id")
     logging.error("Failed to kick off job %s", mr_id)
 
     state = model.MapreduceState.get_by_job_id(mr_id)

@@ -8,10 +8,8 @@
 # Using opensource naming conventions, pylint: disable=g-bad-name
 
 import datetime
-import logging
 import random
 import string
-import unittest
 
 from google.appengine.ext import db
 from google.appengine.ext import ndb
@@ -27,10 +25,6 @@ from mapreduce import records
 from mapreduce import test_support
 from mapreduce.tools import gcs_file_seg_reader
 from testlib import testutil
-
-from google.cloud import exceptions, storage
-
-_storage_client = storage.Client()
 
 def random_string(length):
   """Generate a random string of given length."""
@@ -301,11 +295,9 @@ class EndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
     """End-to-end test for records reader."""
     input_data = [str(i).encode() for i in range(100)]
 
-    bucket_name = "byates"
     test_filename = f"{self.gcsPrefix}/testfile"
 
-    bucket = _storage_client.get_bucket(bucket_name)
-    blob = bucket.blob(test_filename)
+    blob = self.bucket.blob(test_filename)
 
     with blob.open("wb") as f:
       with records.RecordsWriter(f) as w:
@@ -318,7 +310,7 @@ class EndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
         input_readers.__name__ + ".GoogleCloudStorageRecordInputReader",
         {
             "input_reader": {
-                "bucket_name": bucket_name,
+                "bucket_name": self.TEST_BUCKET,
                 "objects": [test_filename]
             }
         },
@@ -332,11 +324,9 @@ class EndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
     """Test map job with huge parameter values."""
     input_data = [str(i).encode() for i in range(100)]
 
-    bucket_name = "byates"
     test_filename = f"{self.gcsPrefix}/testfile"
 
-    bucket = _storage_client.get_bucket(bucket_name)
-    blob = bucket.blob(test_filename)
+    blob = self.bucket.blob(test_filename)
     
     with blob.open("wb") as f:
       with records.RecordsWriter(f) as w:
@@ -349,7 +339,7 @@ class EndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
         input_readers.__name__ + ".GoogleCloudStorageRecordInputReader",
         {
             "input_reader": {
-                "bucket_name": bucket_name,
+                "bucket_name": self.TEST_BUCKET,
                 "objects": [test_filename],
                 # the parameter will be compressed and should fit into
                 # taskqueue payload
@@ -367,11 +357,9 @@ class EndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
     """Test map job with huge parameter values."""
     input_data = [str(i).encode() for i in range(100)]
 
-    bucket_name = "byates"
     test_filename = f"{self.gcsPrefix}/testfile"
 
-    bucket = _storage_client.get_bucket(bucket_name)
-    blob = bucket.blob(test_filename)
+    blob = self.bucket.blob(test_filename)
 
     with blob.open("wb") as f:
       with records.RecordsWriter(f) as w:
@@ -384,7 +372,7 @@ class EndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
         input_readers.__name__ + ".GoogleCloudStorageRecordInputReader",
         {
             "input_reader": {
-                "bucket_name": bucket_name,
+                "bucket_name": self.TEST_BUCKET,
                 "objects": [test_filename],
                 # the parameter can't be compressed and wouldn't fit into
                 # taskqueue payload

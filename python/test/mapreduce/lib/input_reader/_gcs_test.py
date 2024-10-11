@@ -26,7 +26,6 @@ class GCSInputTestBase(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
 
   # Defaults
   READER_CLS = input_reader.GCSInputReader
-  TEST_BUCKET = "testing"
 
   def create_job_config(self, num_shards=None, input_params=None):
     """Create a JobConfig using GCSInputReader.
@@ -68,15 +67,12 @@ class GCSInputTestBase(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
     """Create a test file with minimal content.
 
     Args:
-      filename: the name of the file in the form "/bucket/object".
+      filename: the name of the file in the form "/object".
       content: the content to put in the file or if None a dummy string
         containing the filename will be used.
     """
-    bucket_name = filename.split("/")[1]
-    filename = filename[len(bucket_name) + 2:]
-    bucket = _storage_client.get_bucket(bucket_name)
-    blob = bucket.blob(filename)
-    blob.upload_from_bytes(content)
+    blob = self.bucket.blob(filename)
+    blob.upload_from_string(content)
 
   def create_single_reader(self, filenames, contents=None, delimiter=None,
                            path_filter=None):
@@ -125,9 +121,9 @@ class GCSInputReaderTest(GCSInputTestBase):
     self.test_num_files = 20
     self.test_filenames = []
     for file_num in range(self.test_num_files):
-      content = "Dummy Content %03d" % file_num
+      content = b"Dummy Content %03d" % file_num
       self.test_content.append(content)
-      filename = "/%s/file-%03d" % (self.gcsPrefix, file_num)
+      filename = "%s/file-%03d" % (self.gcsPrefix, file_num)
       self.test_filenames.append(filename)
       self.create_test_file(filename, content)
 
@@ -297,8 +293,8 @@ class GCSInputReaderTest(GCSInputTestBase):
     reader = self.create_single_reader([f"{self.gcsPrefix}/file-*"])
 
     # Remove the first and second to last files.
-    cloudstorage.delete(self.test_filenames[0])
-    cloudstorage.delete(self.test_filenames[-2])
+    self.bucket.blob(self.test_filenames[0]).delete()
+    self.bucket.blob(self.test_filenames[-2]).delete()
     del self.test_filenames[0]
     del self.test_filenames[-2]
 
@@ -435,7 +431,7 @@ class GCSRecordInputReaderTest(GCSInputTestBase):
       filename: the name of the file in the form "/bucket/object".
       content: list of content to put in file in LevelDB format.
     """
-    test_file = cloudstorage.open(filename, mode="w")
+    test_file = self.bucket.blob(filename).open("wb")
     with records.RecordsWriter(test_file) as w:
       for c in content:
         w.write(c)
@@ -449,10 +445,11 @@ class GCSRecordInputReaderTest(GCSInputTestBase):
 
   def testSingleFileOneRecord(self):
     filename = "single-record-file"
-    reader = self.create_single_reader([filename], [["foobardata"]])
+    reader = self.create_single_reader([filename], [[b"foobardata"]])
 
-    self.assertEqual("foobardata", next(reader))
-    self.assertRaises(StopIteration, reader.__next__)
+    self.assertEqual(b"foobardata", next(reader))
+    with self.assertRaises(StopIteration):
+      next(reader)
 
   def testSingleFileManyRecords(self):
     filename = "many-records-file"
@@ -463,9 +460,11 @@ class GCSRecordInputReaderTest(GCSInputTestBase):
 
     for record in data:
       self.assertEqual(record, next(reader))
-    self.assertRaises(StopIteration, reader.__next__)
+    with self.assertRaises(StopIteration):
+      next(reader)
     # ensure StopIteration is still raised after its first encountered
-    self.assertRaises(StopIteration, reader.__next__)
+    with self.assertRaises(StopIteration):
+      next(reader)
 
   def testManyFilesManyRecords(self):
     filenames = []
@@ -475,7 +474,7 @@ class GCSRecordInputReaderTest(GCSInputTestBase):
       fullname = "/{}/{}".format(self.TEST_BUCKET, filename)
       data_set = []
       for record_num in range(10):  # Make 10 records, each 30 chars long
-        data_set.append(("%03d" % record_num) * 10)
+        data_set.append((b"%03d" % record_num) * 10)
       self.create_test_file(fullname, data_set)
       filenames.append(filename)
       all_data.append(data_set)
@@ -494,7 +493,7 @@ class GCSRecordInputReaderTest(GCSInputTestBase):
       fullname = "/{}/{}".format(self.TEST_BUCKET, filename)
       data_set = []
       for record_num in range(file_num % 5):  # Make up to 4 records
-        data_set.append(("%03d" % record_num) * 10)
+        data_set.append((b"%03d" % record_num) * 10)
       self.create_test_file(fullname, data_set)
       filenames.append(filename)
       all_data.append(data_set)
@@ -513,7 +512,7 @@ class GCSRecordInputReaderTest(GCSInputTestBase):
       fullname = "/{}/{}".format(self.TEST_BUCKET, filename)
       data_set = []
       for record_num in range(file_num % 5):  # Make up to 4 records
-        data_set.append(("%03d" % record_num) * 10)
+        data_set.append((b"%03d" % record_num) * 10)
       self.create_test_file(fullname, data_set)
       filenames.append(filename)
       all_data.append(data_set)
@@ -545,7 +544,7 @@ class GCSRecordInputReaderTest(GCSInputTestBase):
       fullname = "/{}/{}".format(self.TEST_BUCKET, filename)
       data_set = []
       for record_num in range(10):  # Make 10 records, each 30 chars long
-        data_set.append(("%03d" % record_num) * 10)
+        data_set.append((b"%03d" % record_num) * 10)
       self.create_test_file(fullname, data_set)
       filenames.append(filename)
       all_data.append(data_set)

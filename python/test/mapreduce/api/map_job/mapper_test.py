@@ -3,7 +3,6 @@
 
 import collections
 
-from google.cloud import storage
 from testlib import testutil
 
 from mapreduce import output_writers, parameters, test_support
@@ -83,7 +82,7 @@ class MapperTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
         input_reader_cls=sample_input_reader.SampleInputReader,
         input_reader_params={"count": entity_count},
         output_writer_cls=output_writers._GoogleCloudStorageOutputWriter,
-        output_writer_params={"bucket_name": "byates"}))
+        output_writer_params={"bucket_name": self.TEST_BUCKET}))
     test_support.execute_until_empty(self.taskqueue)
     total = 0
     for m in list(MyMapper.mappers.values()):
@@ -105,10 +104,8 @@ class MapperTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
                 "end_slice\n": MyMapper.slices,
                 "begin_slice\n": MyMapper.slices}
     
-    _storage_client = storage.Client()
-    bucket = _storage_client.get_bucket("byates")
     for fn in files:
-        blob = bucket.blob(fn)
+        blob = self.bucket.blob(fn)
         content = blob.download_as_text()
         for line in content.splitlines():
             outputs[line + '\n'] += 1

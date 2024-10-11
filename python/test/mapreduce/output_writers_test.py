@@ -25,21 +25,15 @@ from mapreduce import output_writers
 from mapreduce import records
 from testlib import testutil
 
-from google.cloud import storage
-
-_storage_client = storage.Client()
 
 class GCSRecordsPoolTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
   """Tests for GCSRecordsPool."""
 
   def setUp(self):
     super().setUp()
-    # bucket_name = "testbucket"
-    bucket_name = "byates"
     test_filename = f"{self.gcsPrefix}/testfile"
 
-    bucket = _storage_client.get_bucket(bucket_name)
-    self.blob = bucket.blob(test_filename)
+    self.blob = self.bucket.blob(test_filename)
     if self.blob.exists():
       self.blob.delete()
     self.filehandle = self.blob.open("wb", ignore_flush=True)
@@ -79,7 +73,7 @@ class GCSRecordsPoolTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase
         list(records.RecordsReader(self.filehandle)))
 
 
-class GCSOutputTestBase:
+class GCSOutputTestBase(testutil.CloudStorageTestBase):
   """Base class for running output tests with Google Cloud Storage.
 
   Subclasses must define WRITER_NAME and may redefine NUM_SHARDS.
@@ -88,7 +82,6 @@ class GCSOutputTestBase:
   # Defaults
   NUM_SHARDS = 10
   WRITER_CLS = None
-  TEST_BUCKET = "byates"
 
   def _serialize_and_deserialize(self, writer):
     writer.end_slice(None)
@@ -134,8 +127,7 @@ class GCSOutputTestBase:
     return mapreduce_state
 
 
-class GCSOutputWriterNoDupModeTest(GCSOutputTestBase,
-                                   testutil.CloudStorageTestBase, testutil.HandlerTestBase):
+class GCSOutputWriterNoDupModeTest(GCSOutputTestBase, testutil.HandlerTestBase):
 
   WRITER_CLS = output_writers.GoogleCloudStorageOutputWriter
   WRITER_NAME = output_writers.__name__ + "." + WRITER_CLS.__name__
@@ -255,15 +247,13 @@ class GCSOutputWriterTestCommon(GCSOutputTestBase):
     def testValidate_PassesBasic(self):
         self.WRITER_CLS.validate(self.create_mapper_spec(
         output_params=
-        # {self.WRITER_CLS.BUCKET_NAME_PARAM: "test"}))
-        {self.WRITER_CLS.BUCKET_NAME_PARAM: "byates"}))
+        {self.WRITER_CLS.BUCKET_NAME_PARAM: self.TEST_BUCKET}))
 
     def testValidate_PassesAllOptions(self):
         self.WRITER_CLS.validate(
         self.create_mapper_spec(
             output_params=
-            # {self.WRITER_CLS.BUCKET_NAME_PARAM: "test",
-            {self.WRITER_CLS.BUCKET_NAME_PARAM: "byates",
+            {self.WRITER_CLS.BUCKET_NAME_PARAM: self.TEST_BUCKET,
              self.WRITER_CLS.ACL_PARAM: "test-acl",
              self.WRITER_CLS.NAMING_FORMAT_PARAM:
              "fname",
@@ -301,8 +291,7 @@ class GCSOutputWriterTestCommon(GCSOutputTestBase):
     def testCreateWriters(self):
         mapreduce_state = self.create_mapreduce_state(
         output_params=
-        # {self.WRITER_CLS.BUCKET_NAME_PARAM: "test"})
-        {self.WRITER_CLS.BUCKET_NAME_PARAM: "byates"})
+        {self.WRITER_CLS.BUCKET_NAME_PARAM: self.TEST_BUCKET})
         for shard_num in range(self.NUM_SHARDS):
             shard = self.create_shard_state(shard_num)
             writer = self.WRITER_CLS.create(mapreduce_state.mapreduce_spec,
@@ -320,10 +309,8 @@ class GCSOutputWriterTestCommon(GCSOutputTestBase):
         self.assertEqual(self.NUM_SHARDS, len(set(filenames)))
 
     def testWriter(self):
-        # bucket_name = "test"
-        bucket_name = "byates"
         mapreduce_state = self.create_mapreduce_state(
-          output_params={self.WRITER_CLS.BUCKET_NAME_PARAM: bucket_name}
+          output_params={self.WRITER_CLS.BUCKET_NAME_PARAM: self.TEST_BUCKET}
         )
 
         shard_state = self.create_shard_state(0)
@@ -340,14 +327,11 @@ class GCSOutputWriterTestCommon(GCSOutputTestBase):
         filename = self.WRITER_CLS._get_filename(shard_state)
 
         self.assertNotEqual(None, filename)
-        bucket = _storage_client.get_bucket(bucket_name)
-        blob = bucket.blob(filename)
+        blob = self.bucket.blob(filename)
         self.assertEqual(data, blob.download_as_string())
 
     def testCreateWritersWithRetries(self):
-        # bucket_name = "test"
-        bucket_name = "byates"
-        mapreduce_state = self.create_mapreduce_state(output_params={self.WRITER_CLS.BUCKET_NAME_PARAM: bucket_name})
+        mapreduce_state = self.create_mapreduce_state(output_params={self.WRITER_CLS.BUCKET_NAME_PARAM: self.TEST_BUCKET})
         shard_state = self.create_shard_state(0)
         ctx = context.Context(mapreduce_state.mapreduce_spec, shard_state)
         context.Context._set(ctx)
@@ -376,18 +360,16 @@ class GCSOutputWriterTestCommon(GCSOutputTestBase):
         writer.finalize(ctx, shard_state)
 
         # Verify the badData is not in the final file
-        bucket = _storage_client.get_bucket(bucket_name)
-        blob = bucket.blob(new_filename)
+        blob = self.bucket.blob(new_filename)
 
         self.assertEqual(b"initDatagoodData", blob.download_as_bytes())
 
     def testWriterMetadata(self):
         test_acl = "test-acl"
         test_content_type = "test-mime"
-        bucket_name = "byates"
         mapreduce_state = self.create_mapreduce_state(
         output_params=
-        {self.WRITER_CLS.BUCKET_NAME_PARAM: bucket_name,
+        {self.WRITER_CLS.BUCKET_NAME_PARAM: self.TEST_BUCKET,
          self.WRITER_CLS.ACL_PARAM: test_acl,
          self.WRITER_CLS.CONTENT_TYPE_PARAM:
          test_content_type})
@@ -404,8 +386,7 @@ class GCSOutputWriterTestCommon(GCSOutputTestBase):
         filename = self.WRITER_CLS._get_filename(
         shard_state)
 
-        bucket = _storage_client.get_bucket(bucket_name)
-        blob = bucket.blob(filename)
+        blob = self.bucket.blob(filename)
         blob.reload()
         self.assertEqual(test_content_type, blob.content_type)
         # TODO(user) Add support in the stub to retrieve acl metadata
@@ -449,8 +430,7 @@ class GCSOutputWriterTestCommon(GCSOutputTestBase):
     def testWriterCounters(self):
         mapreduce_state = self.create_mapreduce_state(
         output_params=
-        # {self.WRITER_CLS.BUCKET_NAME_PARAM: "test"})
-        {self.WRITER_CLS.BUCKET_NAME_PARAM: "byates"})
+        {self.WRITER_CLS.BUCKET_NAME_PARAM: self.TEST_BUCKET})
         shard_state = self.create_shard_state(0)
         writer = self.WRITER_CLS.create(mapreduce_state.mapreduce_spec,
                                     shard_state.shard_number, 0)
@@ -474,7 +454,7 @@ class GCSOutputWriterTestCommon(GCSOutputTestBase):
     Other tests on get_filenames see output_writers_end_to_end_test.
     """
         mapreduce_state = self.create_mapreduce_state(
-        output_params={self.WRITER_CLS.BUCKET_NAME_PARAM: "test"})
+        output_params={self.WRITER_CLS.BUCKET_NAME_PARAM: self.TEST_BUCKET})
         self.assertEqual([], self.WRITER_CLS.get_filenames(mapreduce_state))
 
 
@@ -482,8 +462,6 @@ class GCSRecordOutputWriterTestBase(GCSOutputTestBase):
 
   WRITER_CLS = None
   WRITER_NAME = None
-  # BUCKET_NAME = "test"
-  BUCKET_NAME = "byates"
 
   def create_mapreduce_state(self, output_params=None):
     """Create a model.MapreduceState including MapreduceSpec and MapperSpec.

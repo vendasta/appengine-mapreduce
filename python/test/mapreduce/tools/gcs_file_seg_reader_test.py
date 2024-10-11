@@ -3,45 +3,21 @@
 
 # pylint: disable=g-bad-name
 
-import unittest
-
-from google.appengine.datastore import datastore_stub_util
-from google.appengine.ext import testbed
 
 from mapreduce import output_writers
 from mapreduce.tools import gcs_file_seg_reader
 
-from google.cloud import storage
 
-_storage_client = storage.Client()
+from testlib import testutil
 
 
-class GCSFileSegReaderTest(unittest.TestCase):
+class GCSFileSegReaderTest(testutil.CloudStorageTestBase):
   """Test GCSFileSegReader."""
 
   def setUp(self):
     super().setUp()
-
-    self.testbed = testbed.Testbed()
-    self.testbed.activate()
-
-    self.testbed.init_app_identity_stub()
-    self.testbed.init_blobstore_stub()
-    # HRD with no eventual consistency.
-    policy = datastore_stub_util.PseudoRandomHRConsistencyPolicy(probability=1)
-    self.testbed.init_datastore_v3_stub(consistency_policy=policy)
-    self.testbed.init_memcache_stub()
-    self.testbed.init_urlfetch_stub()
-
     self.writer_cls = output_writers._GoogleCloudStorageOutputWriter
-
-    self.bucket_name = "byates"
-    self.bucket = _storage_client.get_bucket(self.bucket_name)
     self.seg_prefix = f"{self.gcsPrefix}/prefix-"
-
-  def tearDown(self):
-    self.testbed.deactivate()
-    super().tearDown()
 
   def testMissingMetadata(self):
     f = self.bucket.blob(self.seg_prefix + "0").open("w")
@@ -49,7 +25,7 @@ class GCSFileSegReaderTest(unittest.TestCase):
     f.close()
 
     with self.assertRaises(ValueError):
-        gcs_file_seg_reader._GCSFileSegReader(f"/{self.bucket_name}/{self.seg_prefix}", 0)
+        gcs_file_seg_reader._GCSFileSegReader(f"/{self.TEST_BUCKET}/{self.seg_prefix}", 0)
 
   def testInvalidMetadata(self):
       blob = self.bucket.blob(self.seg_prefix + "0")
@@ -58,7 +34,7 @@ class GCSFileSegReaderTest(unittest.TestCase):
       blob.patch()
 
       with self.assertRaises(ValueError):
-          gcs_file_seg_reader._GCSFileSegReader(f"/{self.bucket_name}/{self.seg_prefix}", 0)
+          gcs_file_seg_reader._GCSFileSegReader(f"/{self.TEST_BUCKET}/{self.seg_prefix}", 0)
 
   def ReadOneFileTest(self, read_size):
     blob = self.bucket.blob(self.seg_prefix + "0")
@@ -68,7 +44,7 @@ class GCSFileSegReaderTest(unittest.TestCase):
     blob.upload_from_string("1234567")
     blob.patch()
 
-    r = gcs_file_seg_reader._GCSFileSegReader(f"/{self.bucket_name}/{self.seg_prefix}", 0)
+    r = gcs_file_seg_reader._GCSFileSegReader(f"/{self.TEST_BUCKET}/{self.seg_prefix}", 0)
     result = b""
     while True:
       tmp = r.read(read_size)
@@ -106,7 +82,7 @@ class GCSFileSegReaderTest(unittest.TestCase):
   def testReadMultipleFiles(self):
     self.setUpMultipleFile()
 
-    r = gcs_file_seg_reader._GCSFileSegReader(f"/{self.bucket_name}/{self.seg_prefix}", 2)
+    r = gcs_file_seg_reader._GCSFileSegReader(f"/{self.TEST_BUCKET}/{self.seg_prefix}", 2)
     result = b""
     while True:
       tmp = r.read(1)

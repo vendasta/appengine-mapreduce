@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 # Copyright 2011 Google Inc. All Rights Reserved.
 
-
-import io
 import pipeline
 
 from mapreduce import base_handler
@@ -13,11 +11,6 @@ from mapreduce import records
 from mapreduce import shuffler
 from mapreduce import test_support
 from testlib import testutil
-
-from google.cloud import storage
-
-
-_storage_client = storage.Client()
 
 
 class HashEndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
@@ -38,12 +31,10 @@ class HashEndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
     input_data = [(str(i), str(i)) for i in range(100)]
     input_data.sort()
 
-    bucket_name = "byates"
     test_filename = f"{self.gcsPrefix}/testfile"
-    full_filename = f"/{bucket_name}/{test_filename}"
+    full_filename = f"/{self.TEST_BUCKET}/{test_filename}"
 
-    bucket = _storage_client.get_bucket(bucket_name)
-    blob = bucket.blob(test_filename)
+    blob = self.bucket.blob(test_filename)
     
     with blob.open("wb") as f:
       with records.RecordsWriter(f) as w:
@@ -53,7 +44,7 @@ class HashEndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
           proto.value = v
           w.write(proto.SerializeToString())
 
-    p = shuffler._HashPipeline(self.gcsPrefix, bucket_name,
+    p = shuffler._HashPipeline(self.gcsPrefix, self.TEST_BUCKET,
                                [full_filename, full_filename, full_filename])
     p.start()
     test_support.execute_until_empty(self.taskqueue)
@@ -63,7 +54,7 @@ class HashEndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
     output_data = []
     for output_files in list_of_output_files:
       for output_file in output_files:
-        blob = bucket.blob(output_file)
+        blob = self.bucket.blob(output_file)
         with blob.open("rb") as f:
           for binary_record in records.RecordsReader(f):
             proto = kv_pb.KeyValue()
@@ -94,15 +85,13 @@ class SortFileEndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerTestBa
 
   def testSortFile(self):
     """Test sorting a file."""
-    bucket_name = "byates"
     test_filename = f"{self.gcsPrefix}/testfile"
-    full_filename = f"/{bucket_name}/{test_filename}"
+    full_filename = f"/{self.TEST_BUCKET}/{test_filename}"
 
     input_data = [
         (str(i), "_" + str(i)) for i in range(100)]
 
-    bucket = _storage_client.get_bucket(bucket_name)
-    with bucket.blob(test_filename).open("wb") as f:
+    with self.bucket.blob(test_filename).open("wb") as f:
       with records.RecordsWriter(f) as w:
         for (k, v) in input_data:
           proto = kv_pb.KeyValue()
@@ -110,7 +99,7 @@ class SortFileEndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerTestBa
           proto.value = v
           w.write(proto.SerializeToString())
 
-    p = shuffler._SortChunksPipeline(self.gcsPrefix, bucket_name, [[full_filename]])
+    p = shuffler._SortChunksPipeline(self.gcsPrefix, self.TEST_BUCKET, [[full_filename]])
     p.start()
     test_support.execute_until_empty(self.taskqueue)
     p = shuffler._SortChunksPipeline.from_id(p.pipeline_id)
@@ -119,8 +108,8 @@ class SortFileEndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerTestBa
     output_files = p.outputs.default.value[0]
     output_data = []
     for output_file in output_files:
-      output_file = output_file[len(f"/{bucket_name}/"):]
-      with bucket.blob(output_file).open("rb") as f:
+      output_file = output_file[len(f"/{self.TEST_BUCKET}/"):]
+      with self.bucket.blob(output_file).open("rb") as f:
         for binary_record in records.RecordsReader(f):
           proto = kv_pb.KeyValue()
           proto.ParseFromString(binary_record)
@@ -190,8 +179,7 @@ class MergingReaderEndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerT
     test_filename = f"{self.gcsPrefix}/testfile"
     full_filename = f"/{self.TEST_BUCKET}/{test_filename}"
 
-    bucket = _storage_client.get_bucket(self.TEST_BUCKET)
-    with bucket.blob(test_filename).open("wb") as f:
+    with self.bucket.blob(test_filename).open("wb") as f:
       with records.RecordsWriter(f) as w:
         for (k, v) in input_data:
           proto = kv_pb.KeyValue()
@@ -207,7 +195,7 @@ class MergingReaderEndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerT
 
     output_file = p.outputs.default.value[0]
     output_data = []
-    with bucket.blob(output_file).open("rb") as f:
+    with self.bucket.blob(output_file).open("rb") as f:
       for record in records.RecordsReader(f):
         output_data.append(record)
 

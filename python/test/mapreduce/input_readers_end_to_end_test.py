@@ -61,14 +61,12 @@ class GoogleCloudStorageInputReaderEndToEndTest(testutil.CloudStorageTestBase, t
 
   def _run_test(self, num_shards, num_files):
     # bucket_name = "testing"
-    bucket_name = "byates"
     object_prefix = f"{self.gcsPrefix}/file-"
     job_name = self.gcsPrefix
     input_class = (input_readers.__name__ + "." +
                    input_readers._GoogleCloudStorageInputReader.__name__)
 
-    expected_content = self.create_test_content(bucket_name,
-                                                object_prefix,
+    expected_content = self.create_test_content(object_prefix,
                                                 num_files)
 
     control.start_map(
@@ -77,7 +75,7 @@ class GoogleCloudStorageInputReaderEndToEndTest(testutil.CloudStorageTestBase, t
         input_class,
         {
             "input_reader": {
-                "bucket_name": bucket_name,
+                "bucket_name": self.TEST_BUCKET,
                 "objects": [object_prefix + "*"]
             },
         },
@@ -95,10 +93,9 @@ class GoogleCloudStorageInputReaderEndToEndTest(testutil.CloudStorageTestBase, t
   def testStrict(self):
     """Tests that fail_on_missing_input works properly."""
     gcs_files = []
-    bucket = _storage_client.get_bucket("byates")
     for num in range(10):
         gcs_file = f"{self.gcsPrefix}/file{num}"
-        blob = bucket.blob(gcs_file)
+        blob = self.bucket.blob(gcs_file)
         blob.upload_from_string(str(num + 100))
         gcs_files.append(gcs_file)
 
@@ -110,7 +107,7 @@ class GoogleCloudStorageInputReaderEndToEndTest(testutil.CloudStorageTestBase, t
       self._ClearMapperData()
 
       input_reader_dict = {
-          "bucket_name": bucket.name,
+          "bucket_name": self.TEST_BUCKET,
           "objects": gcs_files,
       }
       if fail_on_missing_input is not None:
@@ -138,7 +135,7 @@ class GoogleCloudStorageInputReaderEndToEndTest(testutil.CloudStorageTestBase, t
                      sorted(_memory_mapper_data))
 
     # Now remove a file.
-    bucket.delete_blob(f"{self.gcsPrefix}/file5")
+    self.bucket.delete_blob(f"{self.gcsPrefix}/file5")
 
     # Non-strict MR still works but some output is not there.
     mr_id = _RunMR(False)

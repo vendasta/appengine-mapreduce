@@ -9,7 +9,6 @@
 
 import pipeline
 from google.appengine.ext import db
-from google.cloud import storage
 from testlib import testutil
 
 from mapreduce import (input_readers, mapreduce_pipeline, operation,
@@ -47,7 +46,7 @@ def fake_combiner_reduce(key, values):
   yield repr((key, sum([int(x) for x in values]))) + "\n"
 
 
-class CombinerTest(testutil.HandlerTestBase):
+class CombinerTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
   """Tests for combiners."""
 
   def setUp(self):
@@ -76,7 +75,6 @@ class CombinerTest(testutil.HandlerTestBase):
 
     # Prepare test data
     entity_count = 200
-    bucket_name = "byates"
 
     for i in range(entity_count):
       FakeEntity(data=str(i)).put()
@@ -90,12 +88,12 @@ class CombinerTest(testutil.HandlerTestBase):
         output_writer_spec=
         output_writers.__name__ + ".GoogleCloudStorageOutputWriter",
         mapper_params={
-          "bucket_name": bucket_name,
+          "bucket_name": self.TEST_BUCKET,
           "entity_kind": __name__ + ".FakeEntity",
         },
         reducer_params={
             "output_writer": {
-                "bucket_name": bucket_name
+                "bucket_name": self.TEST_BUCKET
             },
         },
         shards=4)
@@ -105,9 +103,8 @@ class CombinerTest(testutil.HandlerTestBase):
     p = mapreduce_pipeline.MapreducePipeline.from_id(p.pipeline_id)
     self.assertEqual(4, len(p.outputs.default.value))
     file_content = []
-    bucket = storage.Client().get_bucket(bucket_name)
     for input_file in p.outputs.default.value:
-      blob = bucket.blob(input_file)
+      blob = self.bucket.blob(input_file)
       with blob.open("rb") as infile:
         for line in infile:
           file_content.append(line.strip())
@@ -122,7 +119,6 @@ class CombinerTest(testutil.HandlerTestBase):
     """Test running with low values count but with combiner."""
     # Prepare test data
     entity_count = 200
-    bucket_name = "byates"
 
     for i in range(entity_count):
       FakeEntity(data=str(i)).put()
@@ -137,12 +133,12 @@ class CombinerTest(testutil.HandlerTestBase):
         output_writer_spec=
         output_writers.__name__ + ".GoogleCloudStorageOutputWriter",
         mapper_params={
-          "bucket_name": bucket_name,
+          "bucket_name": self.TEST_BUCKET,
           "entity_kind": __name__ + ".FakeEntity",
         },
         reducer_params={
             "output_writer": {
-                "bucket_name": bucket_name
+                "bucket_name": self.TEST_BUCKET
             },
         },
         shards=4)
@@ -152,9 +148,8 @@ class CombinerTest(testutil.HandlerTestBase):
     p = mapreduce_pipeline.MapreducePipeline.from_id(p.pipeline_id)
     self.assertEqual(4, len(p.outputs.default.value))
     file_content = []
-    bucket = storage.Client().get_bucket(bucket_name)
     for input_file in p.outputs.default.value:
-      blob = bucket.blob(input_file)
+      blob = self.bucket.blob(input_file)
       with blob.open("rb") as infile:
         for line in infile:
           file_content.append(line.strip())

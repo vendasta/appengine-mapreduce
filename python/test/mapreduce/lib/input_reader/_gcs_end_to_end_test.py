@@ -10,10 +10,6 @@ from testlib import testutil
 from mapreduce.api import map_job
 from mapreduce.lib import input_reader
 
-from google.cloud import storage
-
-_storage_client = storage.Client()
-
 # Global for collecting data across all map shards
 _memory_mapper_data = []
 _processed_count = 0
@@ -50,11 +46,10 @@ class GCSInputReaderEndToEndTest(testutil.CloudStorageTestBase, testutil.Handler
   def tearDown(self):
     parameters.config._SLICE_DURATION_SEC = self.original_slice_duration_sec
 
-  def create_test_content(self, bucket_name, object_prefix, num_files):
+  def create_test_content(self, object_prefix, num_files):
     """Create a file in Google Cloud Storage with a small amount of content.
 
     Args:
-      bucket_name: the name of the bucket, with no delimiters.
       object_prefix: a string prefix for each object/file that will be created.
         A suffix with a file number will automatically be appended.
       num_files: the number of files to create.
@@ -63,28 +58,24 @@ class GCSInputReaderEndToEndTest(testutil.CloudStorageTestBase, testutil.Handler
       A list with each element containing the data in one of the created files.
     """
     created_content = []
-    bucket = _storage_client.get_bucket(bucket_name)
     created_content = []
     for file_num in range(num_files):
         content = f"Dummy Content {file_num}"
         created_content.append(content)
-        blob = bucket.blob(f"{object_prefix}{file_num:03d}")
+        blob = self.bucket.blob(f"{object_prefix}{file_num:03d}")
         blob.upload_from_string(content)
     return created_content
 
   def _run_test(self, num_shards, num_files, multi_slices=False):
-    # bucket_name = "testing"
-    bucket_name = "byates"
     object_prefix = f"{self.gcsPrefix}/file-"
     job_name = self.gcsPrefix
-    expected_content = self.create_test_content(bucket_name,
-                                                object_prefix,
+    expected_content = self.create_test_content(object_prefix,
                                                 num_files)
     job = map_job.Job.submit(map_job.JobConfig(
         job_name=job_name,
         mapper=_InputReaderMemoryMapper,
         input_reader_cls=input_reader.GCSInputReader,
-        input_reader_params={"bucket_name": bucket_name,
+        input_reader_params={"bucket_name": self.TEST_BUCKET,
                              "objects": [object_prefix + "*"],
                              "path_filter": _MyPathFilter()},
         shard_count=num_shards))
