@@ -76,7 +76,6 @@ class MapreducePipelineTest(testutil.CloudStorageTestBase, testutil.HandlerTestB
     self.emails.append((sender, subject, body, html))
 
   def testFailedMapReduce(self):
-    bucket_name = "testbucket"
     max_attempts_before = pipeline.pipeline._DEFAULT_MAX_ATTEMPTS
     try:
       pipeline.pipeline._DEFAULT_MAX_ATTEMPTS = 1
@@ -102,7 +101,7 @@ class MapreducePipelineTest(testutil.CloudStorageTestBase, testutil.HandlerTestB
           },
           reducer_params={
               "output_writer": {
-                  "bucket_name": bucket_name
+                  "bucket_name": self.TEST_BUCKET
               },
           },
           shards=3)
@@ -155,7 +154,7 @@ class MapreducePipelineTest(testutil.CloudStorageTestBase, testutil.HandlerTestB
                      p.outputs.result_status.value)
     output_data = []
     for output_file in p.outputs.default.value:
-      with self.bucket.blob(output_file).open() as f:
+      with self.bucket.blob(output_file).open("rb") as f:
         for record in records.RecordsReader(f):
           output_data.append(record)
 
@@ -166,16 +165,17 @@ class MapreducePipelineTest(testutil.CloudStorageTestBase, testutil.HandlerTestB
     self.assertEqual(expected_data, output_data)
 
     # Verify that mapreduce doesn't leave intermediate files behind.
-    temp_file_stats = _storage_client.listbucket(bucket_name)
+    from google.cloud import storage
+    _storage_client = storage.Client()
+    temp_file_stats = _storage_client.listbucket(self.TEST_BUCKET)
     for stat in temp_file_stats:
       if stat.filename:
         self.assertFalse(
             stat.filename.startswith("/%s/%s-shuffle-" %
-                                     (bucket_name, job_name)))
+                                     (self.TEST_BUCKET, job_name)))
 
   def testMapReduceWithShardRetry(self):
     # Prepare test data
-    bucket_name = "testbucket"
     entity_count = 200
     db.delete(RetryCount.all())
 
@@ -198,7 +198,7 @@ class MapreducePipelineTest(testutil.CloudStorageTestBase, testutil.HandlerTestB
         },
         reducer_params={
             "output_writer": {
-                "bucket_name": bucket_name
+                "bucket_name": self.TEST_BUCKET
             },
         },
         shards=16)
@@ -218,7 +218,7 @@ class MapreducePipelineTest(testutil.CloudStorageTestBase, testutil.HandlerTestB
     for output_file in p.outputs.default.value:
       # Get the number of shard retries by parsing filename.
       retries += (int(output_file[-1]) - 1)
-      with cloudstorage.open(output_file) as f:
+      with self.bucket.blob(output_file).open("rb") as f:
         for record in records.RecordsReader(f):
           output_data.append(record)
 
