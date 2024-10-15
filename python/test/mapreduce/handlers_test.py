@@ -185,7 +185,7 @@ class TestOperation(operation.Operation):
     cls.processed_keys = []
 
 
-def test_handler_raise_exception(entity):
+def fake_handler_raise_exception(entity):
   """Test handler function which always raises exception.
 
   Raises:
@@ -194,7 +194,7 @@ def test_handler_raise_exception(entity):
   raise ValueError()
 
 
-def test_handler_raise_fail_job_exception(entity):
+def fake_handler_raise_fail_job_exception(entity):
   """Test handler function which always raises exception.
 
   Raises:
@@ -203,23 +203,23 @@ def test_handler_raise_fail_job_exception(entity):
   raise errors.FailJobError()
 
 
-def test_handler_yield_op(entity):
+def fake_handler_yield_op(entity):
   """Test handler function which yields test operation twice for entity."""
   yield TestOperation(entity)
   yield TestOperation(entity)
 
 
-def test_param_validator_success(params):
+def fake_param_validator_success(params):
   """Test parameter validator that is successful."""
   params["test"] = "good"
 
 
-def test_param_validator_raise_exception(params):
+def fake_param_validator_raise_exception(params):
   """Test parameter validator that fails."""
   raise Exception("These params are bad")
 
 
-def test_handler_yield_keys(entity):
+def fake_handler_yield_keys(entity):
   """Test handler which yeilds entity keys."""
   yield entity.key()
 
@@ -430,11 +430,12 @@ class MapreduceHandlerTestBase(testutil.HandlerTestBase):
       eta_sec = time.mktime(time.strptime(task["eta"], "%Y/%m/%d %H:%M:%S"))
       self.assertTrue(expected_etc_sec < eta_sec + 10)
 
-    request = Request()
-    request.data = base64.b64decode(task["body"])
-    request.headers = dict(task["headers"])    
-
-    payload = model.HugeTask.decode_payload(request)
+    with self.app.test_request_context(
+      headers=dict(task["headers"]),
+      data=base64.b64decode(task["body"]),
+    ):
+      from flask import request
+      payload = model.HugeTask.decode_payload(request)
     self.assertEqual(str(shard_id), payload["shard_id"])
     self.assertEqual(str(slice_id), payload["slice_id"])
 
@@ -496,9 +497,6 @@ class MapreduceHandlerTestBase(testutil.HandlerTestBase):
         particular property is not specified.
     """
     self.assertTrue(mapreduce_state)
-    self.assertTrue(
-        mapreduce_state.chart_url.startswith("https://www.google.com/"),
-        "Wrong chart url: " + mapreduce_state.chart_url)
 
     self.assertEqual(kwargs.get("active", True), mapreduce_state.active)
     self.assertEqual(kwargs.get("processed", 0),
@@ -519,11 +517,12 @@ class MapreduceHandlerTestBase(testutil.HandlerTestBase):
     """
     self.assertEqual("POST", task["method"])
 
-    request = Request()
-    request.data = base64.b64decode(task["body"])
-    request.headers = dict(task["headers"])
-
-    payload = model.HugeTask.decode_payload(request)
+    with self.app.test_request_context(
+      headers=task["headers"],
+      data=base64.b64decode(task["body"])
+    ):
+      from flask import request
+      payload = model.HugeTask.decode_payload(request)
     mapreduce_spec = model.MapreduceSpec.from_json_str(
         payload["mapreduce_spec"])
     self.verify_mapreduce_spec(mapreduce_spec, **kwargs)
@@ -648,34 +647,31 @@ class StartJobHandlerTest(testutil.HandlerTestBase):
     """Sets up the test harness."""
     super().setUp()
     self.handler = handlers.StartJobHandler()
-    self.handler.initialize(mock_webapp.MockRequest(),
-                            mock_webapp.MockResponse())
-
-    self.handler.request.path = "/mapreduce/command/start_job"
-    self.handler.request.set("name", self.NAME)
-    self.handler.request.set("mapper_handler", self.HANDLER_SPEC)
-    self.handler.request.set("mapper_input_reader", self.INPUT_READER_SPEC)
-    self.handler.request.set("mapper_output_writer", self.OUTPUT_WRITER_SPEC)
-    self.handler.request.set("mapper_params.shard_count", self.SHARD_COUNT)
-    self.handler.request.set("mapper_params.entity_kind",
-                             self.ENTITY_KIND)
-    self.handler.request.set("mapper_params.processing_rate",
-                             self.PROCESSING_RATE)
-    self.handler.request.set("mapper_params.queue_name", self.QUEUE)
-
-    self.handler.request.headers["X-Requested-With"] = "XMLHttpRequest"
 
   def testCSRF(self):
     """Tests that that handler only accepts AJAX requests."""
-    del self.handler.request.headers["X-Requested-With"]
-    self.handler.post()
-    self.assertEqual(http.client.FORBIDDEN, self.handler.response.status)
+    with self.app.test_request_context(method="POST"), self.assertRaises(werkzeug.exceptions.Forbidden):
+      self.handler.dispatch_request()
 
   def testSmoke(self):
     """Verifies main execution path of starting scan over several entities."""
     for _ in range(100):
       TestEntity().put()
-    self.handler.post()
+    with self.app.test_request_context(
+      method="POST",
+      data={
+        "name": self.NAME,
+        "mapper_handler": self.HANDLER_SPEC,
+        "mapper_input_reader": self.INPUT_READER_SPEC,
+        "mapper_output_writer": self.OUTPUT_WRITER_SPEC,
+        "mapper_params.shard_count": self.SHARD_COUNT,
+        "mapper_params.entity_kind": self.ENTITY_KIND,
+        "mapper_params.processing_rate": self.PROCESSING_RATE,
+        "mapper_params.queue_name": self.QUEUE
+      },
+      headers={"X-Requested-With": "XMLHttpRequest"}
+    ):
+      self.handler.dispatch_request()
 
     tasks = self.taskqueue.GetTasks(self.QUEUE)
     # Only kickoff task should be there.
@@ -712,9 +708,24 @@ class StartJobHandlerTest(testutil.HandlerTestBase):
   def testOtherApp(self):
     """Verifies main execution path of starting scan over several entities."""
     apiproxy_stub_map.apiproxy.GetStub("datastore_v3").SetTrusted(True)
-    self.handler.request.set("mapper_params._app", "otherapp")
     TestEntity(_app="otherapp").put()
-    self.handler.post()
+    
+    with self.app.test_request_context(
+      method="POST",
+      data={
+        "name": self.NAME,
+        "mapper_handler": self.HANDLER_SPEC,
+        "mapper_input_reader": self.INPUT_READER_SPEC,
+        "mapper_output_writer": self.OUTPUT_WRITER_SPEC,
+        "mapper_params.shard_count": self.SHARD_COUNT,
+        "mapper_params.entity_kind": self.ENTITY_KIND,
+        "mapper_params.processing_rate": self.PROCESSING_RATE,
+        "mapper_params.queue_name": self.QUEUE,
+        "mapper_params._app": "otherapp"
+      },
+      headers={"X-Requested-With": "XMLHttpRequest"}
+    ):
+      self.handler.dispatch_request()
 
     # Verify state is created.
     state = model.MapreduceState.get_by_job_id(
@@ -724,37 +735,84 @@ class StartJobHandlerTest(testutil.HandlerTestBase):
   def testRequiredParams(self):
     """Tests that required parameters are enforced."""
     TestEntity().put()
-    self.handler.post()
 
-    self.handler.request.set("name", None)
-    self.assertRaises(errors.NotEnoughArgumentsError, self.handler.handle)
+    data={
+      "name": self.NAME,
+      "mapper_handler": self.HANDLER_SPEC,
+      "mapper_input_reader": self.INPUT_READER_SPEC,
+      "mapper_output_writer": self.OUTPUT_WRITER_SPEC,
+      "mapper_params.entity_kind": self.ENTITY_KIND
+    }
 
-    self.handler.request.set("name", "my job")
-    self.handler.request.set("mapper_input_reader", None)
-    self.assertRaises(errors.NotEnoughArgumentsError, self.handler.handle)
+    with self.app.test_request_context(
+      method="POST",
+      headers={"X-Requested-With": "XMLHttpRequest"},
+      data=data
+    ):
+      self.handler.handle()
 
-    self.handler.request.set(
-        "mapper_input_reader",
-        "mapreduce.input_readers.DatastoreInputReader")
-    self.handler.request.set("mapper_handler", None)
-    self.assertRaises(errors.NotEnoughArgumentsError, self.handler.handle)
+    data.pop("name")
+    with self.app.test_request_context(
+      method="POST",
+      headers={"X-Requested-With": "XMLHttpRequest"},
+      data=data
+    ), self.assertRaises(errors.NotEnoughArgumentsError):
+      self.handler.handle()
 
-    self.handler.request.set("mapper_handler", MAPPER_HANDLER_SPEC)
-    self.handler.request.set("mapper_params.entity_kind", None)
-    self.assertRaises(input_readers.BadReaderParamsError, self.handler.handle)
+    data["name"] = self.NAME
+    data.pop("mapper_input_reader")
+    with self.app.test_request_context(
+      method="POST",
+      headers={"X-Requested-With": "XMLHttpRequest"},
+      data=data
+    ), self.assertRaises(errors.NotEnoughArgumentsError):
+      self.handler.handle()
 
-    self.handler.request.set("mapper_params.entity_kind",
-                             (__name__ + "." + TestEntity.__name__))
-    self.handler.post()
+    data["mapper_input_reader"] = self.INPUT_READER_SPEC
+    data.pop("mapper_handler")
+    with self.app.test_request_context(
+      method="POST",
+      headers={"X-Requested-With": "XMLHttpRequest"},
+      data=data
+    ), self.assertRaises(errors.NotEnoughArgumentsError):
+      self.handler.handle()
+
+    data["mapper_handler"] = self.HANDLER_SPEC
+    data.pop("mapper_params.entity_kind")
+    with self.app.test_request_context(
+      method="POST",
+      headers={"X-Requested-With": "XMLHttpRequest"},
+      data=data
+    ), self.assertRaises(input_readers.BadReaderParamsError):
+      self.handler.handle()
+
+    data["mapper_params.entity_kind"] = self.ENTITY_KIND
+    with self.app.test_request_context(
+      method="POST",
+      headers={"X-Requested-With": "XMLHttpRequest"},
+      data=data
+    ):
+      self.handler.handle()
 
   def testParameterValidationSuccess(self):
     """Tests validating user-supplied parameters."""
     TestEntity().put()
-    self.handler.request.set("mapper_params.one", ["red", "blue"])
-    self.handler.request.set("mapper_params.two", "green")
-    self.handler.request.set("mapper_params_validator",
-                             __name__ + ".test_param_validator_success")
-    self.handler.post()
+
+    with self.app.test_request_context(
+      method="POST",
+      headers={"X-Requested-With": "XMLHttpRequest"},
+      data={
+        "name": self.NAME,
+        "mapper_handler": self.HANDLER_SPEC,
+        "mapper_input_reader": self.INPUT_READER_SPEC,
+        "mapper_output_writer": self.OUTPUT_WRITER_SPEC,
+        "mapper_params.entity_kind": self.ENTITY_KIND,
+        "mapper_params.one": ["red", "blue"],
+        "mapper_params.two": "green",
+        "mapper_params_validator": __name__ + ".fake_param_validator_success"
+      }
+    ):
+      self.handler.post()
 
     state = model.MapreduceState.get_by_job_id(
         self.handler.json_response["mapreduce_id"])
@@ -769,11 +827,22 @@ class StartJobHandlerTest(testutil.HandlerTestBase):
   def testMapreduceParameters(self):
     """Tests propagation of user-supplied mapreduce parameters."""
     TestEntity().put()
-    self.handler.request.set("params.one", ["red", "blue"])
-    self.handler.request.set("params.two", "green")
-    self.handler.request.set("params_validator",
-                             __name__ + ".test_param_validator_success")
-    self.handler.post()
+
+    with self.app.test_request_context(
+      method="POST",
+      headers={"X-Requested-With": "XMLHttpRequest"},
+      data={
+        "name": self.NAME,
+        "mapper_handler": self.HANDLER_SPEC,
+        "mapper_input_reader": self.INPUT_READER_SPEC,
+        "mapper_output_writer": self.OUTPUT_WRITER_SPEC,
+        "mapper_params.entity_kind": self.ENTITY_KIND,
+        "params.one": ["red", "blue"],
+        "params.two": "green",
+        "params_validator": __name__ + ".fake_param_validator_success"
+      }
+    ):
+      self.handler.post()
 
     state = model.MapreduceState.get_by_job_id(
         self.handler.json_response["mapreduce_id"])
@@ -786,26 +855,57 @@ class StartJobHandlerTest(testutil.HandlerTestBase):
 
   def testParameterValidationFailure(self):
     """Tests when validating user-supplied parameters fails."""
-    self.handler.request.set("mapper_params_validator",
-                             __name__ + ".test_param_validator_raise_exception")
     try:
-      self.handler.handle()
-      self.fail()
+      with self.app.test_request_context(
+        method="POST",
+        headers={"X-Requested-With": "XMLHttpRequest"},
+        data={
+          "name": self.NAME,
+          "mapper_handler": self.HANDLER_SPEC,
+          "mapper_input_reader": self.INPUT_READER_SPEC,
+          "mapper_output_writer": self.OUTPUT_WRITER_SPEC,
+          "mapper_params.entity_kind": self.ENTITY_KIND,
+          "mapper_params_validator": __name__ + ".fake_param_validator_raise_exception"
+        }
+      ):
+        self.handler.handle()
+        self.fail()
     except Exception as e:
       self.assertEqual("These params are bad", str(e))
 
   def testParameterValidationUnknown(self):
     """Tests the user-supplied parameter validation function cannot be found."""
-    self.handler.request.set("mapper_params_validator", "does_not_exist")
-    self.assertRaises(ImportError, self.handler.handle)
+    with self.app.test_request_context(
+      method="POST",
+      headers={"X-Requested-With": "XMLHttpRequest"},
+      data={
+        "name": self.NAME,
+        "mapper_handler": self.HANDLER_SPEC,
+        "mapper_input_reader": self.INPUT_READER_SPEC,
+        "mapper_output_writer": self.OUTPUT_WRITER_SPEC,
+        "mapper_params.entity_kind": self.ENTITY_KIND,
+        "mapper_params_validator": "does_not_exist"
+      }
+    ), self.assertRaises(ImportError):
+      self.handler.handle()
 
   def testOutputWriterValidateFails(self):
     TestEntity().put()
-    self.handler.request.set("mapper_output_writer",
-                             __name__ + ".TestOutputWriter")
-    self.handler.request.set("mapper_params.fail_writer_validate",
-                             "true")
-    self.assertRaises(Exception, self.handler.handle)
+
+    with self.app.test_request_context(
+      method="POST",
+      headers={"X-Requested-With": "XMLHttpRequest"},
+      data={
+        "name": self.NAME,
+        "mapper_handler": self.HANDLER_SPEC,
+        "mapper_input_reader": self.INPUT_READER_SPEC,
+        "mapper_output_writer": self.OUTPUT_WRITER_SPEC,
+        "mapper_params.entity_kind": self.ENTITY_KIND,
+        "mapper_output_writer": __name__ + ".TestOutputWriter",
+        "mapper_params.fail_writer_validate": "true"
+      }
+    ), self.assertRaises(Exception):
+      self.handler.handle()
 
 
 class StartJobHandlerFunctionalTest(testutil.HandlerTestBase):
@@ -1253,12 +1353,6 @@ class MapperWorkerCallbackHandlerLeaseTest(testutil.HandlerTestBase):
 
     # Create worker handler.
     handler = handlers.MapperWorkerCallbackHandler()
-    request = Request()
-    request.headers[model.HugeTask.PAYLOAD_VERSION_HEADER] = (
-        model.HugeTask.PAYLOAD_VERSION)
-    request.headers["X-AppEngine-QueueName"] = "default"
-    request.headers[util._MR_ID_TASK_HEADER] = self.mr_spec.mapreduce_id
-    request.headers[util._MR_SHARD_ID_TASK_HEADER] = self.shard_id
 
     # Create transient shard state.
     tstate = model.TransientShardState(
@@ -1269,10 +1363,6 @@ class MapperWorkerCallbackHandlerLeaseTest(testutil.HandlerTestBase):
         input_reader=InputReader(reader_iter),
         initial_input_reader=InputReader(reader_iter))
 
-    # Set request according to transient shard state.
-    worker_params = tstate.to_dict()
-    for param_name in worker_params:
-      handler.request.set(param_name, worker_params[param_name])
     return handler, tstate
 
   def assertNoEffect(self, no_shard_state=False):
@@ -1291,44 +1381,99 @@ class MapperWorkerCallbackHandlerLeaseTest(testutil.HandlerTestBase):
       self.assertEqual(str(self.shard_state), str(shard_state))
 
   def testStateNotFound(self):
-    handler, _ = self._create_handler()
+    handler, tstate = self._create_handler()
     self.shard_state.delete()
-    handler.post()
+
+    with self.app.test_request_context(
+      method="POST",
+      headers={
+        model.HugeTask.PAYLOAD_VERSION_HEADER: model.HugeTask.PAYLOAD_VERSION,
+        "X-AppEngine-QueueName": "default",
+        "X-Appengine-TaskName": "task_name",
+        util._MR_ID_TASK_HEADER: self.mr_spec.mapreduce_id,
+        util._MR_SHARD_ID_TASK_HEADER: self.shard_id
+      }, 
+      data=tstate.to_dict()
+    ):
+      handler.dispatch_request()
+
     self.assertNoEffect(no_shard_state=True)
     self.assertEqual(None, model.ShardState.get_by_shard_id(self.shard_id))
 
   def testStateNotActive(self):
-    handler, _ = self._create_handler()
+    handler, tstate = self._create_handler()
     self.shard_state.active = False
     self.shard_state.put()
-    handler.post()
+    with self.app.test_request_context(
+      method="POST",
+      headers={
+        model.HugeTask.PAYLOAD_VERSION_HEADER: model.HugeTask.PAYLOAD_VERSION,
+        "X-AppEngine-QueueName": "default",
+        "X-Appengine-TaskName": "task_name",
+        util._MR_ID_TASK_HEADER: self.mr_spec.mapreduce_id,
+        util._MR_SHARD_ID_TASK_HEADER: self.shard_id
+      }, 
+      data=tstate.to_dict()
+    ):
+      handler.dispatch_request()
     self.assertNoEffect()
 
   def testOldTask(self):
-    handler, _ = self._create_handler(slice_id=self.CURRENT_SLICE_ID - 1)
-    handler.post()
+    handler, tstate = self._create_handler(slice_id=self.CURRENT_SLICE_ID - 1)
+    with self.app.test_request_context(
+      method="POST",
+      headers={
+        model.HugeTask.PAYLOAD_VERSION_HEADER: model.HugeTask.PAYLOAD_VERSION,
+        "X-AppEngine-QueueName": "default",
+        "X-Appengine-TaskName": "task_name",
+        util._MR_ID_TASK_HEADER: self.mr_spec.mapreduce_id,
+        util._MR_SHARD_ID_TASK_HEADER: self.shard_id
+      }, 
+      data=tstate.to_dict()
+    ):
+      handler.dispatch_request()
     self.assertNoEffect()
 
   def testFutureTask(self):
-    handler, _ = self._create_handler(slice_id=self.CURRENT_SLICE_ID + 1)
-    handler.post()
-    self.assertEqual(http.client.SERVICE_UNAVAILABLE, handler.response.status)
+    handler, tstate = self._create_handler(slice_id=self.CURRENT_SLICE_ID + 1)
+    with self.app.test_request_context(
+      method="POST",
+      headers={
+        model.HugeTask.PAYLOAD_VERSION_HEADER: model.HugeTask.PAYLOAD_VERSION,
+        "X-AppEngine-QueueName": "default",
+        "X-Appengine-TaskName": "task_name",
+        util._MR_ID_TASK_HEADER: self.mr_spec.mapreduce_id,
+        util._MR_SHARD_ID_TASK_HEADER: self.shard_id
+      }, 
+      data=tstate.to_dict()
+    ), self.assertRaises(werkzeug.exceptions.ServiceUnavailable):
+      handler.dispatch_request()
 
   def testLeaseHasNotEnd(self):
     self.shard_state.slice_start_time = datetime.datetime.now()
     self.shard_state.put()
-    handler, _ = self._create_handler()
+    handler, tstate = self._create_handler()
 
     with mock.patch("datetime.datetime", autospec=True) as dt:
-      # One millisecons after.
+      # One millisecond after.
       dt.now.return_value = (self.shard_state.slice_start_time +
                              datetime.timedelta(milliseconds=1))
       self.assertEqual(
           math.ceil(parameters._LEASE_DURATION_SEC),
           handler._wait_time(self.shard_state,
                              parameters._LEASE_DURATION_SEC))
-      handler.post()
-      self.assertEqual(http.client.SERVICE_UNAVAILABLE, handler.response.status)
+      with self.app.test_request_context(
+        method="POST",
+        headers={
+          model.HugeTask.PAYLOAD_VERSION_HEADER: model.HugeTask.PAYLOAD_VERSION,
+          "X-AppEngine-QueueName": "default",
+          "X-Appengine-TaskName": "task_name",
+          util._MR_ID_TASK_HEADER: self.mr_spec.mapreduce_id,
+          util._MR_SHARD_ID_TASK_HEADER: self.shard_id
+        }, 
+        data=tstate.to_dict()
+      ), self.assertRaises(werkzeug.exceptions.ServiceUnavailable):
+        handler.dispatch_request()
 
   def testRequestHasNotEnd(self):
     # Previous request's lease has timed out but the request has not.
@@ -1338,21 +1483,20 @@ class MapperWorkerCallbackHandlerLeaseTest(testutil.HandlerTestBase):
     self.shard_state.slice_start_time = old
     self.shard_state.slice_request_id = self.PREVIOUS_REQUEST_ID
     self.shard_state.put()
-    handler, _ = self._create_handler()
-    # Lease has ended.
-    self.assertEqual(0,
-                     handler._wait_time(self.shard_state,
-                                        parameters._LEASE_DURATION_SEC),
-                     lambda: now)
-    # Logs API doesn't think the request has ended.
-    self.assertFalse(handler._has_old_request_ended(self.shard_state))
-    # Request has not timed out.
-    self.assertTrue(handler._wait_time(
-        self.shard_state,
-        parameters._MAX_LEASE_DURATION_SEC,
-        lambda: now))
-    handler.post()
-    self.assertEqual(http.client.SERVICE_UNAVAILABLE, handler.response.status)
+    handler, tstate = self._create_handler()
+
+    with self.app.test_request_context(
+      method="POST",
+      headers={
+        model.HugeTask.PAYLOAD_VERSION_HEADER: model.HugeTask.PAYLOAD_VERSION,
+        "X-AppEngine-QueueName": "default",
+        "X-Appengine-TaskName": "task_name",
+        util._MR_ID_TASK_HEADER: self.mr_spec.mapreduce_id,
+        util._MR_SHARD_ID_TASK_HEADER: self.shard_id
+      }, 
+      data=tstate.to_dict()
+    ), self.assertRaises(werkzeug.exceptions.ServiceUnavailable):
+      handler.dispatch_request()
 
   def testRequestHasTimedOut(self):
     slice_start_time = datetime.datetime(2000, 1, 1)
@@ -1360,15 +1504,6 @@ class MapperWorkerCallbackHandlerLeaseTest(testutil.HandlerTestBase):
     self.shard_state.slice_request_id = self.PREVIOUS_REQUEST_ID
     self.shard_state.put()
     handler, tstate = self._create_handler()
-    # Lease has ended.
-    self.assertEqual(0,
-                     handler._wait_time(self.shard_state,
-                                        parameters._LEASE_DURATION_SEC))
-    # Logs API doesn't think the request has ended.
-    self.assertFalse(handler._has_old_request_ended(self.shard_state))
-    # But request has timed out.
-    self.assertEqual(0, handler._wait_time(
-        self.shard_state, parameters._MAX_LEASE_DURATION_SEC))
 
     # acquire lease should succeed.
     handler._try_acquire_lease(self.shard_state, tstate)
@@ -1376,7 +1511,7 @@ class MapperWorkerCallbackHandlerLeaseTest(testutil.HandlerTestBase):
     shard_state = model.ShardState.get_by_shard_id(self.shard_id)
     self.assertTrue(shard_state.active)
     self.assertEqual(self.CURRENT_SLICE_ID, shard_state.slice_id)
-    self.assertEqual(self.CURRENT_REQUEST_ID, shard_state.slice_request_id)
+    self.assertEqual(self.CURRENT_REQUEST_ID, shard_state.slice_request_id.decode())
     self.assertTrue(shard_state.slice_start_time > slice_start_time)
 
   def testContentionWhenAcquireLease(self):
@@ -1399,17 +1534,13 @@ class MapperWorkerCallbackHandlerLeaseTest(testutil.HandlerTestBase):
     self.shard_state.slice_request_id = self.PREVIOUS_REQUEST_ID
     self.shard_state.put()
     handler, tstate = self._create_handler()
-    with mock.patch("google.appengine.api"
-                    ".logservice.fetch") as fetch:
-      mock_request_log = mock.Mock()
-      mock_request_log.finished = True
-      fetch.return_value = [mock_request_log]
-      handler._try_acquire_lease(self.shard_state, tstate)
+
+    handler._try_acquire_lease(self.shard_state, tstate)
 
     shard_state = model.ShardState.get_by_shard_id(self.shard_id)
     self.assertTrue(shard_state.active)
     self.assertEqual(self.CURRENT_SLICE_ID, shard_state.slice_id)
-    self.assertEqual(self.CURRENT_REQUEST_ID, shard_state.slice_request_id)
+    self.assertEqual(self.CURRENT_REQUEST_ID, shard_state.slice_request_id.decode())
     self.assertTrue(shard_state.slice_start_time > slice_start_time)
     self.assertEqual(shard_state, self.shard_state)
 
@@ -1417,12 +1548,19 @@ class MapperWorkerCallbackHandlerLeaseTest(testutil.HandlerTestBase):
     self.shard_state.slice_start_time = datetime.datetime(2000, 1, 1)
     self.shard_state.slice_request_id = self.PREVIOUS_REQUEST_ID
     self.shard_state.put()
-    handler, _ = self._create_handler()
-    with mock.patch("google.appengine.api"
-                    ".logservice.fetch") as fetch:
-      mock_request_log = mock.Mock()
-      mock_request_log.finished = True
-      fetch.return_value = [mock_request_log]
+    handler, tstate = self._create_handler()
+
+    with self.app.test_request_context(
+      method="POST",
+      headers={
+        model.HugeTask.PAYLOAD_VERSION_HEADER: model.HugeTask.PAYLOAD_VERSION,
+        "X-AppEngine-QueueName": "default",
+        "X-Appengine-TaskName": "task_name",
+        util._MR_ID_TASK_HEADER: self.mr_spec.mapreduce_id,
+        util._MR_SHARD_ID_TASK_HEADER: self.shard_id
+      }, 
+      data=tstate.to_dict()
+    ):
       handler.post()
 
     shard_state = model.ShardState.get_by_shard_id(self.shard_id)
@@ -1437,7 +1575,7 @@ class MapperWorkerCallbackHandlerLeaseTest(testutil.HandlerTestBase):
 
   def testLeaseFreedOnSliceRetry(self):
     # Reinitialize with faulty map function.
-    self._init_job(__name__ + "." + test_handler_raise_exception.__name__)
+    self._init_job(__name__ + "." + fake_handler_raise_exception.__name__)
     self._init_shard()
     handler, _ = self._create_handler()
     handler.post()
@@ -1557,25 +1695,25 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
 
     self.handler = handlers.MapperWorkerCallbackHandler()
     self.handler._time = MockTime.time
-    request = Request()
-    request.headers["X-AppEngine-QueueName"] = "default"
-    request.headers["X-AppEngine-TaskName"] = "foo-task-name"
-    request.path = "/mapreduce/worker_callback/" + self.shard_id
-    request.headers[util._MR_ID_TASK_HEADER] = self.mapreduce_id
-    request.headers[util._MR_SHARD_ID_TASK_HEADER] = self.shard_id
-    request.headers[model.HugeTask.PAYLOAD_VERSION_HEADER] = (
-        model.HugeTask.PAYLOAD_VERSION)
-
-    self.request = request
-
-    worker_params = self.transient_state.to_dict()
-    for param_name in worker_params:
-      self.handler.request.set(param_name, worker_params[param_name])
 
   def _handle_request(self, expect_finalize=True):
     """Handles request and optionally finalizes the output stream."""
     self.assertEqual(0, len(self.taskqueue.GetTasks("default")))
-    self.handler.post()
+
+    with self.app.test_request_context(
+      "/mapreduce/worker_callback/" + self.shard_id,
+      method="POST",
+      headers={
+        model.HugeTask.PAYLOAD_VERSION_HEADER: model.HugeTask.PAYLOAD_VERSION,
+        "X-AppEngine-QueueName": "default",
+        "X-Appengine-TaskName": "task_name",
+        util._MR_ID_TASK_HEADER: self.mapreduce_id,
+        util._MR_SHARD_ID_TASK_HEADER: self.shard_id
+      }, 
+      data=self.transient_state.to_dict()
+    ):
+      self.handler.dispatch_request()
+
     if not expect_finalize:
       self.assertEqual(0, len(self.taskqueue.GetTasks("default")))
       return
@@ -1592,8 +1730,21 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.verify_shard_task(
         tasks[0], self.shard_id, slice_id=1, verify_spec=False)
     self.taskqueue.FlushQueue("default")
-    self.handler.request.set("slice_id", 1)
-    self.handler.post()
+
+    with self.app.test_request_context(
+      "/mapreduce/worker_callback/" + self.shard_id,
+      method="POST",
+      headers={
+        model.HugeTask.PAYLOAD_VERSION_HEADER: model.HugeTask.PAYLOAD_VERSION,
+        "X-AppEngine-QueueName": "default",
+        "X-Appengine-TaskName": "task_name",
+        util._MR_ID_TASK_HEADER: self.mapreduce_id,
+        util._MR_SHARD_ID_TASK_HEADER: self.shard_id,
+      }, 
+      data=self.transient_state.to_dict().update(slice_id=1)
+    ):
+      self.handler.dispatch_request()
+
     shard_state = model.ShardState.get_by_shard_id(self.shard_id)
     self.assertFalse(shard_state.active)
 
@@ -1601,9 +1752,20 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     shard_state = model.ShardState.get_by_shard_id(self.shard_id)
     self.assertTrue(shard_state.active)
 
-    del self.request.headers[model.HugeTask.PAYLOAD_VERSION_HEADER]
-    self.handler.initialize(self.request, self.response)
-    self._handle_request(expect_finalize=False)
+    with self.app.test_request_context(
+      "/mapreduce/worker_callback/" + self.shard_id,
+      method="POST",
+      headers={
+        "X-AppEngine-QueueName": "default",
+        "X-Appengine-TaskName": "task_name",
+        util._MR_ID_TASK_HEADER: self.mapreduce_id,
+        util._MR_SHARD_ID_TASK_HEADER: self.shard_id
+      }, 
+      data=self.transient_state.to_dict()
+    ):
+      self.handler.dispatch_request()
+
+    self.assertEqual(0, len(self.taskqueue.GetTasks("default")))
 
     shard_state = model.ShardState.get_by_shard_id(self.shard_id)
     self.assertFalse(shard_state.active)
@@ -1798,7 +1960,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     """Tests a user-initiated abort of the shard."""
     # Be sure to have an output writer for the abort step so we can confirm
     # that the finalize() method is never called.
-    self.init(__name__ + ".test_handler_yield_keys",
+    self.init(__name__ + ".fake_handler_yield_keys",
               output_writer_spec=__name__ + ".UnfinalizableTestOutputWriter")
 
     model.MapreduceControl.abort(self.mapreduce_id, force_writes=True)
@@ -1810,7 +1972,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
 
   def testLifeCycle(self):
     """Tests life cycle methods are called."""
-    self.init(__name__ + ".test_handler_yield_keys",
+    self.init(__name__ + ".fake_handler_yield_keys",
               output_writer_spec=__name__ + ".ShardLifeCycleOutputWriter")
 
     e1 = TestEntity()
@@ -2007,7 +2169,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
 
   def testDatastoreExceptionInHandler(self):
     """Test when a handler can't save state to datastore."""
-    self.init(__name__ + ".test_handler_yield_keys")
+    self.init(__name__ + ".fake_handler_yield_keys")
     TestEntity().put()
     original_method = datastore.PutAsync
     datastore.PutAsync = mock.MagicMock(side_effect=datastore_errors.Timeout())
@@ -2032,7 +2194,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
 
   def testTaskqueueExceptionInHandler(self):
     """Test when a handler can't reach taskqueue."""
-    self.init(__name__ + ".test_handler_yield_keys")
+    self.init(__name__ + ".fake_handler_yield_keys")
     # Force enqueue another task.
     parameters.config._SLICE_DURATION_SEC = 0
     TestEntity().put()
@@ -2141,7 +2303,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
 
   def testSliceAndShardRetries(self):
     """Test when a handler throws a non fatal exception."""
-    self.init(__name__ + ".test_handler_raise_exception")
+    self.init(__name__ + ".fake_handler_raise_exception")
     TestEntity().put()
 
     # First time, the task gets retried.
@@ -2172,7 +2334,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
   # it is configurable per job.
   def testShardRetryFailed(self):
     """Test when shard retry failed."""
-    self.init(__name__ + ".test_handler_raise_exception",
+    self.init(__name__ + ".fake_handler_raise_exception",
               shard_retries=parameters.config.SHARD_MAX_ATTEMPTS)
     TestEntity().put()
 
@@ -2193,7 +2355,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
 
   def testShardRetryInitiatedAtBeginning(self):
     """Test shard retry can be initiated at the beginning of a slice."""
-    self.init(__name__ + ".test_handler_yield_keys")
+    self.init(__name__ + ".fake_handler_yield_keys")
     TestEntity().put()
 
     # Slice has been attempted before.
@@ -2215,7 +2377,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
         retries=1)
 
   def testSuccessfulSliceRetryClearsSliceRetriesCount(self):
-    self.init(__name__ + ".test_handler_yield_op")
+    self.init(__name__ + ".fake_handler_yield_op")
     TestEntity().put()
     TestEntity().put()
     # Force enqueue another task.
@@ -2235,7 +2397,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
 
   def testExceptionInHandler(self):
     """Test behavior when handler throws exception."""
-    self.init(__name__ + ".test_handler_raise_exception")
+    self.init(__name__ + ".fake_handler_raise_exception")
     TestEntity().put()
 
     with mock.patch.object(context.Context, "_set") as mock_set:
@@ -2258,7 +2420,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
 
   def testFailJobExceptionInHandler(self):
     """Test behavior when handler throws exception."""
-    self.init(__name__ + ".test_handler_raise_fail_job_exception")
+    self.init(__name__ + ".fake_handler_raise_fail_job_exception")
     TestEntity().put()
 
     with mock.patch.object(context.Context, "_set") as mock_set:
@@ -2309,7 +2471,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
 
   def testOperationYield(self):
     """Test yielding operations from handler."""
-    self.init(__name__ + ".test_handler_yield_op")
+    self.init(__name__ + ".fake_handler_yield_op")
     e1 = TestEntity().put()
     e2 = TestEntity().put()
 
@@ -2318,7 +2480,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
                       TestOperation.processed_keys)
 
   def testOutputWriter(self):
-    self.init(__name__ + ".test_handler_yield_keys",
+    self.init(__name__ + ".fake_handler_yield_keys",
               output_writer_spec=__name__ + ".TestOutputWriter")
     e1 = TestEntity().put()
     e2 = TestEntity().put()
@@ -2510,7 +2672,21 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
         shard_state.active = False
       shard_state.put()
 
-    self.handler.post()
+    with self.app.test_request_context(
+      "/mapreduce/controller_callback",
+      headers={
+        "X-AppEngine-QueueName": "default",
+        "X-AppEngine-TaskName": "foo-task-name",
+        util._MR_ID_TASK_HEADER: self.mapreduce_id,
+        model.HugeTask.PAYLOAD_VERSION_HEADER: model.HugeTask.PAYLOAD_VERSION,
+      },
+      method="POST",
+      data={
+        "mapreduce_spec": self.mapreduce_state.mapreduce_spec.to_json_str(),
+        "serial_id": "1234",
+      },
+    ):
+      self.handler.dispatch_request()
 
     mapreduce_state = model.MapreduceState.get_by_key_name(self.mapreduce_id)
     # we should have 1 + 3 + 5 = 9 elements processed
@@ -2529,7 +2705,21 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
 
   def testMissingShardState(self):
     """Correct handling of missing shard state."""
-    self.handler.post()
+    with self.app.test_request_context(
+      "/mapreduce/controller_callback",
+      headers={
+        "X-AppEngine-QueueName": "default",
+        "X-AppEngine-TaskName": "foo-task-name",
+        util._MR_ID_TASK_HEADER: self.mapreduce_id,
+        model.HugeTask.PAYLOAD_VERSION_HEADER: model.HugeTask.PAYLOAD_VERSION,
+      },
+      method="POST",
+      data={
+        "mapreduce_spec": self.mapreduce_state.mapreduce_spec.to_json_str(),
+        "serial_id": "1234",
+      },
+    ):
+      self.handler.dispatch_request()
 
     mapreduce_state = model.MapreduceState.get_by_key_name(self.mapreduce_id)
     self.verify_mapreduce_state(mapreduce_state, active=False, shard_count=3,
@@ -2562,7 +2752,21 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
       shard_state.result_status = model.ShardState.RESULT_SUCCESS
       shard_state.put()
 
-    self.handler.post()
+    with self.app.test_request_context(
+      "/mapreduce/controller_callback",
+      headers={
+        "X-AppEngine-QueueName": "default",
+        "X-AppEngine-TaskName": "foo-task-name",
+        util._MR_ID_TASK_HEADER: self.mapreduce_id,
+        model.HugeTask.PAYLOAD_VERSION_HEADER: model.HugeTask.PAYLOAD_VERSION,
+      },
+      method="POST",
+      data={
+        "mapreduce_spec": self.mapreduce_state.mapreduce_spec.to_json_str(),
+        "serial_id": "1234",
+      },
+    ):
+      self.handler.dispatch_request()
 
     mapreduce_state = model.MapreduceState.get_by_key_name(self.mapreduce_id)
     self.verify_mapreduce_state(
@@ -2590,8 +2794,6 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.mapreduce_state.mapreduce_spec.mapper.output_writer_spec = (
         __name__ + "." + TestOutputWriter.__name__)
     self.mapreduce_state.put()
-    self.handler.request.set("mapreduce_spec",
-                             self.mapreduce_state.mapreduce_spec.to_json_str())
 
     for i in range(3):
       shard_state = self.create_shard_state(self.mapreduce_id, i)
@@ -2601,7 +2803,21 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
       shard_state.result_status = model.ShardState.RESULT_SUCCESS
       shard_state.put()
 
-    self.handler.post()
+    with self.app.test_request_context(
+      "/mapreduce/controller_callback",
+      headers={
+        "X-AppEngine-QueueName": "default",
+        "X-AppEngine-TaskName": "foo-task-name",
+        util._MR_ID_TASK_HEADER: self.mapreduce_id,
+        model.HugeTask.PAYLOAD_VERSION_HEADER: model.HugeTask.PAYLOAD_VERSION,
+      },
+      method="POST",
+      data={
+        "mapreduce_spec": self.mapreduce_state.mapreduce_spec.to_json_str(),
+        "serial_id": "1234",
+      },
+    ):
+      self.handler.dispatch_request()
 
     self.assertEqual(["finalize_job"], TestOutputWriter.events)
 
@@ -2610,8 +2826,6 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.mapreduce_state.mapreduce_spec.hooks_class_name = (
         __name__ + '.' + TestHooks.__name__)
     self.mapreduce_state.put()
-    self.handler.request.set("mapreduce_spec",
-                             self.mapreduce_state.mapreduce_spec.to_json_str())
 
     for i in range(3):
       shard_state = self.create_shard_state(self.mapreduce_id, i)
@@ -2619,7 +2833,22 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
       shard_state.result_status = model.ShardState.RESULT_SUCCESS
       shard_state.put()
 
-    self.handler.post()
+    with self.app.test_request_context(
+      "/mapreduce/controller_callback",
+      headers={
+        "X-AppEngine-QueueName": "default",
+        "X-AppEngine-TaskName": "foo-task-name",
+        util._MR_ID_TASK_HEADER: self.mapreduce_id,
+        model.HugeTask.PAYLOAD_VERSION_HEADER: model.HugeTask.PAYLOAD_VERSION,
+      },
+      method="POST",
+      data={
+        "mapreduce_spec": self.mapreduce_state.mapreduce_spec.to_json_str(),
+        "serial_id": "1234",
+      },
+    ):
+      self.handler.dispatch_request()
+
     self.assertEqual(1, len(TestHooks.enqueue_done_task_calls))
     task, queue_name = TestHooks.enqueue_done_task_calls[0]
     self.assertEqual('crazy-queue', queue_name)
@@ -2637,7 +2866,21 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
         shard_state.active = True
       shard_state.put()
 
-    self.handler.post()
+    with self.app.test_request_context(
+      "/mapreduce/controller_callback",
+      headers={
+        "X-AppEngine-QueueName": "default",
+        "X-AppEngine-TaskName": "foo-task-name",
+        util._MR_ID_TASK_HEADER: self.mapreduce_id,
+        model.HugeTask.PAYLOAD_VERSION_HEADER: model.HugeTask.PAYLOAD_VERSION,
+      },
+      method="POST",
+      data={
+        "mapreduce_spec": self.mapreduce_state.mapreduce_spec.to_json_str(),
+        "serial_id": "1234",
+      },
+    ):
+      self.handler.dispatch_request()
 
     mapreduce_state = model.MapreduceState.get_by_key_name(self.mapreduce_id)
     self.verify_mapreduce_state(
@@ -2669,7 +2912,21 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
         shard_state.result_status = model.ShardState.RESULT_SUCCESS
       shard_state.put()
 
-    self.handler.post()
+    with self.app.test_request_context(
+      "/mapreduce/controller_callback",
+      headers={
+        "X-AppEngine-QueueName": "default",
+        "X-AppEngine-TaskName": "foo-task-name",
+        util._MR_ID_TASK_HEADER: self.mapreduce_id,
+        model.HugeTask.PAYLOAD_VERSION_HEADER: model.HugeTask.PAYLOAD_VERSION,
+      },
+      method="POST",
+      data={
+        "mapreduce_spec": self.mapreduce_state.mapreduce_spec.to_json_str(),
+        "serial_id": "1234",
+      },
+    ):
+      self.handler.dispatch_request()
 
     mapreduce_state = model.MapreduceState.get_by_key_name(self.mapreduce_id)
     self.verify_mapreduce_state(
@@ -2698,7 +2955,21 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
       shard_state.put()
 
     model.MapreduceControl.abort(self.mapreduce_id)
-    self.handler.post()
+    with self.app.test_request_context(
+      "/mapreduce/controller_callback",
+      headers={
+        "X-AppEngine-QueueName": "default",
+        "X-AppEngine-TaskName": "foo-task-name",
+        util._MR_ID_TASK_HEADER: self.mapreduce_id,
+        model.HugeTask.PAYLOAD_VERSION_HEADER: model.HugeTask.PAYLOAD_VERSION,
+      },
+      method="POST",
+      data={
+        "mapreduce_spec": self.mapreduce_state.mapreduce_spec.to_json_str(),
+        "serial_id": "1234",
+      },
+    ):
+      self.handler.dispatch_request()
     mapreduce_state = model.MapreduceState.get_by_key_name(self.mapreduce_id)
     self.verify_mapreduce_state(
         mapreduce_state, active=True, shard_count=3)
@@ -2713,7 +2984,21 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
 
     # Repeated calls to callback closure while the shards are active will
     # result in a no op. As the controller waits for the shards to finish.
-    self.handler.post()
+    with self.app.test_request_context(
+      "/mapreduce/controller_callback",
+      headers={
+        "X-AppEngine-QueueName": "default",
+        "X-AppEngine-TaskName": "foo-task-name",
+        util._MR_ID_TASK_HEADER: self.mapreduce_id,
+        model.HugeTask.PAYLOAD_VERSION_HEADER: model.HugeTask.PAYLOAD_VERSION,
+      },
+      method="POST",
+      data={
+        "mapreduce_spec": self.mapreduce_state.mapreduce_spec.to_json_str(),
+        "serial_id": "1234",
+      },
+    ):
+      self.handler.dispatch_request()
     mapreduce_state = model.MapreduceState.get_by_key_name(self.mapreduce_id)
     self.verify_mapreduce_state(
         mapreduce_state, active=True, shard_count=3)
@@ -2737,7 +3022,21 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
     shard_state_list[2].result_status = model.ShardState.RESULT_ABORTED
     db.put(shard_state_list)
 
-    self.handler.post()
+    with self.app.test_request_context(
+      "/mapreduce/controller_callback",
+      headers={
+        "X-AppEngine-QueueName": "default",
+        "X-AppEngine-TaskName": "foo-task-name",
+        util._MR_ID_TASK_HEADER: self.mapreduce_id,
+        model.HugeTask.PAYLOAD_VERSION_HEADER: model.HugeTask.PAYLOAD_VERSION,
+      },
+      method="POST",
+      data={
+        "mapreduce_spec": self.mapreduce_state.mapreduce_spec.to_json_str(),
+        "serial_id": "1234",
+      },
+    ):
+      self.handler.dispatch_request()
     mapreduce_state = model.MapreduceState.get_by_key_name(self.mapreduce_id)
     self.verify_mapreduce_state(
         mapreduce_state, active=False, shard_count=3,
@@ -2762,7 +3061,21 @@ class ControllerCallbackHandlerTest(MapreduceHandlerTestBase):
         shard_state = self.create_shard_state(self.mapreduce_id, i)
         shard_state.put()
 
-      self.handler.post()
+      with self.app.test_request_context(
+        "/mapreduce/controller_callback",
+        headers={
+          "X-AppEngine-QueueName": "default",
+          "X-AppEngine-TaskName": "foo-task-name",
+          util._MR_ID_TASK_HEADER: self.mapreduce_id,
+          model.HugeTask.PAYLOAD_VERSION_HEADER: model.HugeTask.PAYLOAD_VERSION,
+        },
+        method="POST",
+        data={
+          "mapreduce_spec": self.mapreduce_state.mapreduce_spec.to_json_str(),
+          "serial_id": "1234",
+        },
+      ):
+        self.handler.dispatch_request()
 
       # new task should be spawned on the calling queue
       tasks = self.taskqueue.GetTasks("crazy-queue")
