@@ -65,7 +65,14 @@ class TaskQueueHandler(MethodView):
       super().__init__(*args, **kwargs)
 
   def dispatch_request(self, *args, **kwargs):
-      self.request = self._RequestWrapper(request)
+      try:
+          self.request = self._RequestWrapper(request)
+      except Exception:
+          logging.exception(
+              "Decode payload %s failed. Dropping it permanently.",
+              request.headers["X-AppEngine-TaskName"])
+          self._drop_gracefully()
+          return make_response("Preprocessing failed", 200)
 
     # Check request is from taskqueue.
       if "X-AppEngine-QueueName" not in request.headers:
