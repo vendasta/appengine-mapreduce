@@ -1746,300 +1746,6 @@ class NamespaceInputReaderTest(unittest.TestCase):
         input_readers.NamespaceInputReader.from_json(json)._batch_size)
 
 
-class LogInputReaderTest(unittest.TestCase):
-  """Tests for LogInputReaderTest."""
-
-  def setUp(self):
-    unittest.TestCase.setUp(self)
-
-    self.num_shards = 4
-    self.app_id = "app1"
-    self.major_version_id = "1"
-    self.version_id = "1.2"
-    self.offset = "\n\x0eO)\x1c\xf7\x00\tn\xde\x08\xd5C{\x00\x00"
-    os.environ["APPLICATION_ID"] = self.app_id
-    prototype_request = log_service_pb.LogReadRequest()
-    prototype_request.set_app_id(self.app_id)
-    self.mapper_spec = model.MapperSpec(
-        "test_handler",
-        input_readers.__name__ + ".LogInputReader",
-        {
-            "input_reader": {
-                "start_time": 0,
-                "end_time": 128,
-                "offset": self.offset,
-                "version_ids": ["1"],
-                "minimum_log_level": logservice.LOG_LEVEL_INFO,
-                "include_incomplete": True,
-                "include_app_logs": True,
-                "prototype_request": prototype_request.Encode()
-            },
-        },
-        self.num_shards)
-
-  def testValidatePasses(self):
-    """Test validate function accepts valid parameters."""
-    input_readers.LogInputReader.validate(self.mapper_spec)
-
-  def testValidateInvalidReaderClass(self):
-    """Test invalid reader class name."""
-    self.mapper_spec.input_reader_spec = __name__ + ".LogInputReaderTest"
-    self.assertRaises(errors.BadReaderParamsError,
-                      input_readers.LogInputReader.validate,
-                      self.mapper_spec)
-
-  def testValidateUnrecognizedParam(self):
-    """Test validate with an unrecognized parameter."""
-    self.mapper_spec.params["input_reader"]["unrecognized"] = True
-    self.assertRaises(errors.BadReaderParamsError,
-                      input_readers.LogInputReader.validate,
-                      self.mapper_spec)
-
-  def testValidateNoVersionIdsOrModuleVersionsParam(self):
-    """Test validate without version_ids or module_versions param."""
-    del self.mapper_spec.params["input_reader"]["version_ids"]
-    self.assertRaises(errors.BadReaderParamsError,
-                      input_readers.LogInputReader.validate,
-                      self.mapper_spec)
-
-  def testValidateTooManyVersionIdsParam(self):
-    """Test validate with a malformed version_ids param."""
-    # This is really testing the validation that logservice.fetch() itself does.
-    self.mapper_spec.params["input_reader"]["version_ids"] = "1"
-    self.assertRaises(errors.BadReaderParamsError,
-                      input_readers.LogInputReader.validate,
-                      self.mapper_spec)
-
-  def testValidateModuleVersionsParam(self):
-    """Test validate module_versions param but without version_ids param."""
-    del self.mapper_spec.params["input_reader"]["version_ids"]
-    self.mapper_spec.params["input_reader"]["module_versions"] = [("m", "v")]
-    input_readers.LogInputReader.validate(self.mapper_spec)
-
-  def testValidateNoVersionIdsAndModuleVersionsParam(self):
-    """Test validate without version_ids and module_versions param."""
-    self.mapper_spec.params["input_reader"]["module_versions"] = [("m", "v")]
-    self.assertRaises(errors.BadReaderParamsError,
-                      input_readers.LogInputReader.validate,
-                      self.mapper_spec)
-
-  def testValidateTimeRangeParams(self):
-    """Test validate with bad sets of start/end time params."""
-    # start_time must be specified and may not be None.
-    del self.mapper_spec.params["input_reader"]["start_time"]
-    self.assertRaises(errors.BadReaderParamsError,
-                      input_readers.LogInputReader.validate,
-                      self.mapper_spec)
-
-    self.mapper_spec.params["input_reader"]["start_time"] = None
-    self.assertRaises(errors.BadReaderParamsError,
-                      input_readers.LogInputReader.validate,
-                      self.mapper_spec)
-
-    # It's okay to not specify an end_time; the current time will be assumed.
-    self.mapper_spec.params["input_reader"]["start_time"] = time.time() - 1
-    del self.mapper_spec.params["input_reader"]["end_time"]
-    input_readers.LogInputReader.validate(self.mapper_spec)
-
-    # Start time must be less than end_time, whether implicit or explicit.
-    self.mapper_spec.params["input_reader"]["start_time"] = time.time() + 100
-    self.assertRaises(errors.BadReaderParamsError,
-                      input_readers.LogInputReader.validate,
-                      self.mapper_spec)
-
-    self.mapper_spec.params["input_reader"]["end_time"] = time.time() + 50
-    self.assertRaises(errors.BadReaderParamsError,
-                      input_readers.LogInputReader.validate,
-                      self.mapper_spec)
-
-    # Success again
-    self.mapper_spec.params["input_reader"]["end_time"] = time.time() + 150
-    input_readers.LogInputReader.validate(self.mapper_spec)
-
-    # start_time must be less than end time.
-    self.mapper_spec.params["input_reader"]["start_time"] = (
-        self.mapper_spec.params["input_reader"]["end_time"])
-    self.assertRaises(errors.BadReaderParamsError,
-                      input_readers.LogInputReader.validate,
-                      self.mapper_spec)
-
-  def testValidateInvalidPrototypeRequest(self):
-    """Test validate without specifying a prototype request."""
-    self.mapper_spec.params["input_reader"]["prototype_request"] = "__bad__"
-    self.assertRaises(errors.BadReaderParamsError,
-                      input_readers.LogInputReader.validate,
-                      self.mapper_spec)
-
-  def testValidateNoPrototypeRequest(self):
-    """Test validate without specifying a prototype request."""
-    del self.mapper_spec.params["input_reader"]["prototype_request"]
-    input_readers.LogInputReader.validate(self.mapper_spec)
-
-  def testStr(self):
-    """Simplistic test for stringification of LogInputReader."""
-    readers = input_readers.LogInputReader.split_input(self.mapper_spec)
-    self.assertEqual(
-        "LogInputReader"
-        "(end_time=128,"
-        " include_app_logs=True,"
-        " include_incomplete=True,"
-        " minimum_log_level=1,"
-        " offset=\'%s',"
-        " prototype_request=\'app_id: \"app1\"\n\',"
-        " start_time=96,"
-        " version_ids=[\'1\']"
-        ")" % self.offset, str(readers[-1]))
-
-  def testEvenLogSplit(self):
-    readers = input_readers.LogInputReader.split_input(self.mapper_spec)
-    self.assertEqual(self.num_shards, len(readers))
-
-    for i, reader in enumerate(readers):
-      start = i * 32
-      end = (i + 1) * 32
-      self.assertEqual(start, reader._LogInputReader__params["start_time"])
-      self.assertEqual(end, reader._LogInputReader__params["end_time"])
-
-  def testUnevenLogSplit(self):
-    start = 0
-    end = 100
-    num_shards = 3
-
-    mapper_spec = model.MapperSpec(
-        "test_handler",
-        input_readers.__name__ + ".LogInputReader",
-        {"start_time": start, "end_time": end},
-        num_shards)
-
-    readers = input_readers.LogInputReader.split_input(mapper_spec)
-    self.assertEqual(num_shards, len(readers))
-
-    self.assertEqual(0, readers[0]._LogInputReader__params["start_time"])
-    self.assertEqual(33, readers[0]._LogInputReader__params["end_time"])
-    self.assertEqual(33, readers[1]._LogInputReader__params["start_time"])
-    self.assertEqual(66, readers[1]._LogInputReader__params["end_time"])
-    self.assertEqual(66, readers[2]._LogInputReader__params["start_time"])
-    self.assertEqual(100, readers[2]._LogInputReader__params["end_time"])
-
-  def testToJsonFromJson(self):
-    """Test to/from json implementations."""
-    readers = input_readers.LogInputReader.split_input(self.mapper_spec)
-    start_time = self.mapper_spec.params["input_reader"]["start_time"]
-    end_time = self.mapper_spec.params["input_reader"]["end_time"]
-    seconds_per_shard = (end_time - start_time) / self.mapper_spec.shard_count
-    for i, reader in enumerate(readers):
-      # Full roundtrip test; this cannot verify that all fields are encoded.
-      as_json = reader.to_json_str()
-      from_json = input_readers.LogInputReader.from_json_str(as_json)
-      self.assertEqual(from_json.to_json_str(), as_json)
-
-      # Test correctness of individual fields.
-      params_from_json = from_json._LogInputReader__params
-      self.assertEqual(params_from_json["start_time"],
-                        start_time + i * seconds_per_shard)
-      if i != len(readers) - 1:
-        self.assertEqual(params_from_json["end_time"],
-                          start_time + (i + 1) * seconds_per_shard)
-      else:
-        self.assertEqual(params_from_json["end_time"], end_time)
-      self.assertEqual(params_from_json["offset"], self.offset)
-      self.assertEqual(params_from_json["version_ids"], ["1"])
-      self.assertEqual(params_from_json["minimum_log_level"],
-                        logservice.LOG_LEVEL_INFO)
-      self.assertEqual(params_from_json["include_incomplete"], True)
-      self.assertEqual(params_from_json["include_app_logs"], True)
-      self.assertEqual(params_from_json["prototype_request"].app_id(),
-                        self.app_id)
-
-  def createLogs(self, count=10):
-    """Create a set of test log records."""
-    # Prepare the data.
-    apiproxy_stub_map.apiproxy = apiproxy_stub_map.APIProxyStubMap()
-    stub = logservice_stub.LogServiceStub()
-    apiproxy_stub_map.apiproxy.RegisterStub("logservice", stub)
-
-    # Write test data.
-    expected = []
-    for i in range(count):
-      stub.start_request(request_id=i,
-                         user_request_id="",
-                         ip="127.0.0.1",
-                         app_id=self.app_id,
-                         version_id=self.version_id,
-                         nickname="test@example.com",
-                         user_agent="Chrome/15.0.874.106",
-                         host="127.0.0.1:8080",
-                         method="GET",
-                         resource="/",
-                         http_version="HTTP/1.1",
-                         start_time=i * 1000000)
-      stub.end_request(i, 200, 0, end_time=i * 1000000 + 500)
-      expected.append({"start_time": i, "end_time": i + .0005})
-    expected.reverse()  # Results come back in most-recent-first order.
-
-    return expected
-
-  def verifyLogs(self, expected, retrieved):
-    """Verifies a list of retrieved logs against a list of expectations.
-
-    Args:
-      expected: A list of dictionaries, each containing property names and
-        values to be compared against the corresponding entries in 'retrieved'.
-      retrieved: A list of RequestLog objects, hopefully matching 'expected'.
-    """
-    self.assertEqual(len(expected), len(retrieved))
-    for expected, retrieved in zip(expected, retrieved):
-      for property_name, value in expected.items():
-        self.assertEqual(value, getattr(retrieved, property_name))
-
-  def testIter(self):
-    """Test __iter__ implementation."""
-    request_count = 100  # Number of log records over which we'll test.
-    restart_interval = 7  # Frequency of de/serialization test below.
-
-    expected = self.createLogs(request_count)
-
-    # Test simple read.
-    reader = input_readers.LogInputReader(version_ids=[self.major_version_id],
-                                          start_time=0, end_time=101 * 1e6)
-    self.verifyLogs(expected, list(reader))
-
-    # Test interrupted read, exercising de/serialization process occassionally.
-    reader = input_readers.LogInputReader(version_ids=[self.major_version_id],
-                                          start_time=0, end_time=101 * 1e6)
-    logs = []
-    iterator = reader.__iter__()
-    restart_counter = 0
-    while True:
-      restart_counter += 1
-      if restart_counter >= restart_interval:
-        as_json = reader.to_json_str()
-        reader = input_readers.LogInputReader.from_json_str(as_json)
-        iterator = reader.__iter__()
-        restart_counter = 0
-      try:
-        logs.append(next(iterator))
-      except StopIteration:
-        break
-    self.verifyLogs(expected, logs)
-
-  def testOffset(self):
-    """Test that the user can provide an offset parameter."""
-    request_count = 10  # NOTE(user): This test is O(N*N), so keep this low.
-
-    # Iterate through the logs using logservice.fetch(); for each log found,
-    # retrieve all records after it using the LogInputReader, and verify that
-    # the sum of records fetched plus those from the InputReader adds up.
-    expected = self.createLogs(request_count)
-    fetched_logs = []
-    for log in logservice.fetch(version_ids=[self.major_version_id]):
-      fetched_logs.append(log)
-      reader = input_readers.LogInputReader(version_ids=[self.major_version_id],
-                                            start_time=0, end_time=101 * 1e6,
-                                            offset=log.offset)
-      self.verifyLogs(expected, fetched_logs + list(reader))
-
-
 def FakeCombiner(unused_key, values, left_fold):
   """Test combiner for ReducerReaderTest."""
   if left_fold:
@@ -2230,7 +1936,7 @@ class GoogleCloudStorageInputReaderWithDelimiterTest(
     self.test_num_files = 20
     self.test_filenames = []
     for file_num in range(self.test_num_files):
-      filename = f"/{self.test_bucket}/{self.gcsPrefix}/file-{file_num:03d}"
+      filename = f"/{self.TEST_BUCKET}/{self.gcsPrefix}/file-{file_num:03d}"
       self.test_filenames.append(filename)
       self.create_test_file(filename, "foo")
 
@@ -2240,7 +1946,7 @@ class GoogleCloudStorageInputReaderWithDelimiterTest(
     self.filenames_in_first_10_dirs = []
     for d in range(self.dirs):
       for file_num in range(self.file_per_dir):
-        filename = f"/{self.test_bucket}/{self.gcsPrefix}/dir-{d:02d}/file-{file_num:03d}"
+        filename = f"/{self.TEST_BUCKET}/{self.gcsPrefix}/dir-{d:02d}/file-{file_num:03d}"
         if d < 10:
           self.filenames_in_first_10_dirs.append(filename)
         self.create_test_file(filename, "foo")
@@ -2249,7 +1955,7 @@ class GoogleCloudStorageInputReaderWithDelimiterTest(
     self.assertRaises(
         errors.BadReaderParamsError,
         self.READER_CLS.validate,
-        self.create_mapper_spec(input_params={"bucket_name": self.test_bucket,
+        self.create_mapper_spec(input_params={"bucket_name": self.TEST_BUCKET,
                                               "delimiter": 1,
                                               "objects": ["file"]}))
 
@@ -2257,7 +1963,7 @@ class GoogleCloudStorageInputReaderWithDelimiterTest(
     # Grab all files in the first 10 directories and all other files.
     readers = self.READER_CLS.split_input(
         self.create_mapper_spec(num_shards=1,
-                                input_params={"bucket_name": self.test_bucket,
+                                input_params={"bucket_name": self.TEST_BUCKET,
                                               "objects": ["dir-0*", "file*"],
                                               "delimiter": "/"}))
     self.assertEqual(1, len(readers))
@@ -2281,7 +1987,7 @@ class GoogleCloudStorageInputReaderWithDelimiterTest(
     # fail_on_missing_input=True.
     readers = self.READER_CLS.split_input(
         self.create_mapper_spec(num_shards=1,
-                                input_params={"bucket_name": self.test_bucket,
+                                input_params={"bucket_name": self.TEST_BUCKET,
                                               "objects": ["dir-0*", "file*"],
                                               "delimiter": "/",
                                               "fail_on_missing_input": True}))
@@ -2294,7 +2000,7 @@ class GoogleCloudStorageInputReaderWithDelimiterTest(
     # fail_on_missing_input=False.
     readers = self.READER_CLS.split_input(
         self.create_mapper_spec(num_shards=1,
-                                input_params={"bucket_name": self.test_bucket,
+                                input_params={"bucket_name": self.TEST_BUCKET,
                                               "objects": ["dir-0*", "file*"],
                                               "delimiter": "/",
                                               "fail_on_missing_input": False}))
@@ -2307,7 +2013,7 @@ class GoogleCloudStorageInputReaderWithDelimiterTest(
     # fail_on_missing_input not present in json.
     readers = self.READER_CLS.split_input(
         self.create_mapper_spec(num_shards=1,
-                                input_params={"bucket_name": self.test_bucket,
+                                input_params={"bucket_name": self.TEST_BUCKET,
                                               "objects": ["dir-0*", "file*"],
                                               "delimiter": "/"}))
     self.assertEqual(1, len(readers))
@@ -2325,7 +2031,7 @@ class GoogleCloudStorageInputReaderWithDelimiterTest(
     # Grab all files in the first 10 directories.
     readers = self.READER_CLS.split_input(
         self.create_mapper_spec(num_shards=1,
-                                input_params={"bucket_name": self.test_bucket,
+                                input_params={"bucket_name": self.TEST_BUCKET,
                                               "objects": ["dir-0*"],
                                               "delimiter": "/"}))
     self.assertEqual(1, len(readers))
@@ -2338,7 +2044,7 @@ class GoogleCloudStorageInputReaderWithDelimiterTest(
     # Grab all files.
     readers = self.READER_CLS.split_input(
         self.create_mapper_spec(num_shards=1,
-                                input_params={"bucket_name": self.test_bucket,
+                                input_params={"bucket_name": self.TEST_BUCKET,
                                               "objects": ["*"],
                                               "delimiter": "/"}))
     self.assertEqual(1, len(readers))
