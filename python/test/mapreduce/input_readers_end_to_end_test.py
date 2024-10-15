@@ -66,7 +66,7 @@ class GoogleCloudStorageInputReaderEndToEndTest(testutil.CloudStorageTestBase, t
     input_class = (input_readers.__name__ + "." +
                    input_readers._GoogleCloudStorageInputReader.__name__)
 
-    expected_content = self.create_test_content(object_prefix,
+    expected_content = self.create_test_content(self.TEST_BUCKET, object_prefix,
                                                 num_files)
 
     control.start_map(
