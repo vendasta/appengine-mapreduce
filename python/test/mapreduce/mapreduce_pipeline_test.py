@@ -167,7 +167,7 @@ class MapreducePipelineTest(testutil.CloudStorageTestBase, testutil.HandlerTestB
     # Verify that mapreduce doesn't leave intermediate files behind.
     from google.cloud import storage
     _storage_client = storage.Client()
-    temp_file_stats = _storage_client.listbucket(self.TEST_BUCKET)
+    temp_file_stats = _storage_client.listbucket(self.TEST_BUCKET, prefix=job_name)
     for stat in temp_file_stats:
       if stat.filename:
         self.assertFalse(

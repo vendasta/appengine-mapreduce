@@ -81,7 +81,7 @@ class CombinerTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
       FakeEntity(data=str(i)).put()
 
     p = mapreduce_pipeline.MapreducePipeline(
-        "test",
+        self.gcsPrefix,
         __name__ + ".fake_combiner_map",
         __name__ + ".fake_combiner_reduce",
         input_reader_spec=input_readers.__name__ + ".DatastoreInputReader",
@@ -125,7 +125,7 @@ class CombinerTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
       FakeEntity(data=str(i)).put()
 
     p = mapreduce_pipeline.MapreducePipeline(
-        "test",
+        self.gcsPrefix,
         __name__ + ".fake_combiner_map",
         __name__ + ".fake_combiner_reduce",
         combiner_spec=__name__ + ".FakeCombiner",

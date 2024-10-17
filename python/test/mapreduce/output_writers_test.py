@@ -472,7 +472,7 @@ class GCSRecordOutputWriterTestBase(GCSOutputTestBase):
     Returns:
       a model.MapreduceSpec with default settings and specified output_params.
     """
-    all_params = {self.WRITER_CLS.BUCKET_NAME_PARAM: self.BUCKET_NAME}
+    all_params = {self.WRITER_CLS.BUCKET_NAME_PARAM: self.TEST_BUCKET}
     all_params.update(output_params or {})
     return super().create_mapreduce_state(
         all_params)
@@ -615,7 +615,7 @@ class GCSOutputConsistentOutputWriterTest(GCSOutputWriterTestCommon,
                                     shard_state.shard_number, 0)
     writer.begin_slice(None)
 
-    prefix = "gae_mr_tmp/DummyMapReduceJobId-tmp-19-"
+    prefix = f"{self.gcsPrefix}/gae_mr_tmp/DummyMapReduceJobId-tmp-19-"
     tmpfile_name = writer.status.tmpfile._blob.name
     self.assertTrue(tmpfile_name.startswith(prefix),
                     "Test file name is: %s" % tmpfile_name)
@@ -664,17 +664,17 @@ class GCSOutputConsistentOutputWriterTest(GCSOutputWriterTestCommon,
     writer.begin_slice(None)
 
     # our shard
-    our_file = "gae_mr_tmp/DummyMapReduceJobId-tmp-1-very-random"
+    our_file = f"{self.gcsPrefix}/gae_mr_tmp/DummyMapReduceJobId-tmp-1-very-random"
     blob = self.bucket.blob(our_file)
     blob.upload_from_string("foo?")
 
     # not our shard
-    their_file = "gae_mr_tmp/DummyMapReduceJobId-tmp-3-very-random"
+    their_file = f"{self.gcsPrefix}/gae_mr_tmp/DummyMapReduceJobId-tmp-3-very-random"
     blob = self.bucket.blob(their_file)
     blob.upload_from_string("bar?")
 
     # unrelated file
-    real_file = "this_things_should_survive"
+    real_file = f"{self.gcsPrefix}/this_things_should_survive"
     blob = self.bucket.blob(real_file)
     blob.upload_from_string("yes, foobar!")
 

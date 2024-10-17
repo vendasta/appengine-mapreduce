@@ -90,8 +90,7 @@ class GCSInputTestBase(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
     """
     if contents is not None:
       for f, c in zip(filenames, contents):
-        fullname = "/{}/{}".format(self.TEST_BUCKET, f)
-        self.create_test_file(fullname, c)
+        self.create_test_file(f, c)
 
     job_config = self.create_job_config(
         num_shards=1,
@@ -153,7 +152,7 @@ class GCSInputReaderTest(GCSInputTestBase):
                                              "objects": ["1"],
                                              "path_filter": object()}))
 
-  def testVlidate_PathFilter(self):
+  def testValidate_PathFilter(self):
     # expect no errors are raised.
     self.READER_CLS.validate(
         self.create_job_config(
@@ -359,11 +358,10 @@ class GCSInputReaderWithDelimiterTest(GCSInputTestBase):
     super().setUp()
 
     # create some test content
-    self.test_bucket = "testing"
     self.test_num_files = 20
     self.test_filenames = []
     for file_num in range(self.test_num_files):
-      filename = "/%s/file-%03d" % (self.test_bucket, file_num)
+      filename = f"{self.gcsPrefix}/file-{file_num:03d}"
       self.test_filenames.append(filename)
       self.create_test_file(filename, "foo")
 
@@ -373,7 +371,7 @@ class GCSInputReaderWithDelimiterTest(GCSInputTestBase):
     self.filenames_in_first_10_dirs = []
     for d in range(self.dirs):
       for file_num in range(self.file_per_dir):
-        filename = "/%s/dir-%02d/file-%03d" % (self.test_bucket, d, file_num)
+        filename = f"{self.gcsPrefix}/dir-{d:02d}/file-{file_num:03d}"
         if d < 10:
           self.filenames_in_first_10_dirs.append(filename)
         self.create_test_file(filename, "foo")
@@ -382,13 +380,13 @@ class GCSInputReaderWithDelimiterTest(GCSInputTestBase):
     self.assertRaises(
         errors.BadReaderParamsError,
         self.READER_CLS.validate,
-        self.create_job_config(input_params={"bucket_name": self.test_bucket,
+        self.create_job_config(input_params={"bucket_name": self.TEST_BUCKET,
                                              "delimiter": 1,
                                              "objects": ["file"]}))
 
   def testSerialization(self):
     # Grab all files in the first 10 directories and all other files.
-    reader = self.create_single_reader(["dir-0*", "file*"], None, "/")
+    reader = self.create_single_reader([f"{self.gcsPrefix}/dir-0*", f"{self.gcsPrefix}/file*"], None, f"{self.gcsPrefix}/")
     self.assertEqual(10 + self.test_num_files, len(reader._filenames))
     result_filenames = []
     while True:
@@ -406,14 +404,14 @@ class GCSInputReaderWithDelimiterTest(GCSInputTestBase):
 
   def testSplit(self):
     # Grab all files in the first 10 directories.
-    reader = self.create_single_reader(["dir-0*"], None, "/")
+    reader = self.create_single_reader([f"{self.gcsPrefix}/dir-0*"], None, f"{self.gcsPrefix}/")
     self.assertEqual(10, len(reader._filenames))
     result_filenames = [f.name for f in reader]
     self.assertEqual(self.file_per_dir * 10, len(result_filenames))
     self.assertEqual(self.filenames_in_first_10_dirs, result_filenames)
 
     # Grab all files.
-    reader = self.create_single_reader(["*"], None, "/")
+    reader = self.create_single_reader([f"{self.gcsPrefix}/*"], None, f"{self.gcsPrefix}/")
     self.assertEqual(self.dirs + self.test_num_files, len(reader._filenames))
     self.assertEqual(self.file_per_dir * self.dirs + self.test_num_files,
                      len([f for f in reader]))
@@ -438,13 +436,13 @@ class GCSRecordInputReaderTest(GCSInputTestBase):
     test_file.close()
 
   def testSingleFileNoRecord(self):
-    filename = "empty-file"
+    filename = f"{self.gcsPrefix}/empty-file"
     reader = self.create_single_reader([filename], [[]])
 
     self.assertRaises(StopIteration, reader.__next__)
 
   def testSingleFileOneRecord(self):
-    filename = "single-record-file"
+    filename = f"{self.gcsPrefix}/single-record-file"
     reader = self.create_single_reader([filename], [[b"foobardata"]])
 
     self.assertEqual(b"foobardata", next(reader))
@@ -452,10 +450,10 @@ class GCSRecordInputReaderTest(GCSInputTestBase):
       next(reader)
 
   def testSingleFileManyRecords(self):
-    filename = "many-records-file"
+    filename = f"{self.gcsPrefix}/many-records-file"
     data = []
     for record_num in range(100):  # Make 100 records
-      data.append(("%03d" % record_num) * 10)  # Make each record 30 chars long
+      data.append((b"%03d" % record_num) * 10)  # Make each record 30 chars long
     reader = self.create_single_reader([filename], [data])
 
     for record in data:
@@ -471,11 +469,10 @@ class GCSRecordInputReaderTest(GCSInputTestBase):
     all_data = []
     for file_num in range(10):  # Make 10 files
       filename = f"{self.gcsPrefix}/file-%03d" % file_num
-      fullname = "/{}/{}".format(self.TEST_BUCKET, filename)
       data_set = []
       for record_num in range(10):  # Make 10 records, each 30 chars long
         data_set.append((b"%03d" % record_num) * 10)
-      self.create_test_file(fullname, data_set)
+      self.create_test_file(filename, data_set)
       filenames.append(filename)
       all_data.append(data_set)
     reader = self.create_single_reader(filenames, all_data)
@@ -490,11 +487,10 @@ class GCSRecordInputReaderTest(GCSInputTestBase):
     all_data = []
     for file_num in range(50):  # Make 10 files
       filename = f"{self.gcsPrefix}/file-%03d" % file_num
-      fullname = "/{}/{}".format(self.TEST_BUCKET, filename)
       data_set = []
       for record_num in range(file_num % 5):  # Make up to 4 records
         data_set.append((b"%03d" % record_num) * 10)
-      self.create_test_file(fullname, data_set)
+      self.create_test_file(filename, data_set)
       filenames.append(filename)
       all_data.append(data_set)
     reader = self.create_single_reader(filenames, all_data)
@@ -509,11 +505,10 @@ class GCSRecordInputReaderTest(GCSInputTestBase):
     all_data = []
     for file_num in range(50):  # Make 10 files
       filename = f"{self.gcsPrefix}/file-%03d" % file_num
-      fullname = "/{}/{}".format(self.TEST_BUCKET, filename)
       data_set = []
       for record_num in range(file_num % 5):  # Make up to 4 records
         data_set.append((b"%03d" % record_num) * 10)
-      self.create_test_file(fullname, data_set)
+      self.create_test_file(filename, data_set)
       filenames.append(filename)
       all_data.append(data_set)
     reader = self.create_single_reader(filenames, all_data)
@@ -541,11 +536,10 @@ class GCSRecordInputReaderTest(GCSInputTestBase):
     all_data = []
     for file_num in range(10):  # Make 10 files
       filename = f"{self.gcsPrefix}/file-%03d" % file_num
-      fullname = "/{}/{}".format(self.TEST_BUCKET, filename)
       data_set = []
       for record_num in range(10):  # Make 10 records, each 30 chars long
         data_set.append((b"%03d" % record_num) * 10)
-      self.create_test_file(fullname, data_set)
+      self.create_test_file(filename, data_set)
       filenames.append(filename)
       all_data.append(data_set)
     reader = self.create_single_reader(filenames, all_data)

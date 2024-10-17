@@ -633,10 +633,6 @@ class _GoogleCloudStorageOutputWriterBase(_GoogleCloudStorageBase):
     name = state["name"]
     blob = storage.Blob.from_string(name, client=_storage_client)
     result = cls(blob)
-    if blob.exists():
-      # TODO: This is an expensive hack to replicate the behavior of the cloudstorage API. Fix with a better solution.
-      data = blob.download_as_bytes()
-      result.write(data)
     if state["closed"]:
       result.close()
     return result
@@ -671,7 +667,7 @@ class _GoogleCloudStorageOutputWriter(_GoogleCloudStorageOutputWriterBase):
         """Initialize a GoogleCloudStorageOutputWriter instance.
 
     Args:
-      streaming_buffer: an instance of writable buffer from cloudstorage_api.
+      streaming_buffer: an instance of BlobWriter from storage.fileio.
 
       writer_spec: the specification for the writer.
     """
@@ -727,9 +723,7 @@ class _GoogleCloudStorageOutputWriter(_GoogleCloudStorageOutputWriterBase):
     def from_json(cls, state):
         gcs_url = state["gcs_url"]
         blob = storage.Blob.from_string(gcs_url, client=_storage_client)
-        contents = blob.download_as_bytes()
         _streaming_buffer = blob.open("wb")
-        _streaming_buffer.write(contents)
         writer = cls(_streaming_buffer)
         no_dup = state.get(cls._JSON_NO_DUP, False)
         writer._no_dup = no_dup

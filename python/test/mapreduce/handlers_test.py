@@ -1577,9 +1577,20 @@ class MapperWorkerCallbackHandlerLeaseTest(testutil.HandlerTestBase):
     # Reinitialize with faulty map function.
     self._init_job(__name__ + "." + fake_handler_raise_exception.__name__)
     self._init_shard()
-    handler, _ = self._create_handler()
-    handler.post()
-    self.assertEqual(http.client.SERVICE_UNAVAILABLE, handler.response.status)
+    handler, tstate = self._create_handler()
+
+    with self.app.test_request_context(
+      method="POST",
+      headers={
+        model.HugeTask.PAYLOAD_VERSION_HEADER: model.HugeTask.PAYLOAD_VERSION,
+        "X-AppEngine-QueueName": "default",
+        "X-Appengine-TaskName": "task_name",
+        util._MR_ID_TASK_HEADER: self.mr_spec.mapreduce_id,
+        util._MR_SHARD_ID_TASK_HEADER: self.shard_id
+      }, 
+      data=tstate.to_dict()
+    ), self.assertRaises(werkzeug.exceptions.ServiceUnavailable):
+      handler.post()
 
     shard_state = model.ShardState.get_by_shard_id(self.shard_id)
     self.assertTrue(shard_state.active)
@@ -1902,7 +1913,19 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     e1 = TestEntity()
     e1.put()
 
-    self.handler.post()
+    with self.app.test_request_context(
+      "/mapreduce/worker_callback/" + self.shard_id,
+      method="POST",
+      headers={
+        model.HugeTask.PAYLOAD_VERSION_HEADER: model.HugeTask.PAYLOAD_VERSION,
+        "X-AppEngine-QueueName": "default",
+        "X-Appengine-TaskName": "task_name",
+        util._MR_ID_TASK_HEADER: self.mapreduce_id,
+        util._MR_SHARD_ID_TASK_HEADER: self.shard_id
+      }, 
+      data=self.transient_state.to_dict()
+    ):
+      self.handler.dispatch_request()
 
     # completed state => no data processed
     self.assertEqual([], TestHandler.processed_keys)
