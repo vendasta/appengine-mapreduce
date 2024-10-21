@@ -415,6 +415,10 @@ class GCSOutputWriterNoDupModeTest(GCSOutputWriterTestBase):
   """Test GCS output writer slice recovery."""
 
   def testSliceRecoveryWithForcedFlushing(self):
+    # Force a flush to GCS on every character wrote.
+    # storage_api.StreamingBuffer._blocksize = 1
+    # storage_api.StreamingBuffer._flushsize = 1
+
     mr_id = control.start_map(
         self.gcsPrefix,
         __name__ + ".FaultyHandler",
@@ -457,6 +461,10 @@ class GCSOutputWriterNoDupModeTest(GCSOutputWriterTestBase):
     self.assertEqual({"10\n", "11\n"}, common)
 
   def testSliceRecoveryWithFrequentFlushing(self):
+    # Force a flush to GCS on every 8 chars.
+    # storage_api.StreamingBuffer._blocksize = 8
+    # storage_api.StreamingBuffer._flushsize = 8
+
     mr_id = control.start_map(
         self.gcsPrefix,
         __name__ + ".FaultyHandler",
@@ -466,7 +474,7 @@ class GCSOutputWriterNoDupModeTest(GCSOutputWriterTestBase):
                 "entity_kind": __name__ + "." + FakeEntity.__name__,
             },
             "output_writer": {
-                "bucket_name": "bucket",
+                "bucket_name": self.TEST_BUCKET,
                 "no_duplicate": True,
             },
             "processing_rate": self.processing_rate,
@@ -503,7 +511,7 @@ class GCSOutputWriterNoDupModeTest(GCSOutputWriterTestBase):
                 "entity_kind": __name__ + "." + FakeEntity.__name__,
             },
             "output_writer": {
-                "bucket_name": "bucket",
+                "bucket_name": self.TEST_BUCKET,
                 "no_duplicate": True,
             },
             "processing_rate": self.processing_rate,
@@ -531,8 +539,8 @@ class GCSOutputWriterNoDupModeTest(GCSOutputWriterTestBase):
 
   def _assertOutputEqual(self, seg_prefix, last_seg_index):
     # Read back outputs.
-    reader = gcs_file_seg_reader._GCSFileSegReader(seg_prefix, last_seg_index)
-    result = ""
+    reader = gcs_file_seg_reader._GCSFileSegReader(self.bucket, seg_prefix, last_seg_index)
+    result = b""
     while True:
       tmp = reader.read(n=100)
       if not tmp:
@@ -540,9 +548,9 @@ class GCSOutputWriterNoDupModeTest(GCSOutputWriterTestBase):
       result += tmp
 
     # Verify output has no duplicates.
-    expected = ""
+    expected = b""
     for i in range(30):
-      expected += "%s\n" % i
+      expected += b"%d\n" % i
     self.assertEqual(expected, result)
 
 

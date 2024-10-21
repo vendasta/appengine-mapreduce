@@ -18,8 +18,6 @@ from mapreduce import output_writers
 
 from google.cloud import storage
 
-_storage_client = storage.Client()
-
 # pylint: disable=protected-access
 # pylint: disable=invalid-name
 
@@ -31,7 +29,7 @@ class _GCSFileSegReader:
   This reader conforms to Python stream interface.
   """
 
-  def __init__(self, seg_prefix, last_seg_index):
+  def __init__(self, bucket, seg_prefix, last_seg_index):
     """Init.
 
     Instances are pickle safe.
@@ -45,6 +43,7 @@ class _GCSFileSegReader:
     self._offset = 0
 
     # fields related to seg.
+    self._bucket = bucket
     self._seg_prefix = seg_prefix
     self._last_seg_index = last_seg_index
     self._seg_index = -1
@@ -92,9 +91,7 @@ class _GCSFileSegReader:
       return
 
     filename = self._seg_prefix + str(self._seg_index)
-    bucket_name, blob_name = filename[1:].split("/", 1)
-    bucket = _storage_client.bucket(bucket_name)
-    blob = bucket.blob(blob_name)
+    blob = self._bucket.blob(filename)
     blob.reload()
 
     writer = output_writers._GoogleCloudStorageOutputWriter

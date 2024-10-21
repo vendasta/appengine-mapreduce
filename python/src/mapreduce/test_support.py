@@ -74,7 +74,10 @@ def execute_task(task, retries=0, handlers_map=None):
   headers.update({
     'X-AppEngine-TaskName': name,
     'X-AppEngine-QueueName': task.get("queue_name", "default"),
+    'X-AppEngine-TaskExecutionCount': retries,
   })
+
+  os.environ["HTTP_X_APPENGINE_QUEUENAME"] = task.get("queue_name", "default")
 
   logging.debug('Executing "%s %s" name="%s"', method, url, name)
   client = app.test_client()

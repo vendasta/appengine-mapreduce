@@ -24,7 +24,6 @@
 # os_compat must be first to ensure timezones are UTC.
 # pylint: disable=unused-import
 # pylint: disable=g-bad-import-order
-from flask import Flask, Request
 from google.appengine.tools import os_compat
 import werkzeug
 import werkzeug.exceptions
@@ -35,14 +34,12 @@ from testlib import testutil
 import base64
 import collections
 import datetime
-import http.client
 import math
 import os
 import time
-import unittest
 import json
 
-import unittest.mock as mock
+from unittest import mock
 
 from google.appengine.api import apiproxy_stub_map
 from google.appengine.api import datastore
@@ -1561,7 +1558,7 @@ class MapperWorkerCallbackHandlerLeaseTest(testutil.HandlerTestBase):
       }, 
       data=tstate.to_dict()
     ):
-      handler.post()
+      handler.dispatch_request()
 
     shard_state = model.ShardState.get_by_shard_id(self.shard_id)
     self.assertTrue(shard_state.active)
@@ -1590,7 +1587,7 @@ class MapperWorkerCallbackHandlerLeaseTest(testutil.HandlerTestBase):
       }, 
       data=tstate.to_dict()
     ), self.assertRaises(werkzeug.exceptions.ServiceUnavailable):
-      handler.post()
+      handler.dispatch_request()
 
     shard_state = model.ShardState.get_by_shard_id(self.shard_id)
     self.assertTrue(shard_state.active)
@@ -1604,11 +1601,22 @@ class MapperWorkerCallbackHandlerLeaseTest(testutil.HandlerTestBase):
                      shard_state.slice_retries)
 
   def testLeaseFreedOnTaskqueueUnavailable(self):
-    handler, _ = self._create_handler()
+    handler, tstate = self._create_handler()
     with mock.patch("mapreduce"
                     ".handlers.MapperWorkerCallbackHandler._add_task") as add:
       add.side_effect = taskqueue.Error
-      self.assertRaises(taskqueue.Error, handler.post)
+      with self.app.test_request_context(
+        method="POST",
+        headers={
+          model.HugeTask.PAYLOAD_VERSION_HEADER: model.HugeTask.PAYLOAD_VERSION,
+          "X-AppEngine-QueueName": "default",
+          "X-Appengine-TaskName": "task_name",
+          util._MR_ID_TASK_HEADER: self.mr_spec.mapreduce_id,
+          util._MR_SHARD_ID_TASK_HEADER: self.shard_id
+        }, 
+        data=tstate.to_dict()
+      ), self.assertRaises(taskqueue.Error):
+        handler.dispatch_request()
 
     # No new task in taskqueue.
     stub = apiproxy_stub_map.apiproxy.GetStub("taskqueue")
@@ -1752,7 +1760,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
         util._MR_ID_TASK_HEADER: self.mapreduce_id,
         util._MR_SHARD_ID_TASK_HEADER: self.shard_id,
       }, 
-      data=self.transient_state.to_dict().update(slice_id=1)
+      data={**self.transient_state.to_dict(), "slice_id": 1}
     ):
       self.handler.dispatch_request()
 
@@ -2029,7 +2037,19 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
 
     TestHandler.delay = parameters.config._SLICE_DURATION_SEC + 10
 
-    self.handler.post()
+    with self.app.test_request_context(
+      "/mapreduce/worker_callback/" + self.shard_id,
+      method="POST",
+      headers={
+        model.HugeTask.PAYLOAD_VERSION_HEADER: model.HugeTask.PAYLOAD_VERSION,
+        "X-AppEngine-QueueName": "default",
+        "X-Appengine-TaskName": "task_name",
+        util._MR_ID_TASK_HEADER: self.mapreduce_id,
+        util._MR_SHARD_ID_TASK_HEADER: self.shard_id
+      }, 
+      data=self.transient_state.to_dict()
+    ):
+      self.handler.dispatch_request()
 
     # only first entity should be processed
     self.assertEqual([str(e1.key())], TestHandler.processed_keys)
@@ -2045,7 +2065,8 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     self.verify_shard_task(tasks[0], self.shard_id, self.slice_id + 1)
     self.assertEqual(tasks[0]["eta_delta"], "0:00:00 ago")
 
-  def testLimitingRate(self):
+  @mock.patch.object(taskqueue, 'Task')
+  def testLimitingRate(self, task_mock):
     """Test not enough quota to process everything in this slice."""
     e1 = TestEntity()
     e1.put()
@@ -2063,7 +2084,19 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
         "processing_rate": 10.0/parameters.config._SLICE_DURATION_SEC},
               shard_count=5)
 
-    self.handler.post()
+    with self.app.test_request_context(
+      "/mapreduce/worker_callback/" + self.shard_id,
+      method="POST",
+      headers={
+        model.HugeTask.PAYLOAD_VERSION_HEADER: model.HugeTask.PAYLOAD_VERSION,
+        "X-AppEngine-QueueName": "default",
+        "X-Appengine-TaskName": "task_name",
+        util._MR_ID_TASK_HEADER: self.mapreduce_id,
+        util._MR_SHARD_ID_TASK_HEADER: self.shard_id
+      }, 
+      data=self.transient_state.to_dict()
+    ):
+      self.handler.dispatch_request()
 
     self.assertEqual(2, len(TestHandler.processed_keys))
     self.verify_shard_state(
@@ -2071,9 +2104,10 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
         active=True, processed=2,
         result_status=None)
 
-    tasks = self.taskqueue.GetTasks("default")
-    self.assertEqual(1, len(tasks))
-    self.assertEqual(tasks[0]["eta_delta"], "0:00:02 from now")
+    task_mock.assert_called_once()
+    self.assertEqual(task_mock.call_args[1]["countdown"], 2)
+    task_mock.return_value.add.assert_called_once()
+
 
   def testLongProcessDataWithAllowCheckpoint(self):
     """Tests that process_datum works with input_readers.ALLOW_CHECKPOINT."""
@@ -2194,19 +2228,29 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     """Test when a handler can't save state to datastore."""
     self.init(__name__ + ".fake_handler_yield_keys")
     TestEntity().put()
-    original_method = datastore.PutAsync
-    datastore.PutAsync = mock.MagicMock(side_effect=datastore_errors.Timeout())
 
-    # Tests that handler doesn't abort task for datastore errors.
-    # Unfornately they still increase TaskExecutionCount.
-    for _ in range(parameters.config.TASK_MAX_DATA_PROCESSING_ATTEMPTS):
-      self.assertRaises(datastore_errors.Timeout, self.handler.post)
-    self.verify_shard_state(
-        model.ShardState.get_by_shard_id(self.shard_id),
-        active=True,
-        processed=0)
-
-    datastore.PutAsync = original_method
+    with mock.patch.object(datastore, 'PutAsync', side_effect=datastore_errors.Timeout()):
+        # Tests that handler doesn't abort task for datastore errors.
+        # Unfortunately they still increase TaskExecutionCount.
+        for _ in range(parameters.config.TASK_MAX_DATA_PROCESSING_ATTEMPTS):
+            with self.app.test_request_context(
+                "/mapreduce/worker_callback/" + self.shard_id,
+                method="POST",
+                headers={
+                    model.HugeTask.PAYLOAD_VERSION_HEADER: model.HugeTask.PAYLOAD_VERSION,
+                    "X-AppEngine-QueueName": "default",
+                    "X-Appengine-TaskName": "task_name",
+                    util._MR_ID_TASK_HEADER: self.mapreduce_id,
+                    util._MR_SHARD_ID_TASK_HEADER: self.shard_id
+                }, 
+                data=self.transient_state.to_dict()
+            ):
+                self.assertRaises(datastore_errors.Timeout, self.handler.dispatch_request)
+        self.verify_shard_state(
+            model.ShardState.get_by_shard_id(self.shard_id),
+            active=True,
+            processed=0)
+    
     self._handle_request()
 
     self.verify_shard_state(
@@ -2226,14 +2270,38 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     # Tests that handler doesn't abort task for taskqueue errors.
     # Unfornately they still increase TaskExecutionCount.
     for _ in range(parameters.config.TASK_MAX_DATA_PROCESSING_ATTEMPTS):
-      self.assertRaises(taskqueue.TransientError, self.handler.post)
+      with self.app.test_request_context(
+        "/mapreduce/worker_callback/" + self.shard_id,
+        method="POST",
+        headers={
+          model.HugeTask.PAYLOAD_VERSION_HEADER: model.HugeTask.PAYLOAD_VERSION,
+          "X-AppEngine-QueueName": "default",
+          "X-Appengine-TaskName": "task_name",
+          util._MR_ID_TASK_HEADER: self.mapreduce_id,
+          util._MR_SHARD_ID_TASK_HEADER: self.shard_id
+        }, 
+        data=self.transient_state.to_dict()
+      ):
+        self.assertRaises(taskqueue.TransientError, self.handler.dispatch_request)
     self.verify_shard_state(
         model.ShardState.get_by_shard_id(self.shard_id),
         active=True,
         processed=0)
 
     taskqueue.Task.add = self.original_task_add
-    self.handler.post()
+
+    with self.app.test_request_context(
+      "/mapreduce/worker_callback/" + self.shard_id,
+      method="POST",
+      headers={
+        "X-AppEngine-QueueName": "default",
+        "X-Appengine-TaskName": "task_name",
+        util._MR_ID_TASK_HEADER: self.mapreduce_id,
+        util._MR_SHARD_ID_TASK_HEADER: self.shard_id
+      }, 
+      data=self.transient_state.to_dict()
+    ):
+      self.handler.post()
 
     self.verify_shard_state(
         model.ShardState.get_by_shard_id(self.shard_id),
@@ -2290,7 +2358,19 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     shard_state.acquired_once = True
     shard_state.put()
 
-    self.handler.post()
+    with self.app.test_request_context(
+      "/mapreduce/worker_callback/" + self.shard_id,
+      method="POST",
+      headers={
+        model.HugeTask.PAYLOAD_VERSION_HEADER: model.HugeTask.PAYLOAD_VERSION,
+        "X-AppEngine-QueueName": "default",
+        "X-Appengine-TaskName": "task_name",
+        util._MR_ID_TASK_HEADER: self.mapreduce_id,
+        util._MR_SHARD_ID_TASK_HEADER: self.shard_id
+      }, 
+      data=self.transient_state.to_dict()
+    ):
+      self.handler.dispatch_request()
     self.verify_shard_state(
         model.ShardState.get_by_shard_id(self.shard_id),
         active=True,
@@ -2315,9 +2395,20 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     shard_state.acquired_once = True
     shard_state.put()
 
-    self.handler.post()
-    # Slice gets retried.
-    self.assertEqual(http.client.SERVICE_UNAVAILABLE, self.handler.response.status)
+    with self.app.test_request_context(
+      "/mapreduce/worker_callback/" + self.shard_id,
+      method="POST",
+      headers={
+        model.HugeTask.PAYLOAD_VERSION_HEADER: model.HugeTask.PAYLOAD_VERSION,
+        "X-AppEngine-QueueName": "default",
+        "X-Appengine-TaskName": "task_name",
+        util._MR_ID_TASK_HEADER: self.mapreduce_id,
+        util._MR_SHARD_ID_TASK_HEADER: self.shard_id
+      }, 
+      data=self.transient_state.to_dict()
+    ), self.assertRaises(werkzeug.exceptions.ServiceUnavailable):
+      self.handler.dispatch_request()
+
     self.verify_shard_state(
         model.ShardState.get_by_shard_id(self.shard_id),
         active=True,
@@ -2330,8 +2421,9 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     TestEntity().put()
 
     # First time, the task gets retried.
-    self._handle_request(expect_finalize=False)
-    self.assertEqual(http.client.SERVICE_UNAVAILABLE, self.handler.response.status)
+    with self.assertRaises(werkzeug.exceptions.ServiceUnavailable):
+      self._handle_request(expect_finalize=False)
+
     self.verify_shard_state(
         model.ShardState.get_by_shard_id(self.shard_id),
         active=True,
@@ -2343,8 +2435,19 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     shard_state.slice_retries = (
         parameters.config.TASK_MAX_DATA_PROCESSING_ATTEMPTS)
     shard_state.put()
-    # TODO(user): fix
-    self.handler.post()
+
+    with self.app.test_request_context(
+      "/mapreduce/worker_callback/" + self.shard_id,
+      method="POST",
+      headers={
+        "X-AppEngine-QueueName": "default",
+        "X-Appengine-TaskName": "task_name",
+        util._MR_ID_TASK_HEADER: self.mapreduce_id,
+        util._MR_SHARD_ID_TASK_HEADER: self.shard_id
+      }, 
+      data=self.transient_state.to_dict()
+    ):
+      self.handler.post()
     self.verify_shard_state(
         model.ShardState.get_by_shard_id(self.shard_id),
         active=True,
@@ -2389,7 +2492,19 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     # Disable slice retry.
     parameters.config.TASK_MAX_DATA_PROCESSING_ATTEMPTS = 1
 
-    self.handler.post()
+    with self.app.test_request_context(
+      "/mapreduce/worker_callback/" + self.shard_id,
+      method="POST",
+      headers={
+        model.HugeTask.PAYLOAD_VERSION_HEADER: model.HugeTask.PAYLOAD_VERSION,
+        "X-AppEngine-QueueName": "default",
+        "X-Appengine-TaskName": "task_name",
+        util._MR_ID_TASK_HEADER: self.mapreduce_id,
+        util._MR_SHARD_ID_TASK_HEADER: self.shard_id
+      }, 
+      data=self.transient_state.to_dict()
+    ):
+      self.handler.dispatch_request()
     self.verify_shard_state(
         model.ShardState.get_by_shard_id(self.shard_id),
         active=True,
@@ -2411,7 +2526,19 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
         parameters.config.TASK_MAX_DATA_PROCESSING_ATTEMPTS - 1)
     shard_state.put()
 
-    self.handler.post()
+    with self.app.test_request_context(
+      "/mapreduce/worker_callback/" + self.shard_id,
+      method="POST",
+      headers={
+        model.HugeTask.PAYLOAD_VERSION_HEADER: model.HugeTask.PAYLOAD_VERSION,
+        "X-AppEngine-QueueName": "default",
+        "X-Appengine-TaskName": "task_name",
+        util._MR_ID_TASK_HEADER: self.mapreduce_id,
+        util._MR_SHARD_ID_TASK_HEADER: self.shard_id
+      }, 
+      data=self.transient_state.to_dict()
+    ):
+      self.handler.dispatch_request()
     self.verify_shard_state(
         model.ShardState.get_by_shard_id(self.shard_id),
         active=True,
@@ -2424,9 +2551,19 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     TestEntity().put()
 
     with mock.patch.object(context.Context, "_set") as mock_set:
-      self.handler.post()
-      self.assertEqual(http.client.SERVICE_UNAVAILABLE,
-                       self.handler.response.status)
+      with self.app.test_request_context(
+        "/mapreduce/worker_callback/" + self.shard_id,
+        method="POST",
+        headers={
+          model.HugeTask.PAYLOAD_VERSION_HEADER: model.HugeTask.PAYLOAD_VERSION,
+          "X-AppEngine-QueueName": "default",
+          "X-Appengine-TaskName": "task_name",
+          util._MR_ID_TASK_HEADER: self.mapreduce_id,
+          util._MR_SHARD_ID_TASK_HEADER: self.shard_id
+        }, 
+        data=self.transient_state.to_dict()
+      ), self.assertRaises(werkzeug.exceptions.ServiceUnavailable):
+        self.handler.dispatch_request()
 
       # slice should be still active
       shard_state = model.ShardState.get_by_shard_id(self.shard_id)
@@ -2447,7 +2584,19 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     TestEntity().put()
 
     with mock.patch.object(context.Context, "_set") as mock_set:
-      self.handler.post()
+      with self.app.test_request_context(
+        "/mapreduce/worker_callback/" + self.shard_id,
+        method="POST",
+        headers={
+          model.HugeTask.PAYLOAD_VERSION_HEADER: model.HugeTask.PAYLOAD_VERSION,
+          "X-AppEngine-QueueName": "default",
+          "X-Appengine-TaskName": "task_name",
+          util._MR_ID_TASK_HEADER: self.mapreduce_id,
+          util._MR_SHARD_ID_TASK_HEADER: self.shard_id
+        }, 
+        data=self.transient_state.to_dict()
+      ):
+        self.handler.dispatch_request()
 
       # slice should not be active
       shard_state = model.ShardState.get_by_shard_id(self.shard_id)
@@ -2467,16 +2616,27 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
 
   def testContext(self):
     """Test proper context initialization."""
-    self.handler.request.headers["X-AppEngine-TaskExecutionCount"] = 5
     TestEntity().put()
 
     with mock.patch.object(context.Context, '_set') as mock_set:
-      mock_set.assert_any_call(task_retry_count=5)
-      mock_set.assert_any_call(None)
+      with self.app.test_request_context(
+        "/mapreduce/worker_callback/" + self.shard_id,
+        method="POST",
+        headers={
+          model.HugeTask.PAYLOAD_VERSION_HEADER: model.HugeTask.PAYLOAD_VERSION,
+          "X-AppEngine-QueueName": "default",
+          "X-Appengine-TaskName": "task_name",
+          "X-AppEngine-TaskExecutionCount": 5,
+          util._MR_ID_TASK_HEADER: self.mapreduce_id,
+          util._MR_SHARD_ID_TASK_HEADER: self.shard_id
+        }, 
+        data=self.transient_state.to_dict()
+      ):
+        self.handler.dispatch_request()
 
-      self.handler.post()
-
-      mock_set.assert_called()
+      self.assertEqual(2, mock_set.call_count)
+      self.assertEqual(5, mock_set.call_args_list[0][0][0].task_retry_count)
+      mock_set.assert_called_with(None)
 
   def testContextFlush(self):
     """Test context handling."""
@@ -2484,7 +2644,19 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
 
     with mock.patch.object(context.Context, "_set") as mock_set, \
          mock.patch.object(context.Context, "flush") as mock_flush:
-      self.handler.post()
+      with self.app.test_request_context(
+        "/mapreduce/worker_callback/" + self.shard_id,
+        method="POST",
+        headers={
+          model.HugeTask.PAYLOAD_VERSION_HEADER: model.HugeTask.PAYLOAD_VERSION,
+          "X-AppEngine-QueueName": "default",
+          "X-Appengine-TaskName": "task_name",
+          util._MR_ID_TASK_HEADER: self.mapreduce_id,
+          util._MR_SHARD_ID_TASK_HEADER: self.shard_id
+        }, 
+        data=self.transient_state.to_dict()
+      ):
+        self.handler.dispatch_request()
 
       #  1 entity should be processed
       self.assertEqual(1, len(TestHandler.processed_keys))

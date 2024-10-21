@@ -25,7 +25,7 @@ class GCSFileSegReaderTest(testutil.CloudStorageTestBase):
     f.close()
 
     with self.assertRaises(ValueError):
-        gcs_file_seg_reader._GCSFileSegReader(f"/{self.TEST_BUCKET}/{self.seg_prefix}", 0)
+        gcs_file_seg_reader._GCSFileSegReader(self.bucket, self.seg_prefix, 0)
 
   def testInvalidMetadata(self):
       blob = self.bucket.blob(self.seg_prefix + "0")
@@ -34,7 +34,7 @@ class GCSFileSegReaderTest(testutil.CloudStorageTestBase):
       blob.patch()
 
       with self.assertRaises(ValueError):
-          gcs_file_seg_reader._GCSFileSegReader(f"/{self.TEST_BUCKET}/{self.seg_prefix}", 0)
+          gcs_file_seg_reader._GCSFileSegReader(self.bucket, self.seg_prefix, 0)
 
   def ReadOneFileTest(self, read_size):
     blob = self.bucket.blob(self.seg_prefix + "0")
@@ -44,7 +44,7 @@ class GCSFileSegReaderTest(testutil.CloudStorageTestBase):
     blob.upload_from_string("1234567")
     blob.patch()
 
-    r = gcs_file_seg_reader._GCSFileSegReader(f"/{self.TEST_BUCKET}/{self.seg_prefix}", 0)
+    r = gcs_file_seg_reader._GCSFileSegReader(self.bucket, self.seg_prefix, 0)
     result = b""
     while True:
       tmp = r.read(read_size)
@@ -82,7 +82,7 @@ class GCSFileSegReaderTest(testutil.CloudStorageTestBase):
   def testReadMultipleFiles(self):
     self.setUpMultipleFile()
 
-    r = gcs_file_seg_reader._GCSFileSegReader(f"/{self.TEST_BUCKET}/{self.seg_prefix}", 2)
+    r = gcs_file_seg_reader._GCSFileSegReader(self.bucket, self.seg_prefix, 2)
     result = b""
     while True:
       tmp = r.read(1)
