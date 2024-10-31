@@ -21,7 +21,7 @@ import pipeline
 
 from . import handlers, status
 
-version = os.environ.get("CURRENT_VERSION_ID", "").split(".")[0]
+version = os.environ.get("GAE_VERSION", "").split(".")[0]
 
 if (
     __name__ == "google.appengine.ext.mapreduce"

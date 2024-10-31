@@ -2031,12 +2031,12 @@ class GoogleCloudStorageInputReaderWithDelimiterTest(
     readers = self.READER_CLS.split_input(
         self.create_mapper_spec(num_shards=1,
                                 input_params={"bucket_name": self.TEST_BUCKET,
-                                              "objects": ["dir-0*"],
+                                              "objects": [f"{self.gcsPrefix}/dir-0*"],
                                               "delimiter": "/"}))
     self.assertEqual(1, len(readers))
     reader = readers[0]
     self.assertEqual(10, len(reader._filenames))
-    result_filenames = [f.name for f in reader]
+    result_filenames = [f._blob.name for f in reader]
     self.assertEqual(self.file_per_dir * 10, len(result_filenames))
     self.assertEqual(self.filenames_in_first_10_dirs, result_filenames)
 
@@ -2044,7 +2044,7 @@ class GoogleCloudStorageInputReaderWithDelimiterTest(
     readers = self.READER_CLS.split_input(
         self.create_mapper_spec(num_shards=1,
                                 input_params={"bucket_name": self.TEST_BUCKET,
-                                              "objects": ["*"],
+                                              "objects": [f"{self.gcsPrefix}/*"],
                                               "delimiter": "/"}))
     self.assertEqual(1, len(readers))
     reader = readers[0]
@@ -2269,7 +2269,7 @@ class GoogleCloudStorageInputReaderTest(GoogleCloudStorageInputTestBase):
 
     reader_files = list(readers[0])
     self.assertEqual(len(self.test_filenames), len(reader_files))
-    self.assertEqual(self.test_filenames, [f"/{f._blob.bucket.name}/{f._blob.name}" for f in reader_files])
+    self.assertEqual(self.test_filenames, [f._blob.name for f in reader_files])
 
   def testSerialization(self):
     readers = self.READER_CLS.split_input(
@@ -2319,7 +2319,8 @@ class GoogleCloudStorageRecordInputReaderTest(GoogleCloudStorageInputTestBase):
     self.create_test_file(filename, [])
     reader = self.READER_CLS([filename])
 
-    self.assertRaises(StopIteration, reader.__next__)
+    with self.assertRaises(StopIteration):
+      next(reader)
 
   def testSingleFileOneRecord(self):
     filename = f"{self.gcsPrefix}/single-record-file"

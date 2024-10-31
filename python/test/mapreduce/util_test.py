@@ -206,8 +206,8 @@ class GetTaskHeadersTest(unittest.TestCase):
 
   def setUp(self):
     super().setUp()
-    os.environ["CURRENT_VERSION_ID"] = "v7.1"
-    os.environ["CURRENT_MODULE_ID"] = "foo-module"
+    os.environ["GAE_VERSION"] = "v7.1"
+    os.environ["GAE_SERVICE"] = "foo-module"
     os.environ["DEFAULT_VERSION_HOSTNAME"] = "foo.appspot.com"
 
   def testGetTaskHost(self):
@@ -219,7 +219,7 @@ class GetTaskHeadersTest(unittest.TestCase):
     self.assertEqual("v7.foo-module", task.target)
 
   def testGetTaskHostDefaultModule(self):
-    os.environ["CURRENT_MODULE_ID"] = "default"
+    os.environ["GAE_SERVICE"] = "default"
     self.assertEqual("v7.foo.appspot.com", util._get_task_host())
     task = taskqueue.Task(url="/relative_url",
                           headers={"Host": util._get_task_host()})

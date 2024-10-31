@@ -253,11 +253,11 @@ class GCSInputReader(map_job.InputReader):
           blobs = _storage_client.list_blobs(bucket_name, prefix=filename[:-1], delimiter=delimiter)
           for blob in blobs:
             if not delimiter or delimiter not in blob.name:
-              all_filenames.append(f"/{bucket_name}/{blob.name}")
+              all_filenames.append(blob.name)
           for prefix in blobs.prefixes:
-              all_filenames.append(f"/{bucket_name}/{prefix}")
+              all_filenames.append(prefix)
         else:
-          all_filenames.append(f"/{bucket_name}/{filename}")
+          all_filenames.append(filename)
 
     all_filenames.sort()
 
@@ -339,14 +339,10 @@ class GCSInputReader(map_job.InputReader):
         continue
       try:
         start_time = time.time()
-        handle = io.BytesIO()
-        handle.name = filename
-        bucket_name = filename.split("/")[1]
-        object_name = "/".join(filename.split("/")[2:])
+        bucket_name = ''
         bucket = _storage_client.get_bucket(bucket_name)
-        blob = bucket.blob(object_name)
-        blob.download_to_file(handle)
-        handle.seek(0)
+        blob = bucket.blob(filename)
+        handle = blob.open("rb")
 
         self._slice_ctx.incr(self.COUNTER_IO_READ_MSEC,
                              int(time.time() - start_time) * 1000)

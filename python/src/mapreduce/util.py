@@ -97,11 +97,11 @@ def _get_task_host():
   version. If "default" version doesn't exist, the url is routed to the
   default version.
   """
-  version = os.environ.get("CURRENT_VERSION_ID", ".").split(".")[0]
+  version = os.environ.get("GAE_VERSION", ".").split(".")[0]
   default_host = os.environ["DEFAULT_VERSION_HOSTNAME"]
   if not version:
     return default_host
-  module = os.environ.get("CURRENT_MODULE_ID", "default")
+  module = os.environ.get("GAE_SERVICE", "default")
   if module == "default":
     return "{}.{}".format(version, default_host)
   return "{}.{}.{}".format(version, module, default_host)

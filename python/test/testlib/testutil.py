@@ -180,8 +180,8 @@ class HandlerTestBase(unittest.TestCase):
     self.testbed.activate()
 
     os.environ["APPLICATION_ID"] = self.appid
-    os.environ["CURRENT_VERSION_ID"] = self.version_id
-    os.environ["CURRENT_MODULE_ID"] = self.module_id
+    os.environ["GAE_VERSION"] = self.version_id
+    os.environ["GAE_SERVICE"] = self.module_id
     os.environ["DEFAULT_VERSION_HOSTNAME"] = "%s.appspot.com" % self.appid
     os.environ["HTTP_HOST"] = self.host
 
@@ -216,8 +216,8 @@ class HandlerTestBase(unittest.TestCase):
 
   def tearDown(self):
     del os.environ["APPLICATION_ID"]
-    del os.environ["CURRENT_VERSION_ID"]
-    del os.environ["CURRENT_MODULE_ID"]
+    del os.environ["GAE_VERSION"]
+    del os.environ["GAE_SERVICE"]
     del os.environ["DEFAULT_VERSION_HOSTNAME"]
     del os.environ["HTTP_HOST"]
 

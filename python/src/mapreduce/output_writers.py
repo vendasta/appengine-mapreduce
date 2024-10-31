@@ -628,16 +628,6 @@ class _GoogleCloudStorageOutputWriterBase(_GoogleCloudStorageBase):
     return True
 
 
-  @classmethod
-  def from_dict(cls, state):
-    name = state["name"]
-    blob = storage.Blob.from_string(name, client=_storage_client)
-    result = cls(blob)
-    if state["closed"]:
-      result.close()
-    return result
-
-
 class _GoogleCloudStorageOutputWriter(_GoogleCloudStorageOutputWriterBase):
     """Naive version of GoogleCloudStorageWriter.
 
@@ -721,48 +711,51 @@ class _GoogleCloudStorageOutputWriter(_GoogleCloudStorageOutputWriterBase):
 
     @classmethod
     def from_json(cls, state):
-        gcs_url = state["gcs_url"]
+      _streaming_buffer = None
+      gcs_url = state.get("gcs_url", None)
+      if gcs_url:
         blob = storage.Blob.from_string(gcs_url, client=_storage_client)
-        _streaming_buffer = blob.open("wb")
-        writer = cls(_streaming_buffer)
-        no_dup = state.get(cls._JSON_NO_DUP, False)
-        writer._no_dup = no_dup
-        if no_dup:
-            # TODO(byates): Uncomment/figure out
-            # writer._seg_valid_length = state[cls._VALID_LENGTH]
-            writer._seg_index = state[cls._JSON_SEG_INDEX]
-        return writer
+        _streaming_buffer = pickle.loads(state[cls._JSON_GCS_BUFFER])
+        _streaming_buffer._blob = blob
+      writer = cls(_streaming_buffer)
+      no_dup = state.get(cls._JSON_NO_DUP, False)
+      writer._no_dup = no_dup
+      if no_dup:
+        writer._seg_valid_length = state[cls._VALID_LENGTH]
+        writer._seg_index = state[cls._JSON_SEG_INDEX]
+      return writer
 
     def end_slice(self, slice_ctx):
-      if not self._streaming_buffer.closed:
-          self._streaming_buffer.close()
+      pass
 
     def to_json(self):
+      if self._streaming_buffer.closed:
+        return {
+          self._JSON_NO_DUP: self._no_dup,
+          self._JSON_SEG_INDEX: getattr(self, "_seg_index", None)
+        }
+      gcs_url = f"gs://{self._streaming_buffer._blob.bucket.name}/{self._streaming_buffer._blob.name}"
+      del self._streaming_buffer._blob
       result = {
-        "gcs_url": f"gs://{self._streaming_buffer._blob.bucket.name}/{self._streaming_buffer._blob.name}",
+        "gcs_url": gcs_url,
+        self._JSON_GCS_BUFFER: pickle.dumps(self._streaming_buffer),
         self._JSON_NO_DUP: self._no_dup
       }
       if self._no_dup:
-          result.update({
-        # Save the length of what has been written, including what is
-        # buffered in memory.
-        # This assumes from_json and to_json are only called
-        # at the beginning of a slice.
-        # TODO(user): This may not be a good assumption.
-        # TODO(byates): Uncomment/figure out
-        # self._VALID_LENGTH: self._streaming_buffer.tell(), 
-        self._JSON_SEG_INDEX: self._seg_index})
-      self._streaming_buffer.close()
+        result.update({
+            # Save the length of what has been written, including what is
+            # buffered in memory.
+            # This assumes from_json and to_json are only called
+            # at the beginning of a slice.
+            # TODO(user): This may not be a good assumption.
+            self._VALID_LENGTH: self._streaming_buffer.tell(),
+            self._JSON_SEG_INDEX: self._seg_index})
       return result
 
     def finalize(self, ctx, shard_state):
-
         if self._no_dup:
-            self._streaming_buffer._blob.upload_from_filename(
-                self._streaming_buffer._blob.name,
-            )
-            self._streaming_buffer._blob.metadata = {self._VALID_LENGTH: self._streaming_buffer.tell()}
-            self._streaming_buffer._blob.patch()
+            seg_filename = self._streaming_buffer._blob.name
+            self._streaming_buffer._blob.metadata = {self._VALID_LENGTH: self._seg_valid_length}
             self._streaming_buffer.close()
 
             # The filename user requested.
@@ -774,7 +767,6 @@ class _GoogleCloudStorageOutputWriter(_GoogleCloudStorageOutputWriterBase):
                 mr_spec.mapreduce_id,
                 shard_state.shard_number,
             )
-            seg_filename = self._streaming_buffer._blob.name
             prefix, last_index = seg_filename.rsplit("-", 1)
             # These info is enough for any external process to combine
             # all segs into the final file.
@@ -793,15 +785,34 @@ class _GoogleCloudStorageOutputWriter(_GoogleCloudStorageOutputWriterBase):
     def _recover(self, mr_spec, shard_number, shard_attempt):
         next_seg_index = self._seg_index
 
-        # TODO(byates): Uncomment/figure out
-        # if self._seg_valid_length != 0:
-        #     if self._streaming_buffer._blob.exists():
-        #       self._streaming_buffer._blob.upload_from_filename(
-        #           self._streaming_buffer_blob.name,
-        #       )
-        #       self._streaming_buffer._blob.metadata = {self._VALID_LENGTH: self._seg_valid_length}
-        #       self._streaming_buffer._blob.patch()
-        #       next_seg_index = self._seg_index + 1
+        # Save the current seg if it actually has something.
+        # Remember self._streaming_buffer is the pickled instance
+        # from the previous slice.
+        if self._seg_valid_length != 0:
+          # Get the length of the blob in GCS.
+          self._streaming_buffer._blob.reload()
+          gcs_next_offset = self._streaming_buffer._blob.size + 1
+          buffer_next_offset = self._streaming_buffer.tell()
+
+          # If GCS is ahead of us, just force close.
+          if gcs_next_offset > buffer_next_offset:
+            self._streaming_buffer._blob.metadata = {self._VALID_LENGTH: self._seg_valid_length}
+            self._streaming_buffer._blob.patch()
+          # Otherwise flush in memory contents too.
+          else:
+            self._streaming_buffer.close()
+          # except cloudstorage.FileClosedError:
+          #   pass
+          # self._streaming_buffer._blob.upload_from_filename(
+          #   self._streaming_buffer._blob.name,
+          # )
+          # self._streaming_buffer._blob.metadata = {self._VALID_LENGTH: self._seg_valid_length}
+          # self._streaming_buffer._blob.patch()
+
+          # self._streaming_buffer.close()
+          # self._streaming_buffer._blob.metadata = {self._VALID_LENGTH: self._seg_valid_length}
+          # self._streaming_buffer._blob.patch()
+          next_seg_index = self._seg_index + 1
 
         writer_spec = self.get_params(mr_spec.mapper, allow_old=False)
         # Create name for the new seg.
@@ -974,18 +985,18 @@ class GoogleCloudStorageConsistentOutputWriter(
   @classmethod
   def from_json(cls, state):
     state_data = pickle.loads(state[cls._JSON_STATUS])
-    if state.get('mainfile'):
+    if state.get('mainfile_gcs_url'):
         mainfile_gcs_url = state['mainfile']
         mainfile_blob = storage.Blob.from_string(mainfile_gcs_url, client=_storage_client)
-        state_data.mainfile = mainfile_blob.open("wb")
-    if state.get('tmpfile'):
+        state_data.mainfile._blob = mainfile_blob
+    if state.get('tmpfile_gcs_url'):
         tmpfile_gcs_url = state['tmpfile']
         tmpfile_blob = storage.Blob.from_string(tmpfile_gcs_url, client=_storage_client)
-        state_data.tmpfile = tmpfile_blob.open("wb")
-    if state.get('tmpfile_1ago'):
+        state_data.tmpfile._blob = tmpfile_blob
+    if state.get('tmpfile_1ago_gcs_url'):
         tmpfile_1ago_gcs_url = state['tmpfile_1ago']
         tmpfile_1ago_blob = storage.Blob.from_string(tmpfile_1ago_gcs_url, client=_storage_client)
-        state_data.tmpfile_1ago = tmpfile_1ago_blob.open("wb")
+        state_data.tmpfile_1ago._blob = tmpfile_1ago_blob
     result = cls(state_data)
     return result
 
@@ -993,30 +1004,29 @@ class GoogleCloudStorageConsistentOutputWriter(
     self.status.tmpfile.close()
 
   def to_json(self):
-    before_mainfile = self.status.mainfile
-    before_tmpfile = self.status.tmpfile
-    before_tmpfile_1ago = self.status.tmpfile_1ago
-    self.status.mainfile = None
-    self.status.tmpfile = None
-    self.status.tmpfile_1ago = None
-    try:
-      result = {
-        self._JSON_STATUS: pickle.dumps(self.status)
-      }
-      if before_mainfile:
-        result["mainfile"] = f"gs://{before_mainfile._blob.bucket.name}/{before_mainfile._blob.name}"
-        before_mainfile.close()
-      if before_tmpfile:
-        result["tmpfile"] = f"gs://{before_tmpfile._blob.bucket.name}/{before_tmpfile._blob.name}"
-        before_tmpfile.close()
-      if before_tmpfile_1ago:
-        result["tmpfile_1ago"] = f"gs://{before_tmpfile_1ago._blob.bucket.name}/{before_tmpfile_1ago._blob.name}"
-        before_tmpfile_1ago.close()
-      return result
-    finally:
-      self.status.mainfile = before_mainfile
-      self.status.tmpfile = before_tmpfile
-      self.status.tmpfile_1ago = before_tmpfile_1ago
+    mainfile_gcs_url = None
+    tmpfile_gcs_url = None
+    tmpfile_1ago_gcs_url = None
+
+    if self.status.mainfile:
+      mainfile_gcs_url = f"gs://{self.status.mainfile._blob.bucket.name}/{self.status.mainfile._blob.name}"
+      # self.status.mainfile.close()
+      del self.status.mainfile._blob
+    if self.status.tmpfile:
+      tmpfile_gcs_url = f"gs://{self.status.tmpfile._blob.bucket.name}/{self.status.tmpfile._blob.name}"
+      # self.status.tmpfile.close()
+      del self.status.tmpfile._blob
+    if self.status.tmpfile_1ago:
+      tmpfile_1ago_gcs_url = f"gs://{self.status.tmpfile_1ago._blob.bucket.name}/{self.status.tmpfile_1ago._blob.name}"
+      # self.status.tmpfile_1ago.close()
+      del self.status.tmpfile_1ago._blob
+    
+    return {
+      self._JSON_STATUS: pickle.dumps(self.status),
+      "mainfile_gcs_url": mainfile_gcs_url,
+      "tmpfile_gcs_url": tmpfile_gcs_url,
+      "tmpfile_1ago_gcs_url": tmpfile_1ago_gcs_url,
+    }
 
   def write(self, data):
     super().write(data)

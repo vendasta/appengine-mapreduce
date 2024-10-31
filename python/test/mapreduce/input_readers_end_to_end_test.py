@@ -60,7 +60,6 @@ class GoogleCloudStorageInputReaderEndToEndTest(testutil.CloudStorageTestBase, t
     return created_content
 
   def _run_test(self, num_shards, num_files):
-    # bucket_name = "testing"
     object_prefix = f"{self.gcsPrefix}/file-"
     job_name = self.gcsPrefix
     input_class = (input_readers.__name__ + "." +
