@@ -1,0 +1,6 @@
+[tool.pytest.ini_options]
+pythonpath = ["src", "test"]
+testpaths = ["test"]
+env = [
+    "GOOGLE_CLOUD_PROJECT=repcore-prod"
+]
