@@ -26,8 +26,6 @@ class KeyRangesTest(unittest.TestCase):
 
   def setUp(self):
     self.testbed = testbed.Testbed()
-    self.app = "foo"
-    os.environ["APPLICATION_ID"] = self.app
     self.testbed.activate()
     self.testbed.init_datastore_v3_stub()
 
