@@ -105,7 +105,7 @@ class GCSInputReader(map_job.InputReader):
   #    the lifetime of the MR job.
   # 2. A shard has to process files from a contiguous namespace.
   #    May introduce staggering shard.
-  def __init__(self, filenames, index=0, buffer_size=None, _account_id=None,
+  def __init__(self, bucket_name, filenames, index=0, buffer_size=None, _account_id=None,
                delimiter=None, path_filter=None):
     """Initialize a GoogleCloudStorageInputReader instance.
 
@@ -119,6 +119,7 @@ class GCSInputReader(map_job.InputReader):
       path_filter: An instance of PathFilter.
     """
     super().__init__()
+    self._bucket_name = bucket_name
     self._filenames = filenames
     self._index = index
     self._buffer_size = buffer_size
@@ -267,7 +268,7 @@ class GCSInputReader(map_job.InputReader):
       shard_filenames = all_filenames[shard::job_config.shard_count]
       if shard_filenames:
         readers.append(cls(
-            shard_filenames, buffer_size=buffer_size, _account_id=account_id,
+            bucket_name, shard_filenames, buffer_size=buffer_size, _account_id=account_id,
             delimiter=delimiter, path_filter=path_filter))
     return readers
 
@@ -339,8 +340,7 @@ class GCSInputReader(map_job.InputReader):
         continue
       try:
         start_time = time.time()
-        bucket_name = ''
-        bucket = _storage_client.get_bucket(bucket_name)
+        bucket = _storage_client.get_bucket(self._bucket_name)
         blob = bucket.blob(filename)
         handle = blob.open("rb")
 

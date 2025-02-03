@@ -986,15 +986,15 @@ class GoogleCloudStorageConsistentOutputWriter(
   def from_json(cls, state):
     state_data = pickle.loads(state[cls._JSON_STATUS])
     if state.get('mainfile_gcs_url'):
-        mainfile_gcs_url = state['mainfile']
+        mainfile_gcs_url = state['mainfile_gcs_url']
         mainfile_blob = storage.Blob.from_string(mainfile_gcs_url, client=_storage_client)
         state_data.mainfile._blob = mainfile_blob
     if state.get('tmpfile_gcs_url'):
-        tmpfile_gcs_url = state['tmpfile']
+        tmpfile_gcs_url = state['tmpfile_gcs_url']
         tmpfile_blob = storage.Blob.from_string(tmpfile_gcs_url, client=_storage_client)
         state_data.tmpfile._blob = tmpfile_blob
     if state.get('tmpfile_1ago_gcs_url'):
-        tmpfile_1ago_gcs_url = state['tmpfile_1ago']
+        tmpfile_1ago_gcs_url = state['tmpfile_1ago_gcs_url']
         tmpfile_1ago_blob = storage.Blob.from_string(tmpfile_1ago_gcs_url, client=_storage_client)
         state_data.tmpfile_1ago._blob = tmpfile_1ago_blob
     result = cls(state_data)

@@ -18,7 +18,7 @@ google-cloud-storage==2.19.0
 google-crc32c==1.6.0
 google-resumable-media==2.7.2
 googleapis-common-protos==1.66.0
-GoogleAppEnginePipeline==2.0.0a7
+GoogleAppEnginePipeline==2.0.0a12
 gunicorn==23.0.0
 idna==3.10
 importlib_metadata==8.5.0

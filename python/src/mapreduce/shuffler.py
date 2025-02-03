@@ -293,7 +293,7 @@ class _MergingReader(input_readers.InputReader):
       fh = bucket.blob(filename).open("rb", chunk_size=self.GCS_BUFFER_SIZE)
       reader = records.RecordsReader(fh)
       reader.seek(offset)
-      readers.append((None, None, i, reader))
+      readers.append(('', '', i, reader))
 
     # Read records from heap and merge values with the same key.
 
@@ -305,7 +305,7 @@ class _MergingReader(input_readers.InputReader):
     while readers:
       (key, value, index, reader) = readers[0]
 
-      if key is not None:
+      if key:
         current_count += 1
         current_size += len(value)
 
