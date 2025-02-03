@@ -64,6 +64,8 @@ class AbstractDatastoreInputReaderTest(unittest.TestCase):
 
   def setUp(self):
     self.testbed = testbed.Testbed()
+    self.appid = "testapp"
+    os.environ["APPLICATION_ID"] = self.appid
     self.testbed.activate()
     self.testbed.init_datastore_v3_stub()
     self.testbed.init_memcache_stub()
@@ -963,6 +965,9 @@ class BlobstoreLineInputReaderBlobstoreStubTest(unittest.TestCase):
   def setUp(self):
     unittest.TestCase.setUp(self)
 
+    self.appid = "testapp"
+    os.environ["APPLICATION_ID"] = self.appid
+
     self.blob_storage = dict_blob_storage.DictBlobStorage()
     self.blobstore = blobstore_stub.BlobstoreServiceStub(self.blob_storage)
     # Blobstore uses datastore for BlobInfo.
@@ -1073,6 +1078,12 @@ class MockBlobInfo:
 
 
 class BlobstoreLineInputReaderTest(unittest.TestCase):
+
+  def setUp(self):
+    unittest.TestCase.setUp(self)
+
+    self.appid = "testapp"
+    os.environ["APPLICATION_ID"] = self.appid
 
   # pylint: disable=unused-argument
   def initMockedBlobstoreLineReader(self,
@@ -1275,6 +1286,9 @@ class BlobstoreZipInputReaderTest(unittest.TestCase):
   def setUp(self):
     unittest.TestCase.setUp(self)
 
+    self.appid = "testapp"
+    os.environ["APPLICATION_ID"] = self.appid
+
     self.zipdata = io.BytesIO()
     archive = zipfile.ZipFile(self.zipdata, "w")
     for i in range(10):
@@ -1336,6 +1350,12 @@ class BlobstoreZipInputReaderTest(unittest.TestCase):
 class BlobstoreZipLineInputReaderTest(unittest.TestCase):
   READER_NAME = ("mapreduce.input_readers."
                  "BlobstoreZipLineInputReader")
+
+  def setUp(self):
+    unittest.TestCase.setUp(self)
+
+    self.appid = "testapp"
+    os.environ["APPLICATION_ID"] = self.appid
 
   def create_zip_data(self, blob_count):
     """Create blob_count blobs with uneven zip data."""
@@ -1607,12 +1627,15 @@ class NamespaceInputReaderTest(unittest.TestCase):
 
   def setUp(self):
     unittest.TestCase.setUp(self)
+    self.app_id = "myapp"
 
     self.mapper_spec = model.MapperSpec.from_json({
         "mapper_handler_spec": "FooHandler",
         "mapper_input_reader": NamespaceInputReaderTest.MAPREDUCE_READER_SPEC,
         "mapper_params": {"batch_size": 2},
         "mapper_shard_count": 10})
+
+    os.environ["APPLICATION_ID"] = self.app_id
 
     self.datastore = datastore_file_stub.DatastoreFileStub(
         self.app_id, "/dev/null", "/dev/null")

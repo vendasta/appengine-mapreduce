@@ -253,11 +253,13 @@ class ShardStateTest(unittest.TestCase):
   """Tests model.ShardState."""
 
   def setUp(self):
+    os.environ["APPLICATION_ID"] = "my-app"
     self.testbed = testbed.Testbed()
     self.testbed.activate()
     self.testbed.init_datastore_v3_stub()
 
   def tearDown(self):
+    del os.environ["APPLICATION_ID"]
     self.testbed.deactivate()
 
   def testAccessors(self):
