@@ -189,9 +189,9 @@ class MergingReaderEndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerT
         with records.RecordsWriter(f) as w:
           for (k, v) in input_data:
             proto = kv_pb.KeyValue()
-          proto.key = k
-          proto.value = v
-          w.write(proto.SerializeToString())
+            proto.key = k
+            proto.value = v
+            w.write(proto.SerializeToString())
 
       p = FakeMergePipeline(self.gcsPrefix, self.TEST_BUCKET,
                             [full_filename, full_filename, full_filename])
@@ -207,16 +207,16 @@ class MergingReaderEndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerT
           output_data.append(record)
 
       expected_data = [
-          ("1", ["a"], True),
-          ("1", ["a"], True),
-          ("1", ["a"], False),
-          ("2", ["b"], True),
-          ("2", ["b"], True),
-          ("2", ["b"], False),
-          ("3", ["c"], True),
-          ("3", ["c"], True),
-          ("3", ["c"], False),
-          ]
+        ("1", ["a"], True),
+        ("1", ["a"], True),
+        ("1", ["a"], False),
+        ("2", ["b"], True),
+        ("2", ["b"], True),
+        ("2", ["b"], False),
+        ("3", ["c"], True),
+        ("3", ["c"], True),
+        ("3", ["c"], False),
+      ]
       self.assertEqual([str(e).encode() for e in expected_data], output_data)
     finally:
       shuffler._MergePipeline._MAX_VALUES_COUNT = self._prev_max_values_count
