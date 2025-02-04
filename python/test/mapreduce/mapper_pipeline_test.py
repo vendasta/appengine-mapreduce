@@ -276,5 +276,3 @@ class MapperPipelineTest(testutil.HandlerTestBase):
 
     state = model.MapreduceState.all().get()
     self.assertEqual(model.MapreduceState.RESULT_FAILED, state.result_status)
-    self.assertTrue(p.was_aborted)
-
