@@ -17,7 +17,3 @@ class OutputWriterTest(unittest.TestCase):
     self.assertEqual(slice_ctx, writer._slice_ctx)
     writer.end_slice(slice_ctx)
     self.assertEqual(None, writer._slice_ctx)
-
-
-if __name__ == '__main__':
-  unittest.main()

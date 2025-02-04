@@ -7,7 +7,6 @@
 # Using opensource naming conventions, pylint: disable=g-bad-name
 
 
-import pipeline
 from google.appengine.ext import db
 from testlib import testutil
 
@@ -51,21 +50,15 @@ class CombinerTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
 
   def setUp(self):
     testutil.HandlerTestBase.setUp(self)
-    pipeline.Pipeline._send_mail = self._send_mail
-    self.emails = []
 
     self.old_max_values_count = shuffler._MergePipeline._MAX_VALUES_COUNT
     shuffler._MergePipeline._MAX_VALUES_COUNT = 1
 
-    FakeCombiner.reset()
+    self.addCleanup(FakeCombiner.reset)
 
   def tearDown(self):
     shuffler._MergePipeline._MAX_VALUES_COUNT = self.old_max_values_count
     testutil.HandlerTestBase.tearDown(self)
-
-  def _send_mail(self, sender, subject, body, html=None):
-    """Callback function for sending mail."""
-    self.emails.append((sender, subject, body, html))
 
   def testNoCombiner(self):
     """Test running with low values count but without combiner."""

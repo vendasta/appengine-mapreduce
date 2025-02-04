@@ -557,7 +557,3 @@ class RecordsTest(unittest.TestCase):
         self.assertEqual(inputs, reader.read())
       self.assertRaises(EOFError, reader.read)
       input_size += 1
-
-
-if __name__ == '__main__':
-  unittest.main()

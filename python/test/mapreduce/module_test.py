@@ -139,7 +139,3 @@ class RecordsTests(module_testutil.ModuleInterfaceTest,
                    unittest.TestCase):
   """Test records module interface."""
   MODULE = records
-
-
-if __name__ == '__main__':
-  unittest.main()

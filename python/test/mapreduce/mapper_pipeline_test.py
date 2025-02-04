@@ -7,7 +7,6 @@
 # pylint: disable=g-bad-name
 
 import datetime
-import unittest
 
 import pipeline
 from google.appengine.ext import db
@@ -91,15 +90,6 @@ def fake_empty_handler(entity):
 class MapperPipelineTest(testutil.HandlerTestBase):
   """Tests for MapperPipeline."""
 
-  def setUp(self):
-    testutil.HandlerTestBase.setUp(self)
-    pipeline.Pipeline._send_mail = self._send_mail
-    self.emails = []
-
-  def _send_mail(self, sender, subject, body, html=None):
-    """Callback function for sending mail."""
-    self.emails.append((sender, subject, body, html))
-
   def testEmptyMapper(self):
     """Test empty mapper over empty dataset."""
     p = mapper_pipeline.MapperPipeline(
@@ -117,9 +107,7 @@ class MapperPipelineTest(testutil.HandlerTestBase):
     p.start()
     test_support.execute_until_empty(self.taskqueue)
 
-    self.assertEqual(1, len(self.emails))
-    self.assertTrue(self.emails[0][1].startswith(
-        "Pipeline successful:"))
+    self.assertFalse(p.was_aborted)
 
     p = mapper_pipeline.MapperPipeline.from_id(p.pipeline_id)
     # Verify outputs.
@@ -165,9 +153,7 @@ class MapperPipelineTest(testutil.HandlerTestBase):
     self.assertFalse(p.outputs.result_status.filled)
     self.assertFalse(p.outputs.default.filled)
 
-    self.assertEqual(1, len(self.emails))
-    self.assertTrue(self.emails[0][1].startswith(
-        "Pipeline aborted:"))
+    self.assertTrue(p.was_aborted)
 
   def testProcessEntities(self):
     """Test empty mapper over non-empty dataset."""
@@ -187,9 +173,7 @@ class MapperPipelineTest(testutil.HandlerTestBase):
     p.start()
     test_support.execute_until_empty(self.taskqueue)
 
-    self.assertEqual(1, len(self.emails))
-    self.assertTrue(self.emails[0][1].startswith(
-        "Pipeline successful:"))
+    self.assertFalse(p.was_aborted)
 
     p = mapper_pipeline.MapperPipeline.from_id(p.pipeline_id)
 
@@ -223,9 +207,7 @@ class MapperPipelineTest(testutil.HandlerTestBase):
     p.start()
     test_support.execute_until_empty(self.taskqueue)
 
-    self.assertEqual(1, len(self.emails))
-    self.assertTrue(self.emails[0][1].startswith(
-        "Pipeline successful:"))
+    self.assertFalse(p.was_aborted)
 
     p = mapper_pipeline.MapperPipeline.from_id(p.pipeline_id)
     outputs = []
@@ -258,9 +240,7 @@ class MapperPipelineTest(testutil.HandlerTestBase):
     p.start()
     test_support.execute_until_empty(self.taskqueue)
 
-    self.assertEqual(1, len(self.emails))
-    self.assertTrue(self.emails[0][1].startswith(
-        "Pipeline successful:"))
+    self.assertFalse(p.was_aborted)
 
     p = mapper_pipeline.MapperPipeline.from_id(p.pipeline_id)
     outputs = []
@@ -296,9 +276,5 @@ class MapperPipelineTest(testutil.HandlerTestBase):
 
     state = model.MapreduceState.all().get()
     self.assertEqual(model.MapreduceState.RESULT_FAILED, state.result_status)
-
-    self.assertEqual(1, len(self.emails))
-    self.assertTrue(self.emails[0][1].startswith(
-        "Pipeline aborted:"))
-
+    self.assertTrue(p.was_aborted)
 

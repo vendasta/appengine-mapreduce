@@ -66,15 +66,6 @@ class FakeFileRecordsOutputWriter(
 class MapreducePipelineTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
   """Tests for MapreducePipeline."""
 
-  def setUp(self):
-    testutil.HandlerTestBase.setUp(self)
-    pipeline.Pipeline._send_mail = self._send_mail
-    self.emails = []
-
-  def _send_mail(self, sender, subject, body, html=None):
-    """Callback function for sending mail."""
-    self.emails.append((sender, subject, body, html))
-
   def testFailedMapReduce(self):
     max_attempts_before = pipeline.pipeline._DEFAULT_MAX_ATTEMPTS
     try:
@@ -144,9 +135,7 @@ class MapreducePipelineTest(testutil.CloudStorageTestBase, testutil.HandlerTestB
     p.start()
     test_support.execute_until_empty(self.taskqueue)
 
-    self.assertEqual(1, len(self.emails))
-    self.assertTrue(self.emails[0][1].startswith(
-        "Pipeline successful:"))
+    self.assertFalse(p.was_aborted)
 
     # Verify reduce output.
     p = mapreduce_pipeline.MapreducePipeline.from_id(p.pipeline_id)
@@ -205,9 +194,7 @@ class MapreducePipelineTest(testutil.CloudStorageTestBase, testutil.HandlerTestB
     p.start()
     test_support.execute_until_empty(self.taskqueue)
 
-    self.assertEqual(1, len(self.emails))
-    self.assertTrue(self.emails[0][1].startswith(
-        "Pipeline successful:"))
+    self.assertFalse(p.was_aborted)
 
     # Verify reduce output.
     p = mapreduce_pipeline.MapreducePipeline.from_id(p.pipeline_id)

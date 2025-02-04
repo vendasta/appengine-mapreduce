@@ -58,7 +58,3 @@ class DeleteTest(unittest.TestCase):
     operation(ctx)
 
     ctx._mutation_pool.delete.assert_called_with(entity)
-
-
-if __name__ == '__main__':
-  unittest.main()

@@ -64,8 +64,7 @@ class AbstractDatastoreInputReaderTest(unittest.TestCase):
 
   def setUp(self):
     self.testbed = testbed.Testbed()
-    self.appid = "testapp"
-    os.environ["APPLICATION_ID"] = self.appid
+    self.appid = "testbed-test"
     self.testbed.activate()
     self.testbed.init_datastore_v3_stub()
     self.testbed.init_memcache_stub()
@@ -965,8 +964,9 @@ class BlobstoreLineInputReaderBlobstoreStubTest(unittest.TestCase):
   def setUp(self):
     unittest.TestCase.setUp(self)
 
-    self.appid = "testapp"
-    os.environ["APPLICATION_ID"] = self.appid
+    self.appid = "testbed-test"
+    from google.appengine.api.full_app_id import put
+    put(self.appid)
 
     self.blob_storage = dict_blob_storage.DictBlobStorage()
     self.blobstore = blobstore_stub.BlobstoreServiceStub(self.blob_storage)
@@ -1082,8 +1082,7 @@ class BlobstoreLineInputReaderTest(unittest.TestCase):
   def setUp(self):
     unittest.TestCase.setUp(self)
 
-    self.appid = "testapp"
-    os.environ["APPLICATION_ID"] = self.appid
+    self.appid = "testbed-test"
 
   # pylint: disable=unused-argument
   def initMockedBlobstoreLineReader(self,
@@ -1286,8 +1285,7 @@ class BlobstoreZipInputReaderTest(unittest.TestCase):
   def setUp(self):
     unittest.TestCase.setUp(self)
 
-    self.appid = "testapp"
-    os.environ["APPLICATION_ID"] = self.appid
+    self.appid = "testbed-test"
 
     self.zipdata = io.BytesIO()
     archive = zipfile.ZipFile(self.zipdata, "w")
@@ -1354,8 +1352,7 @@ class BlobstoreZipLineInputReaderTest(unittest.TestCase):
   def setUp(self):
     unittest.TestCase.setUp(self)
 
-    self.appid = "testapp"
-    os.environ["APPLICATION_ID"] = self.appid
+    self.appid = "testbed-test"
 
   def create_zip_data(self, blob_count):
     """Create blob_count blobs with uneven zip data."""
@@ -1635,7 +1632,6 @@ class NamespaceInputReaderTest(unittest.TestCase):
         "mapper_params": {"batch_size": 2},
         "mapper_shard_count": 10})
 
-    os.environ["APPLICATION_ID"] = self.app_id
 
     self.datastore = datastore_file_stub.DatastoreFileStub(
         self.app_id, "/dev/null", "/dev/null")

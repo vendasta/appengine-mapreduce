@@ -105,7 +105,7 @@ class NamespaceRangeIterationTest(unittest.TestCase):
   def setUp(self):
     unittest.TestCase.setUp(self)
     namespace_range._setup_constants('abc', 3, 3)
-    self.app_id = 'testapp'
+    self.app_id = 'testbed-test'
     os.environ['APPLICATION_ID'] = self.app_id
 
   def tearDown(self):
@@ -136,7 +136,7 @@ class NamespaceRangeSplitTest(unittest.TestCase):
     unittest.TestCase.setUp(self)
 
     namespace_range._setup_constants('abc', 3, 3)
-    self.app_id = 'testapp'
+    self.app_id = 'testbed-test'
     os.environ['APPLICATION_ID'] = self.app_id
     self.datastore = datastore_file_stub.DatastoreFileStub(
         self.app_id, '/dev/null', '/dev/null')
@@ -344,6 +344,3 @@ class NamespaceRangeSplitTest(unittest.TestCase):
         namespace_range.NamespaceRange.split(10,
                                              contiguous=True,
                                              can_query=lambda: True))
-
-if __name__ == '__main__':
-  unittest.main()

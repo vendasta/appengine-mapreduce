@@ -16,16 +16,6 @@ from testlib import testutil
 class HashEndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
   """End-to-end test for _HashPipeline."""
 
-  def setUp(self):
-    testutil.HandlerTestBase.setUp(self)
-    pipeline.Pipeline._send_mail = self._send_mail
-    self.emails = []
-
-  # pylint: disable=invalid-name
-  def _send_mail(self, sender, subject, body, html=None):
-    """Callback function for sending mail."""
-    self.emails.append((sender, subject, body, html))
-
   def testHashingMultipleFiles(self):
     """Test hashing files."""
     input_data = [(str(i), str(i)) for i in range(100)]
@@ -67,21 +57,10 @@ class HashEndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
       self.assertEqual(input_data[i], output_data[(3 * i)])
       self.assertEqual(input_data[i], output_data[(3 * i) + 1])
       self.assertEqual(input_data[i], output_data[(3 * i) + 2])
-    self.assertEqual(1, len(self.emails))
 
 
 class SortFileEndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
   """End-to-end test for _SortFilePipeline."""
-
-  def setUp(self):
-    testutil.HandlerTestBase.setUp(self)
-    pipeline.Pipeline._send_mail = self._send_mail
-    self.emails = []
-
-  # pylint: disable=invalid-name
-  def _send_mail(self, sender, subject, body, html=None):
-    """Callback function for sending mail."""
-    self.emails.append((sender, subject, body, html))
 
   def testSortFile(self):
     """Test sorting a file."""
@@ -116,7 +95,6 @@ class SortFileEndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerTestBa
           output_data.append((proto.key, proto.value))
 
     self.assertEqual(input_data, output_data)
-    self.assertEqual(1, len(self.emails))
 
 
 # pylint: disable=invalid-name
@@ -161,16 +139,6 @@ class FakeMergePipeline(base_handler.PipelineBase):
 class MergingReaderEndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
   """End-to-end test for MergingReader."""
 
-  def setUp(self):
-    testutil.HandlerTestBase.setUp(self)
-    pipeline.Pipeline._send_mail = self._send_mail
-    self.emails = []
-
-  # pylint: disable=invalid-name
-  def _send_mail(self, sender, subject, body, html=None):
-    """Callback function for sending mail."""
-    self.emails.append((sender, subject, body, html))
-
   def testMergeFiles(self):
     """Test merging multiple files."""
     input_data = [(str(i), "_" + str(i)) for i in range(100)]
@@ -200,9 +168,8 @@ class MergingReaderEndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerT
         output_data.append(record)
 
     expected_data = [
-        str((k, [v, v, v], False)) for (k, v) in input_data]
+        str((k, [v, v, v], False)).encode() for (k, v) in input_data]
     self.assertEqual(expected_data, output_data)
-    self.assertEqual(1, len(self.emails))
 
   def testPartialRecords(self):
     """Test merging into partial key values."""
@@ -250,24 +217,13 @@ class MergingReaderEndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerT
           ("3", ["c"], True),
           ("3", ["c"], False),
           ]
-      self.assertEqual([str(e) for e in expected_data], output_data)
+      self.assertEqual([str(e).encode() for e in expected_data], output_data)
     finally:
       shuffler._MergePipeline._MAX_VALUES_COUNT = self._prev_max_values_count
-    self.assertEqual(1, len(self.emails))
 
 
 class ShuffleEndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
   """End-to-end test for ShufflePipeline."""
-
-  def setUp(self):
-    testutil.HandlerTestBase.setUp(self)
-    pipeline.Pipeline._send_mail = self._send_mail
-    self.emails = []
-
-  # pylint: disable=invalid-name
-  def _send_mail(self, sender, subject, body, html=None):
-    """Callback function for sending mail."""
-    self.emails.append((sender, subject, body, html))
 
   def testShuffleNoData(self):
     test_filename = f"{self.gcsPrefix}/testfile"
@@ -288,7 +244,6 @@ class ShuffleEndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerTestBas
       blob = self.bucket.blob(filename)
       blob.reload()
       self.assertEqual(0, blob.size)
-    self.assertEqual(1, len(self.emails))
 
   def testShuffleNoFile(self):
     p = shuffler.ShufflePipeline(self.gcsPrefix, {"bucket_name": self.TEST_BUCKET}, [])
@@ -300,7 +255,6 @@ class ShuffleEndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerTestBas
       blob = self.bucket.blob(filename)
       blob.reload()
       self.assertEqual(0, blob.size)
-    self.assertEqual(1, len(self.emails))
 
   def testShuffleFiles(self):
     """Test shuffling multiple files."""
@@ -339,5 +293,4 @@ class ShuffleEndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerTestBas
     expected_data = sorted([
         (str(k), [str(v), str(v), str(v)]) for (k, v) in input_data])
     self.assertEqual(expected_data, output_data)
-    self.assertEqual(1, len(self.emails))
 

@@ -3,14 +3,6 @@
 
 """Testing large mapreduce jobs."""
 
-
-
-# Using opensource naming conventions, pylint: disable=g-bad-name
-
-import unittest
-
-
-import pipeline
 from google.appengine.ext import db
 
 from mapreduce import input_readers
@@ -19,10 +11,6 @@ from mapreduce import output_writers
 from mapreduce import records
 from mapreduce import test_support
 from testlib import testutil
-
-from google.cloud import storage
-
-_storage_client = storage.Client()
 
 
 class FakeEntity(db.Model):
@@ -44,15 +32,6 @@ def reduce_length(key, values):
 
 class LargeMapreduceTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
   """Large tests for MapperPipeline."""
-
-  def setUp(self):
-    testutil.HandlerTestBase.setUp(self)
-    pipeline.Pipeline._send_mail = self._send_mail
-    self.emails = []
-
-  def _send_mail(self, sender, subject, body, html=None):
-    """Callback function for sending mail."""
-    self.emails.append((sender, subject, body, html))
 
   def testLotsOfValuesForSingleKey(self):
     FakeEntity(data=str(1)).put()
@@ -77,9 +56,7 @@ class LargeMapreduceTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase
     p.start()
     test_support.execute_until_empty(self.taskqueue)
 
-    self.assertEqual(1, len(self.emails))
-    self.assertTrue(self.emails[0][1].startswith(
-        "Pipeline successful:"))
+    self.assertFalse(p.was_aborted)
 
     # Verify reduce output.
     p = mapreduce_pipeline.MapreducePipeline.from_id(p.pipeline_id)

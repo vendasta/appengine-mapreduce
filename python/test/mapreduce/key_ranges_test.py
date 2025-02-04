@@ -26,8 +26,7 @@ class KeyRangesTest(unittest.TestCase):
 
   def setUp(self):
     self.testbed = testbed.Testbed()
-    self.app = "foo"
-    os.environ["APPLICATION_ID"] = self.app
+    self.appid = "testbed-test"
     self.testbed.activate()
     self.testbed.init_datastore_v3_stub()
 
@@ -45,12 +44,12 @@ class KeyRangesTest(unittest.TestCase):
   def testKeyRangesFromNSRange(self):
     namespaces = ["1", "3", "5"]
     self.create_entities_in_multiple_ns(namespaces)
-    ns_range = namespace_range.NamespaceRange("0", "5", _app=self.app)
+    ns_range = namespace_range.NamespaceRange("0", "5", _app=self.appid)
     kranges = key_ranges.KeyRangesFactory.create_from_ns_range(ns_range)
 
-    expected = [key_range.KeyRange(namespace="1", _app=self.app),
-                key_range.KeyRange(namespace="3", _app=self.app),
-                key_range.KeyRange(namespace="5", _app=self.app)]
+    expected = [key_range.KeyRange(namespace="1", _app=self.appid),
+                key_range.KeyRange(namespace="3", _app=self.appid),
+                key_range.KeyRange(namespace="5", _app=self.appid)]
     self._assertEqualsAndSerialize(expected, kranges)
 
   def _assertEqualsAndSerialize(self, expected, kranges):

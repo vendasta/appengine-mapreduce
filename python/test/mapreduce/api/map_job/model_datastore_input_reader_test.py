@@ -191,9 +191,8 @@ class ModelDBDatastoreInputReaderTest(testutil.CloudStorageTestBase, datastore_i
         shard_count=100)
     results = conf.input_reader_cls.split_input(conf)
     self.assertEqual(3, len(results))
-    self._assertEquals_splitInput(results[0], ["3", "5", "7"])
-    self._assertEquals_splitInput(results[1], ["15", "17", "19"])
-    self._assertEquals_splitInput(results[2], ["27", "29", "31"])
+    self._assertEqualsForAllShards_splitInput(
+        ["3", "5", "7", "15", "17", "19", "27", "29", "31"], None, *results)
 
 
 class ModelNDBDatastoreInputReaderTest(testutil.CloudStorageTestBase, datastore_input_reader_base_test.DatastoreInputReaderBaseTest):

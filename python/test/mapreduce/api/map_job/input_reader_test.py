@@ -21,7 +21,3 @@ class InputReaderTest(unittest.TestCase):
     self.assertEqual(slice_ctx, reader._slice_ctx)
     reader.end_slice(slice_ctx)
     self.assertEqual(None, reader._slice_ctx)
-
-
-if __name__ == '__main__':
-  unittest.main()

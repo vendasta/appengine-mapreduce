@@ -120,7 +120,3 @@ class UserParametersTest(unittest.TestCase):
     self.assertEqual(parameters.config._SLICE_DURATION_SEC*1.1,
                      parameters._LEASE_DURATION_SEC)
     self.assertEqual(10*60+30, parameters._MAX_LEASE_DURATION_SEC)
-
-
-if __name__ == '__main__':
-  unittest.main()

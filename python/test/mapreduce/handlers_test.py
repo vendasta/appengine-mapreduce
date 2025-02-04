@@ -2014,7 +2014,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
         "create-1",
         "begin_shard-mapreduce0-1",
         "begin_slice-0",
-        "write-agd0ZXN0YXBwchALEgpUZXN0RW50aXR5GAEM",
+        "write-agx0ZXN0YmVkLXRlc3RyEAsSClRlc3RFbnRpdHkYAQw",
         "end_slice-0",
         "begin_slice-1",
         "end_slice-1",

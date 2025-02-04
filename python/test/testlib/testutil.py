@@ -169,17 +169,16 @@ class HandlerTestBase(unittest.TestCase):
   def setUp(self):
     unittest.TestCase.setUp(self)
 
-    self.appid = "testapp"
+    self.appid = "testbed-test"
     self.major_version_id = "1"
     self.version_id = self.major_version_id + ".23456789"
     self.module_id = "foo_module"
     self.host = "{}.{}.{}".format(
-        self.major_version_id, self.module_id, "testapp.appspot.com")
+        self.major_version_id, self.module_id, "testbed-test.appspot.com")
 
     self.testbed = testbed.Testbed()
     self.testbed.activate()
 
-    os.environ["APPLICATION_ID"] = self.appid
     os.environ["GAE_VERSION"] = self.version_id
     os.environ["GAE_SERVICE"] = self.module_id
     os.environ["DEFAULT_VERSION_HOSTNAME"] = "%s.appspot.com" % self.appid
@@ -190,6 +189,7 @@ class HandlerTestBase(unittest.TestCase):
     # HRD with no eventual consistency.
     policy = datastore_stub_util.PseudoRandomHRConsistencyPolicy(probability=1)
     self.testbed.init_datastore_v3_stub(consistency_policy=policy)
+    ndb.get_context().clear_cache()
     self.testbed.init_memcache_stub()
     self.testbed.init_taskqueue_stub()
     self.testbed.init_urlfetch_stub()
@@ -215,7 +215,6 @@ class HandlerTestBase(unittest.TestCase):
     self.client = self.app.test_client()
 
   def tearDown(self):
-    del os.environ["APPLICATION_ID"]
     del os.environ["GAE_VERSION"]
     del os.environ["GAE_SERVICE"]
     del os.environ["DEFAULT_VERSION_HOSTNAME"]
@@ -250,6 +249,11 @@ class CloudStorageTestBase(HandlerTestBase):
 
   TEST_BUCKET = "byates"
   TEST_TMP_BUCKET = "byates"
+
+  def setUp(self):
+    for blob in self.bucket.list_blobs(prefix=self.gcsPrefix):
+      blob.delete()
+    return super().setUp()
 
   @property
   def gcsPrefix(self):
