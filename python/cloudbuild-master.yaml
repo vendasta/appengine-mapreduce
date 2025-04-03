@@ -18,6 +18,7 @@ steps:
     dir: /workspace/python
     script: |
       #!/usr/bin/env bash
-      python3 -m build --sdist --wheel --outdir dist/
+      # Explicitly point build to the src directory
+      python3 -m build src --sdist --wheel --outdir dist/
       python3 -m twine upload --repository-url https://us-central1-python.pkg.dev/repcore-prod/python/ dist/*
     id: "publish"
