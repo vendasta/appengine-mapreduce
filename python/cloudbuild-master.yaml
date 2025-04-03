@@ -14,9 +14,9 @@ steps:
     id: "test"
 
   - name: 'python:3.9.4'
-    dir: /workspace/python/src
+    dir: /workspace/python
     script: |
       #!/usr/bin/env bash
-      python3 setup.py sdist
+      python3 -m build --sdist --wheel --outdir dist/
       python3 -m twine upload --repository-url https://us-central1-python.pkg.dev/repcore-prod/python/ dist/*
     id: "publish"
