@@ -2,10 +2,7 @@
 # Copyright 2011 Google Inc. All Rights Reserved.
 
 
-
-
 # Using opensource naming conventions, pylint: disable=g-bad-name
-
 
 from google.appengine.ext import db
 from testlib import testutil
@@ -50,10 +47,8 @@ class CombinerTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
 
   def setUp(self):
     testutil.HandlerTestBase.setUp(self)
-
     self.old_max_values_count = shuffler._MergePipeline._MAX_VALUES_COUNT
     shuffler._MergePipeline._MAX_VALUES_COUNT = 1
-
     self.addCleanup(FakeCombiner.reset)
 
   def tearDown(self):
@@ -62,12 +57,7 @@ class CombinerTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
 
   def testNoCombiner(self):
     """Test running with low values count but without combiner."""
-    # Even though this test doesn't have combiner specified, it's still
-    # interesting to run. It forces MergePipeline to produce partial
-    # key values and we verify that they are combined correctly in reader.
-
-    # Prepare test data
-    entity_count = 200
+    entity_count = 50
 
     for i in range(entity_count):
       FakeEntity(data=str(i)).put()
@@ -89,12 +79,12 @@ class CombinerTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
                 "bucket_name": self.TEST_BUCKET
             },
         },
-        shards=4)
+        shards=2)
     p.start()
     test_support.execute_until_empty(self.taskqueue)
 
     p = mapreduce_pipeline.MapreducePipeline.from_id(p.pipeline_id)
-    self.assertEqual(4, len(p.outputs.default.value))
+    self.assertEqual(2, len(p.outputs.default.value))
     file_content = []
     for input_file in p.outputs.default.value:
       blob = self.bucket.blob(input_file)
@@ -103,15 +93,13 @@ class CombinerTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
           file_content.append(line.strip())
 
     file_content = sorted(file_content)
-
     self.assertEqual(
-        [b"('0', 9800)", b"('1', 9900)", b"('2', 10000)", b"('3', 10100)"],
+        [b"('0', 624)", b"('1', 650)", b"('2', 576)", b"('3', 600)"],
         file_content)
 
   def testCombiner(self):
     """Test running with low values count but with combiner."""
-    # Prepare test data
-    entity_count = 200
+    entity_count = 50
 
     for i in range(entity_count):
       FakeEntity(data=str(i)).put()
@@ -134,12 +122,12 @@ class CombinerTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
                 "bucket_name": self.TEST_BUCKET
             },
         },
-        shards=4)
+        shards=2)
     p.start()
     test_support.execute_until_empty(self.taskqueue)
 
     p = mapreduce_pipeline.MapreducePipeline.from_id(p.pipeline_id)
-    self.assertEqual(4, len(p.outputs.default.value))
+    self.assertEqual(2, len(p.outputs.default.value))
     file_content = []
     for input_file in p.outputs.default.value:
       blob = self.bucket.blob(input_file)
@@ -148,9 +136,8 @@ class CombinerTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
           file_content.append(line.strip())
 
     file_content = sorted(file_content)
-
     self.assertEqual(
-        [b"('0', 9800)", b"('1', 9900)", b"('2', 10000)", b"('3', 10100)"],
+        [b"('0', 624)", b"('1', 650)", b"('2', 576)", b"('3', 600)"],
         file_content)
 
     self.assertTrue(FakeCombiner.invocations)

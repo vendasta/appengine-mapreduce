@@ -16,13 +16,12 @@
 
 """Utilities to aid in testing mapreduces."""
 
-
-
 import base64
 import collections
 import logging
 import os
 import re
+import time
 
 from flask import Flask
 from werkzeug.routing import RequestRedirect
@@ -36,6 +35,14 @@ from mapreduce import model
 _LOGGING_LEVEL = logging.ERROR
 logging.getLogger().setLevel(_LOGGING_LEVEL)
 
+# Maximum number of retries for a task
+MAX_TASK_RETRIES = 3
+# Delay between retries in seconds
+RETRY_DELAY = 0.1
+# Maximum number of empty task queue checks
+MAX_EMPTY_CHECKS = 10
+# Delay between empty checks in seconds
+EMPTY_CHECK_DELAY = 0.1
 
 def decode_task_payload(task):
   """Decodes POST task payload.
@@ -57,13 +64,33 @@ def decode_task_payload(task):
   # pylint: disable=protected-access
   return model.HugeTask._decode_payload(body)
 
-def execute_task(task, retries=0, handlers_map=None):
+def create_test_app(handlers_map=None):
+  """Creates a Flask test app with the mapreduce handlers."""
   if not handlers_map:
     handlers_map = mapreduce.create_handlers_map()
   
   app = Flask(__name__)
   for pattern, handler_class in handlers_map:
     app.add_url_rule(pattern, view_func=handler_class.as_view(pattern.lstrip("/")))
+  return app
+
+def execute_task(task, retries=0, app=None, handlers_map=None):
+  """Execute a single task.
+  
+  Args:
+    task: Task dict to execute
+    retries: Number of previous retries
+    app: Flask app to use (will create if None)
+    handlers_map: Handler map to use if creating new app
+    
+  Returns:
+    Handler class that executed the task
+  
+  Raises:
+    Exception if task fails after max retries
+  """
+  if not app:
+    app = create_test_app(handlers_map)
 
   name = task['name']
   method = task['method']
@@ -86,48 +113,48 @@ def execute_task(task, retries=0, handlers_map=None):
     raise Exception('Task failed with status %s' % result.status_code)
   
   rule, _ = app.url_map.bind('').match(url, method=method, return_rule=True)
-
   return app.view_functions[rule.endpoint].view_class
 
-
-def execute_all_tasks(taskqueue, queue="default", handlers_map=None):
+def execute_all_tasks(taskqueue, queue="default", app=None, handlers_map=None):
   """Run and remove all tasks in the taskqueue.
 
   Args:
     taskqueue: An instance of taskqueue stub.
     queue: Queue name to run all tasks from.
-    hanlders_map: see main.create_handlers_map.
+    app: Flask app to use (will create if None)
+    handlers_map: Handler map to use if creating new app
 
   Returns:
     task_run_counts: a dict from handler class to the number of tasks
       it handled.
   """
+  if not app:
+    app = create_test_app(handlers_map)
+
   tasks = taskqueue.GetTasks(queue)
   taskqueue.FlushQueue(queue)
   task_run_counts = collections.defaultdict(int)
+  
   for task in tasks:
     retries = 0
     while True:
       try:
-        handler = execute_task(task, retries, handlers_map=handlers_map)
+        handler = execute_task(task, retries, app=app)
         task_run_counts[handler] += 1
         break
-      # pylint: disable=broad-except
       except Exception as e:
         retries += 1
-        # Arbitrary large number.
-        if retries > 100:
-          logging.debug("Task %s failed for too many times. Giving up.",
-                        task["name"])
+        if retries > MAX_TASK_RETRIES:
+          logging.error("Task %s failed after %d retries", task["name"], retries)
           raise
         logging.debug(
             "Task %s is being retried for the %s time",
             task["name"],
             retries)
         logging.debug(e)
+        time.sleep(RETRY_DELAY)
 
   return task_run_counts
-
 
 def execute_until_empty(taskqueue, queue="default", handlers_map=None):
   """Execute taskqueue tasks until it becomes empty.
@@ -135,15 +162,26 @@ def execute_until_empty(taskqueue, queue="default", handlers_map=None):
   Args:
     taskqueue: An instance of taskqueue stub.
     queue: Queue name to run all tasks from.
-    hanlders_map: see main.create_handlers_map.
+    handlers_map: Handler map to use if creating new app
 
   Returns:
     task_run_counts: a dict from handler class to the number of tasks
       it handled.
   """
+  app = create_test_app(handlers_map)
   task_run_counts = collections.defaultdict(int)
-  while taskqueue.GetTasks(queue):
-    new_counts = execute_all_tasks(taskqueue, queue, handlers_map)
+  empty_checks = 0
+  
+  while empty_checks < MAX_EMPTY_CHECKS:
+    tasks = taskqueue.GetTasks(queue)
+    if not tasks:
+      empty_checks += 1
+      time.sleep(EMPTY_CHECK_DELAY)
+      continue
+      
+    empty_checks = 0
+    new_counts = execute_all_tasks(taskqueue, queue, app=app)
     for handler_cls in new_counts:
       task_run_counts[handler_cls] += new_counts[handler_cls]
+      
   return task_run_counts
