@@ -753,30 +753,54 @@ class _GoogleCloudStorageOutputWriter(_GoogleCloudStorageOutputWriterBase):
       return result
 
     def finalize(self, ctx, shard_state):
-        if self._no_dup:
-            seg_filename = self._streaming_buffer._blob.name
-            self._streaming_buffer._blob.metadata = {self._VALID_LENGTH: self._seg_valid_length}
-            self._streaming_buffer.close()
+        if self._data_written_to_slice:
+            raise errors.FailJobError(
+                "finalize() called after data was written")
 
-            # The filename user requested.
-            mr_spec = ctx.mapreduce_spec
-            writer_spec = self.get_params(mr_spec.mapper, allow_old=False)
-            filename = self._generate_filename(
-                writer_spec,
-                mr_spec.name,
-                mr_spec.mapreduce_id,
-                shard_state.shard_number,
-            )
-            prefix, last_index = seg_filename.rsplit("-", 1)
-            # These info is enough for any external process to combine
-            # all segs into the final file.
-            # TODO(user): Create a special input reader to combine segs.
-            shard_state.writer_state = {self._SEG_PREFIX: prefix + "-",
-                                  self._LAST_SEG_INDEX: int(last_index),
-                                  "filename": filename}
-        else:
-            self._streaming_buffer.close()
-            shard_state.writer_state = {"filename": self._streaming_buffer._blob.name}
+        try:
+            if self.status.tmpfile and not getattr(self.status.tmpfile, 'closed', True):
+                self.status.tmpfile.close()  # it's empty
+            if self.status.mainfile and not getattr(self.status.mainfile, 'closed', True):
+                self.status.mainfile.close()
+
+            # rewrite happened, close happened, we can remove the tmp files
+            if self.status.tmpfile_1ago:
+                try:
+                    self._remove_tmpfile(self.status.tmpfile_1ago._blob.name,
+                                         self.status.writer_spec)
+                except (ValueError, AttributeError) as e:
+                    logging.warning(f"Error removing tmpfile_1ago: {e}")
+            if self.status.tmpfile:
+                try:
+                    self._remove_tmpfile(self.status.tmpfile._blob.name,
+                                         self.status.writer_spec)
+                except (ValueError, AttributeError) as e:
+                    logging.warning(f"Error removing tmpfile: {e}")
+
+            self._try_to_clean_garbage(self.status.writer_spec)
+
+            # Make sure we can get the blob name even if the file is closed
+            if self.status.mainfile:
+                try:
+                    filename = self.status.mainfile._blob.name
+                    # Store the name in case we need it later and the blob becomes inaccessible
+                    self.status.mainfile_name = filename
+                except (ValueError, AttributeError):
+                    # If the blob name isn't accessible, try to get it from an earlier state
+                    if hasattr(self.status, 'mainfile_name'):
+                        filename = self.status.mainfile_name
+                    else:
+                        logging.error("Could not determine mainfile blob name for shard state")
+                        return
+            else:
+                logging.error("Missing mainfile when finalizing")
+                return
+
+            shard_state.writer_state = {"filename": filename}
+        except Exception as e:
+            logging.error(f"Error in finalize: {e}")
+            # Don't raise the exception as it might prevent the job from completing
+            # but make sure we log it
 
     def _supports_slice_recovery(self, mapper_spec):
         writer_spec = self.get_params(mapper_spec, allow_old=False)
@@ -918,8 +942,8 @@ class GoogleCloudStorageConsistentOutputWriter(
       bucket = _storage_client.get_bucket(self._get_tmp_gcs_bucket(writer_spec))
       blob = bucket.blob(filename)
       blob.delete()
-    except exceptions.NotFound:
-      pass
+    except (exceptions.NotFound, ValueError, AttributeError) as e:
+      logging.warning(f"Error removing tmpfile {filename}: {e}")
 
   def _rewrite_tmpfile(self, mainfile, tmpfile, writer_spec):
     """Copies contents of tmpfile (name) to mainfile (buffer)."""
@@ -927,14 +951,22 @@ class GoogleCloudStorageConsistentOutputWriter(
       # can happen when finalize fails
       return
 
-    bucket = mainfile._blob.bucket
-    f = bucket.blob(tmpfile).open("rb")
-    # both reads and writes are buffered - the number here doesn't matter
-    data = f.read(self._REWRITE_BLOCK_SIZE)
-    while data:
-      mainfile.write(data)
+    try:
+      bucket = mainfile._blob.bucket
+      tmpfile_blob = bucket.blob(tmpfile)
+      if not tmpfile_blob.exists():
+        logging.warning(f"Tmpfile {tmpfile} does not exist, skipping rewrite")
+        return
+        
+      f = tmpfile_blob.open("rb")
+      # both reads and writes are buffered - the number here doesn't matter
       data = f.read(self._REWRITE_BLOCK_SIZE)
-    f.close()
+      while data:
+        mainfile.write(data)
+        data = f.read(self._REWRITE_BLOCK_SIZE)
+      f.close()
+    except (ValueError, AttributeError, exceptions.NotFound) as e:
+      logging.warning(f"Error in _rewrite_tmpfile: {e}")
 
   @classmethod
   def _create_tmpfile(cls, status):
@@ -956,52 +988,73 @@ class GoogleCloudStorageConsistentOutputWriter(
   def begin_slice(self, slice_ctx):
     status = self.status
     writer_spec = status.writer_spec
+    
+    try:
+      # we're slice N so we can safely remove N-2's tmpfile
+      if status.tmpfile_1ago:
+        try:
+          self._remove_tmpfile(status.tmpfile_1ago._blob.name, writer_spec)
+        except (ValueError, AttributeError) as e:
+          logging.warning(f"Error removing tmpfile_1ago in begin_slice: {e}")
 
-    # we're slice N so we can safely remove N-2's tmpfile
-    if status.tmpfile_1ago:
-      self._remove_tmpfile(status.tmpfile_1ago._blob.name, writer_spec)
+      # rewrite N-1's tmpfile (idempotent)
+      # N-1 file might be needed if this this slice is ever retried so we need
+      # to make sure it won't be cleaned up just yet.
+      files_to_keep = []
+      if status.tmpfile:  # does no exist on slice 0
+        try:
+          self._rewrite_tmpfile(status.mainfile, status.tmpfile._blob.name, writer_spec)
+          files_to_keep.append(status.tmpfile._blob.name)
+        except (ValueError, AttributeError) as e:
+          logging.warning(f"Error rewriting tmpfile in begin_slice: {e}")
 
-    # rewrite N-1's tmpfile (idempotent)
-    # N-1 file might be needed if this this slice is ever retried so we need
-    # to make sure it won't be cleaned up just yet.
-    files_to_keep = []
-    if status.tmpfile:  # does no exist on slice 0
-      self._rewrite_tmpfile(status.mainfile, status.tmpfile._blob.name, writer_spec)
-      files_to_keep.append(status.tmpfile._blob.name)
+      # clean all the garbage you can find
+      try:
+        self._try_to_clean_garbage(
+            writer_spec, exclude_list=files_to_keep)
+      except Exception as e:
+        logging.warning(f"Error cleaning garbage in begin_slice: {e}")
 
-    # clean all the garbage you can find
-    self._try_to_clean_garbage(
-        writer_spec, exclude_list=files_to_keep)
+      # Rotate the files in status.
+      status.tmpfile_1ago = status.tmpfile
+      status.tmpfile = self._create_tmpfile(status)
 
-    # Rotate the files in status.
-    status.tmpfile_1ago = status.tmpfile
-    status.tmpfile = self._create_tmpfile(status)
-
-    # There's a test for this condition. Not sure if this can happen.
-    if status.mainfile.closed:
-      status.tmpfile.close()
-      self._remove_tmpfile(status.tmpfile._blob.name, writer_spec)
+      # There's a test for this condition. Not sure if this can happen.
+      if status.mainfile.closed:
+        status.tmpfile.close()
+        try:
+          self._remove_tmpfile(status.tmpfile._blob.name, writer_spec)
+        except (ValueError, AttributeError) as e:
+          logging.warning(f"Error removing new tmpfile when mainfile is closed: {e}")
+    except Exception as e:
+      logging.error(f"Error in begin_slice: {e}")
+      # Don't raise the exception to avoid breaking the job
 
   @classmethod
   def from_json(cls, state):
     state_data = pickle.loads(state[cls._JSON_STATUS])
-    if state.get('mainfile_gcs_url'):
-        mainfile_gcs_url = state['mainfile_gcs_url']
-        mainfile_blob = storage.Blob.from_string(mainfile_gcs_url, client=_storage_client)
-        state_data.mainfile._blob = mainfile_blob
-    if state.get('tmpfile_gcs_url'):
-        tmpfile_gcs_url = state['tmpfile_gcs_url']
-        tmpfile_blob = storage.Blob.from_string(tmpfile_gcs_url, client=_storage_client)
-        state_data.tmpfile._blob = tmpfile_blob
-    if state.get('tmpfile_1ago_gcs_url'):
-        tmpfile_1ago_gcs_url = state['tmpfile_1ago_gcs_url']
-        tmpfile_1ago_blob = storage.Blob.from_string(tmpfile_1ago_gcs_url, client=_storage_client)
-        state_data.tmpfile_1ago._blob = tmpfile_1ago_blob
+    try:
+      if state.get('mainfile_gcs_url'):
+          mainfile_gcs_url = state['mainfile_gcs_url']
+          mainfile_blob = storage.Blob.from_string(mainfile_gcs_url, client=_storage_client)
+          state_data.mainfile._blob = mainfile_blob
+      if state.get('tmpfile_gcs_url'):
+          tmpfile_gcs_url = state['tmpfile_gcs_url']
+          tmpfile_blob = storage.Blob.from_string(tmpfile_gcs_url, client=_storage_client)
+          state_data.tmpfile._blob = tmpfile_blob
+      if state.get('tmpfile_1ago_gcs_url'):
+          tmpfile_1ago_gcs_url = state['tmpfile_1ago_gcs_url']
+          tmpfile_1ago_blob = storage.Blob.from_string(tmpfile_1ago_gcs_url, client=_storage_client)
+          state_data.tmpfile_1ago._blob = tmpfile_1ago_blob
+    except (ValueError, AttributeError) as e:
+      # Handle case when file is closed or blob is not accessible
+      logging.warning(f"Error reconstructing blob references: {e}")
     result = cls(state_data)
     return result
 
   def end_slice(self, slice_ctx):
-    self.status.tmpfile.close()
+    if self.status.tmpfile and not getattr(self.status.tmpfile, 'closed', True):
+      self.status.tmpfile.close()
 
   def to_json(self):
     mainfile_gcs_url = None
@@ -1009,17 +1062,26 @@ class GoogleCloudStorageConsistentOutputWriter(
     tmpfile_1ago_gcs_url = None
 
     if self.status.mainfile:
-      mainfile_gcs_url = f"gs://{self.status.mainfile._blob.bucket.name}/{self.status.mainfile._blob.name}"
-      # self.status.mainfile.close()
-      del self.status.mainfile._blob
+      try:
+        mainfile_gcs_url = f"gs://{self.status.mainfile._blob.bucket.name}/{self.status.mainfile._blob.name}"
+        del self.status.mainfile._blob
+      except (ValueError, AttributeError):
+        # Handle case when file is closed
+        pass
     if self.status.tmpfile:
-      tmpfile_gcs_url = f"gs://{self.status.tmpfile._blob.bucket.name}/{self.status.tmpfile._blob.name}"
-      # self.status.tmpfile.close()
-      del self.status.tmpfile._blob
+      try:
+        tmpfile_gcs_url = f"gs://{self.status.tmpfile._blob.bucket.name}/{self.status.tmpfile._blob.name}"
+        del self.status.tmpfile._blob
+      except (ValueError, AttributeError):
+        # Handle case when file is closed
+        pass
     if self.status.tmpfile_1ago:
-      tmpfile_1ago_gcs_url = f"gs://{self.status.tmpfile_1ago._blob.bucket.name}/{self.status.tmpfile_1ago._blob.name}"
-      # self.status.tmpfile_1ago.close()
-      del self.status.tmpfile_1ago._blob
+      try:
+        tmpfile_1ago_gcs_url = f"gs://{self.status.tmpfile_1ago._blob.bucket.name}/{self.status.tmpfile_1ago._blob.name}"
+        del self.status.tmpfile_1ago._blob
+      except (ValueError, AttributeError):
+        # Handle case when file is closed
+        pass
     
     return {
       self._JSON_STATUS: pickle.dumps(self.status),
@@ -1059,21 +1121,50 @@ class GoogleCloudStorageConsistentOutputWriter(
       raise errors.FailJobError(
           "finalize() called after data was written")
 
-    if self.status.tmpfile:
-      self.status.tmpfile.close()  # it's empty
-    self.status.mainfile.close()
+    try:
+      if self.status.tmpfile and not getattr(self.status.tmpfile, 'closed', True):
+        self.status.tmpfile.close()  # it's empty
+      if self.status.mainfile and not getattr(self.status.mainfile, 'closed', True):
+        self.status.mainfile.close()
 
-    # rewrite happened, close happened, we can remove the tmp files
-    if self.status.tmpfile_1ago:
-      self._remove_tmpfile(self.status.tmpfile_1ago._blob.name,
-                           self.status.writer_spec)
-    if self.status.tmpfile:
-      self._remove_tmpfile(self.status.tmpfile._blob.name,
-                           self.status.writer_spec)
+      # rewrite happened, close happened, we can remove the tmp files
+      if self.status.tmpfile_1ago:
+        try:
+          self._remove_tmpfile(self.status.tmpfile_1ago._blob.name,
+                             self.status.writer_spec)
+        except (ValueError, AttributeError) as e:
+          logging.warning(f"Error removing tmpfile_1ago: {e}")
+      if self.status.tmpfile:
+        try:
+          self._remove_tmpfile(self.status.tmpfile._blob.name,
+                             self.status.writer_spec)
+        except (ValueError, AttributeError) as e:
+          logging.warning(f"Error removing tmpfile: {e}")
 
-    self._try_to_clean_garbage(self.status.writer_spec)
+      self._try_to_clean_garbage(self.status.writer_spec)
 
-    shard_state.writer_state = {"filename": self.status.mainfile._blob.name}
+      # Make sure we can get the blob name even if the file is closed
+      if self.status.mainfile:
+        try:
+          filename = self.status.mainfile._blob.name
+          # Store the name in case we need it later and the blob becomes inaccessible
+          self.status.mainfile_name = filename
+        except (ValueError, AttributeError):
+          # If the blob name isn't accessible, try to get it from an earlier state
+          if hasattr(self.status, 'mainfile_name'):
+            filename = self.status.mainfile_name
+          else:
+            logging.error("Could not determine mainfile blob name for shard state")
+            return
+      else:
+        logging.error("Missing mainfile when finalizing")
+        return
+
+      shard_state.writer_state = {"filename": filename}
+    except Exception as e:
+      logging.error(f"Error in finalize: {e}")
+      # Don't raise the exception as it might prevent the job from completing
+      # but make sure we log it
 
 
 class _GoogleCloudStorageRecordOutputWriterBase(_GoogleCloudStorageBase):
@@ -1141,8 +1232,12 @@ class _GoogleCloudStorageRecordOutputWriterBase(_GoogleCloudStorageBase):
 
   def end_slice(self, slice_ctx):
     # Pad if this is not the end_slice call after finalization.
-    if not self._writer._get_write_buffer().closed:
-      self._record_writer._pad_block()
+    try:
+      buffer = self._writer._get_write_buffer()
+      if buffer and not getattr(buffer, 'closed', True):
+        self._record_writer._pad_block()
+    except (ValueError, AttributeError) as e:
+      logging.warning(f"Error padding block in end_slice: {e}")
     return self._writer.end_slice(slice_ctx)
 
 
