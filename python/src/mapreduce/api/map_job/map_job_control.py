@@ -14,9 +14,9 @@
 # limitations under the License.
 """User API for controlling Map job execution."""
 
-from google.appengine.api import taskqueue
-from google.appengine.datastore import datastore_rpc
-from google.appengine.ext import db
+from google.cloud import ndb
+from pipeline import taskqueue_compat as taskqueue
+from mapreduce.compat import datastore_config
 from mapreduce import model
 from mapreduce import util
 from mapreduce.api.map_job import map_job_config
@@ -152,13 +152,8 @@ class Job:
         util._obj_to_path(job_config._hooks_cls))
 
     # Save states and enqueue task.
-    if in_xg_transaction:
-      propagation = db.MANDATORY
-    else:
-      propagation = db.INDEPENDENT
-
     state = None
-    @db.transactional(propagation=propagation)
+    @ndb.transactional()
     def _txn():
       state = cls.__create_and_save_state(job_config, mapreduce_spec)
       cls.__add_kickoff_task(job_config, mapreduce_spec)
@@ -216,8 +211,7 @@ class Job:
     state.active = True
     state.active_shards = 0
     state.app_id = job_config._app
-    config = datastore_rpc.Configuration(force_writes=job_config._force_writes)
-    state.put(config=config)
+    state.put()
     return state
 
   @classmethod

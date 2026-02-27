@@ -81,8 +81,8 @@ class HugeTask:
   PAYLOAD_KEY_PARAM = "__payload_key"
 
   # Leave some wiggle room for headers and other fields.
-  MAX_TASK_PAYLOAD = taskqueue.MAX_PUSH_TASK_SIZE_BYTES - 1024
-  MAX_DB_PAYLOAD = datastore_rpc.BaseConnection.MAX_RPC_BYTES
+  MAX_TASK_PAYLOAD = 102400 - 1024  # 100KB max push task size minus headroom
+  MAX_DB_PAYLOAD = datastore_config.MAX_RPC_BYTES
 
   PAYLOAD_VERSION_HEADER = "AE-MR-Payload-Version"
   # Update version when payload handling is changed
