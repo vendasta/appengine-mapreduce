@@ -23,8 +23,6 @@ import datetime
 import math
 
 from google.cloud import ndb
-
-from google.appengine.ext import db
 from mapreduce import errors
 from mapreduce import util
 
@@ -143,12 +141,9 @@ class PropertyRange:
       raise errors.BadReaderParamsError(
           "Filter should contains a complete range on property %s",
           range_property)
-    if issubclass(model_class, db.Model):
-      property_obj = model_class.properties()[range_property]
-    else:
-      property_obj = (
-          model_class._properties[  # pylint: disable=protected-access
-              range_property])
+    property_obj = (
+        model_class._properties[  # pylint: disable=protected-access
+            range_property])
     supported_properties = (
         list(_DISCRETE_PROPERTY_SPLIT_FUNCTIONS.keys()) +
         list(_CONTINUOUS_PROPERTY_SPLIT_FUNCTIONS.keys()))
@@ -211,14 +206,9 @@ class PropertyRange:
     Returns:
       a db.Query or ndb.Query, depends on the model class's type.
     """
-    if issubclass(self.model_class, db.Model):
-      query = db.Query(self.model_class, namespace=ns)
-      for f in self.filters:
-        query.filter("{} {}".format(f[0], f[1]), f[2])
-    else:
-      query = self.model_class.query(namespace=ns)
-      for f in self.filters:
-        query = query.filter(ndb.FilterNode(*f))
+    query = self.model_class.query(namespace=ns)
+    for f in self.filters:
+      query = query.filter(ndb.FilterNode(*f))
     return query
 
   @property
@@ -406,19 +396,12 @@ def _ord_to_str(ordinal, weights):
 # They return at most n+1 points, forming n ranges.
 # Each range should be include_start, exclude_end.
 _DISCRETE_PROPERTY_SPLIT_FUNCTIONS = {
-    db.DateTimeProperty: _split_datetime_property,
-    db.IntegerProperty: _split_integer_property,
-    db.StringProperty: _split_string_property,
-    db.ByteStringProperty: _split_byte_string_property,
-    # ndb.
     ndb.DateTimeProperty: _split_datetime_property,
     ndb.IntegerProperty: _split_integer_property,
     ndb.StringProperty: _split_string_property,
-    ndb.BlobProperty: _split_byte_string_property
+    ndb.BlobProperty: _split_byte_string_property,
 }
 
 _CONTINUOUS_PROPERTY_SPLIT_FUNCTIONS = {
-    db.FloatProperty: _split_float_property,
-    # ndb.
     ndb.FloatProperty: _split_float_property,
 }

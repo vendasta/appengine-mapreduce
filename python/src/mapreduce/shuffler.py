@@ -35,7 +35,7 @@ import time
 
 import pipeline
 from pipeline import common as pipeline_common
-from google.appengine.ext import db
+from google.cloud import ndb
 from mapreduce import context
 from mapreduce import errors
 from mapreduce import input_readers
@@ -54,15 +54,14 @@ from google.api_core.retry import Retry
 
 _storage_client = storage.Client()
 
-class _OutputFile(db.Model):
+class _OutputFile(ndb.Model):
   """Entity to store output filenames of pipelines.
 
   These entities are always children of key returned by get_root_key().
   """
 
   @classmethod
-  def kind(cls):
-    """Returns entity kind."""
+  def _get_kind(cls):
     return "_AE_MR_OutputFile"
 
   @classmethod
@@ -75,7 +74,7 @@ class _OutputFile(db.Model):
     Returns:
       root key for a given job id to store output file entities.
     """
-    return db.Key.from_path(cls.kind(), job_id)
+    return ndb.Key(cls._get_kind(), job_id)
 
 
 class _BatchGCSRecordsReader(
@@ -145,7 +144,7 @@ def _sort_records_map(records):
   logging.debug("Finalizing")
   filehandle.close()
 
-  entity = _OutputFile(key_name=full_filename,
+  entity = _OutputFile(id=full_filename,
                        parent=_OutputFile.get_root_key(ctx.mapreduce_id))
   entity.put()
 
@@ -204,8 +203,8 @@ class _CollectOutputFiles(pipeline_base.PipelineBase):
   def run(self, job_ids):
     result = []
     for job_id in job_ids:
-      entities = _OutputFile.all().ancestor(_OutputFile.get_root_key(job_id))
-      result.append([entity.key().name() for entity in entities])
+      entities = _OutputFile.query(ancestor=_OutputFile.get_root_key(job_id))
+      result.append([entity.key.string_id() for entity in entities])
     return result
 
 
@@ -218,7 +217,9 @@ class _CleanupOutputFiles(pipeline_base.PipelineBase):
 
   def run(self, job_ids):
     for job_id in job_ids:
-      db.delete(_OutputFile.all().ancestor(_OutputFile.get_root_key(job_id)))
+      keys = _OutputFile.query(
+          ancestor=_OutputFile.get_root_key(job_id)).fetch(keys_only=True)
+      ndb.delete_multi(keys)
 
 
 class _MergingReader(input_readers.InputReader):

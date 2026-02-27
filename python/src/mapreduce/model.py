@@ -59,14 +59,13 @@ _MAP_REDUCE_KINDS = ("_AE_MR_MapreduceControl",
                      "_AE_MR_TaskPayload")
 
 
-class _HugeTaskPayload(db.Model):
+class _HugeTaskPayload(ndb.Model):
   """Model object to store task payload."""
 
-  payload = db.BlobProperty()
+  payload = ndb.BlobProperty()
 
   @classmethod
-  def kind(cls):
-    """Returns entity kind."""
+  def _get_kind(cls):
     return "_AE_MR_TaskPayload"
 
 
@@ -149,7 +148,7 @@ class HugeTask:
         payload_entity = _HugeTaskPayload(payload=compressed_payload,
                           parent=parent)
         payload_key = payload_entity.put()
-        self._payload = self.PAYLOAD_KEY_PARAM + str(payload_key)
+        self._payload = self.PAYLOAD_KEY_PARAM + payload_key.urlsafe().decode()
 
   def add(self, queue_name, transactional=False):
     """Add task to the queue."""
@@ -199,8 +198,9 @@ class HugeTask:
   def _decode_payload(cls, body):
     compressed_payload_str = None
     if body.startswith(cls.PAYLOAD_KEY_PARAM):
-      payload_key = body[len(cls.PAYLOAD_KEY_PARAM):]
-      payload_entity = _HugeTaskPayload.get(payload_key)
+      payload_key_str = body[len(cls.PAYLOAD_KEY_PARAM):]
+      payload_key = ndb.Key(urlsafe=payload_key_str)
+      payload_entity = payload_key.get()
       compressed_payload_str = payload_entity.payload
     elif body.startswith(cls.PAYLOAD_PARAM):
       compressed_payload_str = body[len(cls.PAYLOAD_PARAM):]
@@ -548,30 +548,11 @@ class MapreduceSpec(json_util.JsonMixin):
     return spec
 
 
-class MapreduceState(db.Model):
+class MapreduceState(ndb.Model):
   """Holds accumulated state of mapreduce execution.
 
   MapreduceState is stored in datastore with a key name equal to the
   mapreduce ID. Only controller tasks can write to MapreduceState.
-
-  Properties:
-    mapreduce_spec: cached deserialized MapreduceSpec instance. read-only
-    active: if this MR is still running.
-    last_poll_time: last time controller job has polled this mapreduce.
-    counters_map: shard's counters map as CountersMap. Mirrors
-      counters_map_json.
-    chart_url: last computed mapreduce status chart url. This chart displays the
-      progress of all the shards the best way it can.
-    sparkline_url: last computed mapreduce status chart url in small format.
-    result_status: If not None, the final status of the job.
-    active_shards: How many shards are still processing. This starts as 0,
-      then set by KickOffJob handler to be the actual number of input
-      readers after input splitting, and is updated by Controller task
-      as shards finish.
-    start_time: When the job started.
-    writer_state: Json property to be used by writer to store its state.
-      This is filled when single output per job. Will be deprecated.
-      Use OutputWriter.get_filenames instead.
   """
 
   RESULT_SUCCESS = "success"
@@ -580,70 +561,38 @@ class MapreduceState(db.Model):
 
   _RESULTS = frozenset([RESULT_SUCCESS, RESULT_FAILED, RESULT_ABORTED])
 
-  # Functional properties.
-  # TODO(user): Replace mapreduce_spec with job_config.
-  mapreduce_spec = json_util.JsonProperty(MapreduceSpec, indexed=False)
-  active = db.BooleanProperty(default=True, indexed=False)
-  last_poll_time = db.DateTimeProperty(required=True)
-  counters_map = json_util.JsonProperty(
-      CountersMap, default=CountersMap(), indexed=False)
-  app_id = db.StringProperty(required=False, indexed=True)
-  writer_state = json_util.JsonProperty(dict, indexed=False)
-  active_shards = db.IntegerProperty(default=0, indexed=False)
-  failed_shards = db.IntegerProperty(default=0, indexed=False)
-  aborted_shards = db.IntegerProperty(default=0, indexed=False)
-  result_status = db.StringProperty(required=False, choices=_RESULTS)
+  mapreduce_spec = json_util.JsonProperty(MapreduceSpec)
+  active = ndb.BooleanProperty(default=True)
+  last_poll_time = ndb.DateTimeProperty()
+  counters_map = json_util.JsonProperty(CountersMap, default=CountersMap())
+  app_id = ndb.StringProperty(indexed=True)
+  writer_state = json_util.JsonProperty(dict)
+  active_shards = ndb.IntegerProperty(default=0)
+  failed_shards = ndb.IntegerProperty(default=0)
+  aborted_shards = ndb.IntegerProperty(default=0)
+  result_status = ndb.StringProperty(choices=list(_RESULTS))
 
-  # For UI purposes only.
-  chart_url = db.TextProperty(default="")
-  chart_width = db.IntegerProperty(default=300, indexed=False)
-  sparkline_url = db.TextProperty(default="")
-  start_time = db.DateTimeProperty(auto_now_add=True)
+  chart_url = ndb.TextProperty(default="")
+  chart_width = ndb.IntegerProperty(default=300)
+  sparkline_url = ndb.TextProperty(default="")
+  start_time = ndb.DateTimeProperty(auto_now_add=True)
 
   @classmethod
-  def kind(cls):
-    """Returns entity kind."""
+  def _get_kind(cls):
     return "_AE_MR_MapreduceState"
 
   @classmethod
   def get_key_by_job_id(cls, mapreduce_id):
-    """Retrieves the Key for a Job.
-
-    Args:
-      mapreduce_id: The job to retrieve.
-
-    Returns:
-      Datastore Key that can be used to fetch the MapreduceState.
-    """
-    return db.Key.from_path(cls.kind(), str(mapreduce_id))
+    return ndb.Key(cls._get_kind(), str(mapreduce_id))
 
   @classmethod
   def get_by_job_id(cls, mapreduce_id):
-    """Retrieves the instance of state for a Job.
-
-    Args:
-      mapreduce_id: The mapreduce job to retrieve.
-
-    Returns:
-      instance of MapreduceState for passed id.
-    """
-    return db.get(cls.get_key_by_job_id(mapreduce_id))
+    return cls.get_key_by_job_id(mapreduce_id).get()
 
   def set_processed_counts(self, shards_processed, shards_status):
-    """Updates a chart url to display processed count for each shard.
-
-    Args:
-      shards_processed: list of integers with number of processed entities in
-        each shard
-    """
     pass
 
   def get_processed(self):
-    """Number of processed entities.
-
-    Returns:
-      The total number of processed entities as int.
-    """
     return self.counters_map.get(context.COUNTER_MAPPER_CALLS)
 
   processed = property(get_processed)
@@ -651,28 +600,21 @@ class MapreduceState(db.Model):
   @staticmethod
   def create_new(mapreduce_id=None,
                  gettime=datetime.datetime.now):
-    """Create a new MapreduceState.
-
-    Args:
-      mapreduce_id: Mapreduce id as string.
-      gettime: Used for testing.
-    """
     if not mapreduce_id:
       mapreduce_id = MapreduceState.new_mapreduce_id()
-    state = MapreduceState(key_name=mapreduce_id,
+    state = MapreduceState(id=mapreduce_id,
                            last_poll_time=gettime())
     state.set_processed_counts([], [])
     return state
 
   @staticmethod
   def new_mapreduce_id():
-    """Generate new mapreduce id."""
     return util._get_descending_key()
 
   def __eq__(self, other):
     if not isinstance(other, self.__class__):
       return False
-    return self.properties() == other.properties()
+    return self._properties == other._properties
 
 
 class TransientShardState:
@@ -801,94 +743,37 @@ class TransientShardState:
                handler=handler)
 
 
-class ShardState(db.Model):
-  """Single shard execution state.
-
-  The shard state is stored in the datastore and is later aggregated by
-  controller task. ShardState key_name is equal to shard_id.
-
-  Shard state contains critical state to ensure the correctness of
-  shard execution. It is the single source of truth about a shard's
-  progress. For example:
-  1. A slice is allowed to run only if its payload matches shard state's
-     expectation.
-  2. A slice is considered running only if it has acquired the shard's lock.
-  3. A slice is considered done only if it has successfully committed shard
-     state to db.
-
-  Properties about the shard:
-    active: if we have this shard still running as boolean.
-    counters_map: shard's counters map as CountersMap. All counters yielded
-      within mapreduce are stored here.
-    mapreduce_id: unique id of the mapreduce.
-    shard_id: unique id of this shard as string.
-    shard_number: ordered number for this shard.
-    retries: the number of times this shard has been retried.
-    result_status: If not None, the final status of this shard.
-    update_time: The last time this shard state was updated.
-    shard_description: A string description of the work this shard will do.
-    last_work_item: A string description of the last work item processed.
-    writer_state: writer state for this shard. The shard's output writer
-      instance can save in-memory output references to this field in its
-      "finalize" method.
-
-   Properties about slice management:
-    slice_id: slice id of current executing slice. A slice's task
-      will not run unless its slice_id matches this. Initial
-      value is 0. By the end of slice execution, this number is
-      incremented by 1.
-    slice_start_time: a slice updates this to now at the beginning of
-      execution. If the transaction succeeds, the current task holds
-      a lease of slice duration + some grace period. During this time, no
-      other task with the same slice_id will execute. Upon slice failure,
-      the task should try to unset this value to allow retries to carry on
-      ASAP.
-    slice_request_id: the request id that holds/held the lease. When lease has
-      expired, new request needs to verify that said request has indeed
-      ended according to logs API. Do this only when lease has expired
-      because logs API is expensive. This field should always be set/unset
-      with slice_start_time. It is possible Logs API doesn't log a request
-      at all or doesn't log the end of a request. So a new request can
-      proceed after a long conservative timeout.
-    slice_retries: the number of times a slice has been retried due to
-      processing data when lock is held. Taskqueue/datastore errors
-      related to slice/shard management are not counted. This count is
-      only a lower bound and is used to determined when to fail a slice
-      completely.
-    acquired_once: whether the lock for this slice has been acquired at
-      least once. When this is True, duplicates in outputs are possible.
-  """
+class ShardState(ndb.Model):
+  """Single shard execution state."""
 
   RESULT_SUCCESS = "success"
   RESULT_FAILED = "failed"
-  # Shard can be in aborted state when user issued abort, or controller
-  # issued abort because some other shard failed.
   RESULT_ABORTED = "aborted"
 
   _RESULTS = frozenset([RESULT_SUCCESS, RESULT_FAILED, RESULT_ABORTED])
 
-  # Maximum number of shard states to hold in memory at any time.
   _MAX_STATES_IN_MEMORY = 10
 
-  # Functional properties.
-  mapreduce_id = db.StringProperty(required=True)
-  active = db.BooleanProperty(default=True, indexed=False)
-  input_finished = db.BooleanProperty(default=False, indexed=False)
-  counters_map = json_util.JsonProperty(
-      CountersMap, default=CountersMap(), indexed=False)
-  result_status = db.StringProperty(choices=_RESULTS, indexed=False)
-  retries = db.IntegerProperty(default=0, indexed=False)
-  writer_state = json_util.JsonProperty(dict, indexed=False)
-  slice_id = db.IntegerProperty(default=0, indexed=False)
-  slice_start_time = db.DateTimeProperty(indexed=False)
-  slice_request_id = db.ByteStringProperty(indexed=False)
-  slice_retries = db.IntegerProperty(default=0, indexed=False)
-  acquired_once = db.BooleanProperty(default=False, indexed=False)
+  mapreduce_id = ndb.StringProperty(required=True)
+  active = ndb.BooleanProperty(default=True)
+  input_finished = ndb.BooleanProperty(default=False)
+  counters_map = json_util.JsonProperty(CountersMap, default=CountersMap())
+  result_status = ndb.StringProperty(choices=list(_RESULTS))
+  retries = ndb.IntegerProperty(default=0)
+  writer_state = json_util.JsonProperty(dict)
+  slice_id = ndb.IntegerProperty(default=0)
+  slice_start_time = ndb.DateTimeProperty()
+  slice_request_id = ndb.BlobProperty()
+  slice_retries = ndb.IntegerProperty(default=0)
+  acquired_once = ndb.BooleanProperty(default=False)
 
-  # For UI purposes only.
-  update_time = db.DateTimeProperty(auto_now=True, indexed=False)
-  shard_description = db.TextProperty(default="")
-  last_work_item = db.TextProperty(default="")
+  update_time = ndb.DateTimeProperty(auto_now=True)
+  shard_description = ndb.TextProperty(default="")
+  last_work_item = ndb.TextProperty(default="")
+
+  @classmethod
+  def _get_kind(cls):
+    return "_AE_MR_ShardState"
 
   def __str__(self):
     kv = {"active": self.active,
@@ -907,8 +792,7 @@ class ShardState(db.Model):
       kv["slice_request_id"] = self.slice_request_id
     if self.acquired_once:
       kv["acquired_once"] = self.acquired_once
-    keys = list(kv.keys())
-    keys.sort()
+    keys = sorted(kv.keys())
 
     result = "ShardState is {"
     for k in keys:
@@ -917,7 +801,6 @@ class ShardState(db.Model):
     return result
 
   def reset_for_retry(self):
-    """Reset self for shard retry."""
     self.retries += 1
     self.last_work_item = ""
     self.active = True
@@ -931,13 +814,6 @@ class ShardState(db.Model):
     self.acquired_once = False
 
   def advance_for_next_slice(self, recovery_slice=False):
-    """Advance self for next slice.
-
-    Args:
-      recovery_slice: True if this slice is running recovery logic.
-        See handlers.MapperWorkerCallbackHandler._attempt_slice_recovery
-        for more info.
-    """
     self.slice_start_time = None
     self.slice_request_id = None
     self.slice_retries = 0
@@ -970,103 +846,47 @@ class ShardState(db.Model):
     self.acquired_once = False
 
   def copy_from(self, other_state):
-    """Copy data from another shard state entity to self."""
-    for prop in list(self.properties().values()):
-      setattr(self, prop.name, getattr(other_state, prop.name))
+    for prop_name, prop in self._properties.items():
+      setattr(self, prop_name, getattr(other_state, prop_name))
 
   def __eq__(self, other):
     if not isinstance(other, self.__class__):
       return False
-    return self.properties() == other.properties()
+    return self._properties == other._properties
 
   def get_shard_number(self):
-    """Gets the shard number from the key name."""
-    return int(self.key().name().split("-")[-1])
+    return int(self.key.string_id().split("-")[-1])
 
   shard_number = property(get_shard_number)
 
   def get_shard_id(self):
-    """Returns the shard ID."""
-    return self.key().name()
+    return self.key.string_id()
 
   shard_id = property(get_shard_id)
 
   @classmethod
-  def kind(cls):
-    """Returns entity kind."""
-    return "_AE_MR_ShardState"
-
-  @classmethod
   def shard_id_from_number(cls, mapreduce_id, shard_number):
-    """Get shard id by mapreduce id and shard number.
-
-    Args:
-      mapreduce_id: mapreduce id as string.
-      shard_number: shard number to compute id for as int.
-
-    Returns:
-      shard id as string.
-    """
     return "%s-%d" % (mapreduce_id, shard_number)
 
   @classmethod
   def get_key_by_shard_id(cls, shard_id):
-    """Retrieves the Key for this ShardState.
-
-    Args:
-      shard_id: The shard ID to fetch.
-
-    Returns:
-      The Datatore key to use to retrieve this ShardState.
-    """
-    return db.Key.from_path(cls.kind(), shard_id)
+    return ndb.Key(cls._get_kind(), shard_id)
 
   @classmethod
   def get_by_shard_id(cls, shard_id):
-    """Get shard state from datastore by shard_id.
-
-    Args:
-      shard_id: shard id as string.
-
-    Returns:
-      ShardState for given shard id or None if it's not found.
-    """
-    return cls.get_by_key_name(shard_id)
+    return cls.get_by_id(shard_id)
 
   @classmethod
   def find_by_mapreduce_state(cls, mapreduce_state):
-    """Find all shard states for given mapreduce.
-
-    Deprecated. Use find_all_by_mapreduce_state.
-    This will be removed after 1.8.9 release.
-
-    Args:
-      mapreduce_state: MapreduceState instance
-
-    Returns:
-      A list of ShardStates.
-    """
     return list(cls.find_all_by_mapreduce_state(mapreduce_state))
 
   @classmethod
   def find_all_by_mapreduce_state(cls, mapreduce_state):
-    """Find all shard states for given mapreduce.
-
-    Args:
-      mapreduce_state: MapreduceState instance
-
-    Yields:
-      shard states sorted by shard id.
-    """
     keys = cls.calculate_keys_by_mapreduce_state(mapreduce_state)
     i = 0
     while i < len(keys):
-      @db.non_transactional
-      def no_tx_get(i):
-        return db.get(keys[i:i+cls._MAX_STATES_IN_MEMORY])
-      # We need a separate function to so that we can mix non-transactional and
-      # use be a generator
-      states = no_tx_get(i)
+      batch = keys[i:i+cls._MAX_STATES_IN_MEMORY]
+      states = ndb.get_multi(batch)
       for s in states:
         i += 1
         if s is not None:
@@ -1074,42 +894,24 @@ class ShardState(db.Model):
 
   @classmethod
   def calculate_keys_by_mapreduce_state(cls, mapreduce_state):
-    """Calculate all shard states keys for given mapreduce.
-
-    Args:
-      mapreduce_state: MapreduceState instance
-
-    Returns:
-      A list of keys for shard states, sorted by shard id.
-      The corresponding shard states may not exist.
-    """
     if mapreduce_state is None:
       return []
 
     keys = []
     for i in range(mapreduce_state.mapreduce_spec.mapper.shard_count):
-      shard_id = cls.shard_id_from_number(mapreduce_state.key().name(), i)
+      shard_id = cls.shard_id_from_number(mapreduce_state.key.string_id(), i)
       keys.append(cls.get_key_by_shard_id(shard_id))
     return keys
 
   @classmethod
   def create_new(cls, mapreduce_id, shard_number):
-    """Create new shard state.
-
-    Args:
-      mapreduce_id: unique mapreduce id as string.
-      shard_number: shard number for which to create shard state.
-
-    Returns:
-      new instance of ShardState ready to put into datastore.
-    """
     shard_id = cls.shard_id_from_number(mapreduce_id, shard_number)
-    state = cls(key_name=shard_id,
+    state = cls(id=shard_id,
                 mapreduce_id=mapreduce_id)
     return state
 
 
-class MapreduceControl(db.Model):
+class MapreduceControl(ndb.Model):
   """Datastore entity used to control mapreduce job execution.
 
   Only one command may be sent to jobs at a time.
@@ -1123,11 +925,10 @@ class MapreduceControl(db.Model):
   _COMMANDS = frozenset([ABORT])
   _KEY_NAME = "command"
 
-  command = db.TextProperty(choices=_COMMANDS, required=True)
+  command = ndb.TextProperty(choices=list(_COMMANDS))
 
   @classmethod
-  def kind(cls):
-    """Returns entity kind."""
+  def _get_kind(cls):
     return "_AE_MR_MapreduceControl"
 
   @classmethod
@@ -1140,7 +941,7 @@ class MapreduceControl(db.Model):
     Returns:
       Datastore Key for the command for the given job ID.
     """
-    return db.Key.from_path(cls.kind(), "{}:{}".format(mapreduce_id, cls._KEY_NAME))
+    return ndb.Key(cls._get_kind(), "{}:{}".format(mapreduce_id, cls._KEY_NAME))
 
   @classmethod
   def abort(cls, mapreduce_id, **kwargs):
@@ -1149,8 +950,8 @@ class MapreduceControl(db.Model):
     Args:
       mapreduce_id: The job to abort. Not verified as a valid job.
     """
-    cls(key_name="{}:{}".format(mapreduce_id, cls._KEY_NAME),
-        command=cls.ABORT).put(**kwargs)
+    cls(id="{}:{}".format(mapreduce_id, cls._KEY_NAME),
+        command=cls.ABORT).put()
 
 
 class QuerySpec:

@@ -124,14 +124,13 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
     """
     shard_id = request.headers.get(util._MR_SHARD_ID_TASK_HEADER)
     mr_id = request.headers.get(util._MR_ID_TASK_HEADER)
-    shard_state, mr_state = db.get([
+    shard_state, mr_state = ndb.get_multi([
         model.ShardState.get_key_by_shard_id(shard_id),
         model.MapreduceState.get_key_by_job_id(mr_id)])
 
     if shard_state and shard_state.active:
       shard_state.set_for_failure()
-      config = util.create_datastore_write_config(mr_state.mapreduce_spec)
-      shard_state.put(config=config)
+      shard_state.put()
 
   def _try_acquire_lease(self, shard_state, tstate):
     """Validate datastore and the task payload are consistent.
@@ -228,9 +227,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
               tstate.shard_id, tstate.slice_id,
               parameters._MAX_LEASE_DURATION_SEC)
 
-    # Lease expired or slice_start_time not set.
-    config = util.create_datastore_write_config(tstate.mapreduce_spec)
-    @db.transactional(retries=5)
+    @ndb.transactional(retries=5)
     def _tx():
       """Use datastore to set slice_start_time to now.
 
@@ -246,14 +243,14 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
       fresh_state = model.ShardState.get_by_shard_id(tstate.shard_id)
       if not fresh_state:
         logging.warning("ShardState missing.")
-        raise db.Rollback()
+        raise compat_exceptions.Rollback()
       if (fresh_state.active and
           fresh_state.slice_id == shard_state.slice_id and
           fresh_state.slice_start_time == shard_state.slice_start_time):
         shard_state.slice_start_time = datetime.datetime.now()
         shard_state.slice_request_id = os.environ.get("REQUEST_LOG_ID")
         shard_state.acquired_once = True
-        shard_state.put(config=config)
+        shard_state.put()
         return self._TASK_DIRECTIVE.PROCEED_TASK
       else:
         logging.warning(
@@ -308,11 +305,10 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
       shard_state: model.ShardState.
       slice_retry: whether to count this as a failed slice execution.
     """
-    @db.transactional
+    @ndb.transactional()
     def _tx():
       fresh_state = model.ShardState.get_by_shard_id(shard_state.shard_id)
       if fresh_state and fresh_state.active:
-        # Free lease.
         fresh_state.slice_start_time = None
         fresh_state.slice_request_id = None
         if slice_retry:
@@ -384,7 +380,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
     shard_id = self.request.headers.get(util._MR_SHARD_ID_TASK_HEADER)
     mr_id = self.request.headers.get(util._MR_ID_TASK_HEADER)
     spec = model.MapreduceSpec._get_mapreduce_spec(mr_id)
-    shard_state, control = db.get([
+    shard_state, control = ndb.get_multi([
         model.ShardState.get_key_by_shard_id(shard_id),
         model.MapreduceControl.get_key_by_job_id(mr_id),
     ])
@@ -534,9 +530,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
       # TODO(user): Validate these assumptions on all readers. MR should
       # also have a way to detect fake forward progress.
 
-      if isinstance(entity, db.Model):
-        shard_state.last_work_item = repr(entity.key())
-      elif isinstance(entity, ndb.Model):
+      if isinstance(entity, ndb.Model):
         shard_state.last_work_item = repr(entity.key)
       else:
         shard_state.last_work_item = repr(entity)[:100]
@@ -698,14 +692,13 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
                                 # For test only.
                                 # TODO(user): Remove this.
                                 "default")
-    config = util.create_datastore_write_config(spec)
 
-    @db.transactional(retries=5)
+    @ndb.transactional(retries=5)
     def _tx():
       """The Transaction helper."""
       fresh_shard_state = model.ShardState.get_by_shard_id(tstate.shard_id)
       if not fresh_shard_state:
-        raise db.Rollback()
+        raise compat_exceptions.Rollback()
       if (not fresh_shard_state.active or
           "worker_active_state_collision" in _TEST_INJECTED_FAULTS):
         logging.warning("Shard %s is not active. Possible spurious task "
@@ -714,7 +707,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
         logging.warning("Slice's %s", str(shard_state))
         return
       fresh_shard_state.copy_from(shard_state)
-      fresh_shard_state.put(config=config)
+      fresh_shard_state.put()
       # Add task in the same datastore transaction.
       # This way we guarantee taskqueue is never behind datastore states.
       # Old tasks will be dropped.
@@ -726,10 +719,10 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
 
     try:
       _tx()
-    except (datastore_errors.Error,
+    except (compat_exceptions.DatastoreError,
             taskqueue.Error,
-            runtime.DeadlineExceededError,
-            apiproxy_errors.Error) as e:
+            compat_exceptions.DeadlineExceededError,
+            compat_exceptions.ApiError) as e:
       logging.warning(
           "Can't transactionally continue shard. "
           "Will retry slice %s %s for the %s time.",
@@ -1034,25 +1027,22 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
 
     state.active = False
     state.result_status = model.MapreduceState.RESULT_FAILED
-    config = util.create_datastore_write_config(state.mapreduce_spec)
     puts = []
     for ss in model.ShardState.find_all_by_mapreduce_state(state):
       if ss.active:
         ss.set_for_failure()
         puts.append(ss)
-        # Avoid having too many shard states in memory.
         if len(puts) > model.ShardState._MAX_STATES_IN_MEMORY:
-          db.put(puts, config=config)
+          ndb.put_multi(puts)
           puts = []
-    db.put(puts, config=config)
-    # Put mr_state only after all shard_states are put.
-    db.put(state, config=config)
+    ndb.put_multi(puts)
+    state.put()
 
   def handle(self):
     """Handle request."""
     spec_str = self.request.get("mapreduce_spec")
     spec = model.MapreduceSpec.from_json_str(spec_str)
-    state, control = db.get([
+    state, control = ndb.get_multi([
         model.MapreduceState.get_key_by_job_id(spec.mapreduce_id),
         model.MapreduceControl.get_key_by_job_id(spec.mapreduce_id),
     ])
@@ -1144,19 +1134,16 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
       self._finalize_outputs(spec, state)
       self._finalize_job(spec, state)
     else:
-      @db.transactional(retries=5)
+      @ndb.transactional(retries=5)
       def _put_state():
         """The helper for storing the state."""
         fresh_state = model.MapreduceState.get_by_job_id(spec.mapreduce_id)
-        # We don't check anything other than active because we are only
-        # updating stats. It's OK if they are briefly inconsistent.
         if not fresh_state.active:
           logging.warning(
               "Job %s is not active. Looks like spurious task execution. "
               "Dropping controller task.", spec.mapreduce_id)
           return
-        config = util.create_datastore_write_config(spec)
-        state.put(config=config)
+        state.put()
 
       _put_state()
 
@@ -1192,7 +1179,6 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
       mapreduce_spec: an instance of MapreduceSpec
       mapreduce_state: an instance of MapreduceState
     """
-    config = util.create_datastore_write_config(mapreduce_spec)
     queue_name = util.get_queue_name(mapreduce_spec.params.get(
         model.MapreduceSpec.PARAM_DONE_CALLBACK_QUEUE))
     done_callback = mapreduce_spec.params.get(
@@ -1205,7 +1191,7 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
                                          util.CALLBACK_MR_ID_TASK_HEADER),
           method=mapreduce_spec.params.get("done_callback_method", "POST"))
 
-    @db.transactional(retries=5)
+    @ndb.transactional(retries=5)
     def _put_state():
       """Helper to store state."""
       fresh_state = model.MapreduceState.get_by_job_id(
@@ -1215,8 +1201,7 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
             "Job %s is not active. Looks like spurious task execution. "
             "Dropping task.", mapreduce_spec.mapreduce_id)
         return
-      mapreduce_state.put(config=config)
-      # Enqueue done_callback if needed.
+      mapreduce_state.put()
       if done_task and not _run_task_hook(
           mapreduce_spec.get_hooks(),
           "enqueue_done_task",
@@ -1375,8 +1360,7 @@ class KickOffJobHandler(base_handler.TaskQueueHandler):
       return
 
     # Issue abort command just in case there are running tasks.
-    config = util.create_datastore_write_config(state.mapreduce_spec)
-    model.MapreduceControl.abort(mr_id, config=config)
+    model.MapreduceControl.abort(mr_id)
 
     # Finalize job and invoke callback.
     state.active = False
@@ -1395,9 +1379,9 @@ class KickOffJobHandler(base_handler.TaskQueueHandler):
     (None, None) when input reader inplitting returned no data to process.
     """
     serialized_input_readers_key = (self._SERIALIZED_INPUT_READERS_KEY %
-                                    state.key().id_or_name())
-    serialized_input_readers = model._HugeTaskPayload.get_by_key_name(
-        serialized_input_readers_key, parent=state)
+                                    state.key.string_id())
+    serialized_input_readers = model._HugeTaskPayload.get_by_id(
+        serialized_input_readers_key, parent=state.key)
 
     # Initialize input readers.
     input_reader_class = state.mapreduce_spec.mapper.input_reader_class()
@@ -1424,7 +1408,7 @@ class KickOffJobHandler(base_handler.TaskQueueHandler):
     if serialized_input_readers is None:
       # Use mr_state as parent so it can be easily cleaned up later.
       serialized_input_readers = model._HugeTaskPayload(
-          key_name=serialized_input_readers_key, parent=state)
+          id=serialized_input_readers_key, parent=state.key)
       readers_json_str = [i.to_json_str() for i in readers]
       serialized_input_readers.payload = zlib.compress(json.dumps(readers_json_str).encode('utf-8'))
     return readers, serialized_input_readers
@@ -1435,7 +1419,7 @@ class KickOffJobHandler(base_handler.TaskQueueHandler):
       if output_writer_class:
         output_writer_class.init_job(state)
 
-  @db.transactional
+  @ndb.transactional()
   def _save_states(self, state, serialized_readers_entity):
     """Run transaction to save state.
 
@@ -1449,7 +1433,7 @@ class KickOffJobHandler(base_handler.TaskQueueHandler):
     immediately. True if transaction is successful. None if a previous
     attempt of this same transaction has already succeeded.
     """
-    mr_id = state.key().id_or_name()
+    mr_id = state.key.string_id()
     fresh_state = model.MapreduceState.get_by_job_id(mr_id)
     if not self._check_mr_state(fresh_state, mr_id):
       return False
@@ -1458,8 +1442,7 @@ class KickOffJobHandler(base_handler.TaskQueueHandler):
           "Mapreduce %s already has active shards. Looks like spurious task "
           "execution.", mr_id)
       return None
-    config = util.create_datastore_write_config(state.mapreduce_spec)
-    db.put([state, serialized_readers_entity], config=config)
+    ndb.put_multi([state, serialized_readers_entity])
     return True
 
   @classmethod
@@ -1490,16 +1473,13 @@ class KickOffJobHandler(base_handler.TaskQueueHandler):
       shard_state.shard_description = str(input_reader)
       shard_states.append(shard_state)
 
-    # Retrieves already existing shard states.
-    existing_shard_states = db.get(shard.key() for shard in shard_states)
-    existing_shard_keys = {shard.key() for shard in existing_shard_states
+    existing_shard_states = ndb.get_multi(
+        [shard.key for shard in shard_states])
+    existing_shard_keys = {shard.key for shard in existing_shard_states
                               if shard is not None}
 
-    # Save non existent shard states.
-    # Note: we could do this transactionally if necessary.
-    db.put((shard for shard in shard_states
-            if shard.key() not in existing_shard_keys),
-           config=util.create_datastore_write_config(spec))
+    ndb.put_multi([shard for shard in shard_states
+                   if shard.key not in existing_shard_keys])
 
     # Create output writers.
     writer_class = spec.mapper.output_writer_class()
@@ -1698,17 +1678,17 @@ class StartJobHandler(base_handler.PostJsonHandler):
       context.Context._set(None)
 
     # Save states and enqueue task.
-    if in_xg_transaction:
-      propagation = db.MANDATORY
-    else:
-      propagation = db.INDEPENDENT
-
-    @db.transactional(propagation=propagation)
+    @ndb.transactional()
     def _txn():
       cls._create_and_save_state(mapreduce_spec, _app)
       cls._add_kickoff_task(mapreduce_params["base_path"], mapreduce_spec, eta,
                             countdown, queue_name)
-    _txn()
+
+    if in_xg_transaction:
+      _txn()
+    else:
+      _txn()
+
 
     return mapreduce_id
 
@@ -1731,8 +1711,7 @@ class StartJobHandler(base_handler.PostJsonHandler):
     state.active_shards = 0
     if _app:
       state.app_id = _app
-    config = util.create_datastore_write_config(mapreduce_spec)
-    state.put(config=config)
+    state.put()
     return state
 
   @classmethod
@@ -1768,15 +1747,15 @@ class FinalizeJobHandler(base_handler.TaskQueueHandler):
     mapreduce_id = self.request.get("mapreduce_id")
     mapreduce_state = model.MapreduceState.get_by_job_id(mapreduce_id)
     if mapreduce_state:
-      config = (
-          util.create_datastore_write_config(mapreduce_state.mapreduce_spec))
       keys = [model.MapreduceControl.get_key_by_job_id(mapreduce_id)]
       for ss in model.ShardState.find_all_by_mapreduce_state(mapreduce_state):
-        keys.extend(list(
-            model._HugeTaskPayload.all().ancestor(ss).run(keys_only=True)))
-      keys.extend(list(model._HugeTaskPayload.all().ancestor(
-          mapreduce_state).run(keys_only=True)))
-      db.delete(keys, config=config)
+        keys.extend(
+            model._HugeTaskPayload.query(
+                ancestor=ss.key).fetch(keys_only=True))
+      keys.extend(
+          model._HugeTaskPayload.query(
+              ancestor=mapreduce_state.key).fetch(keys_only=True))
+      ndb.delete_multi(keys)
 
   @classmethod
   def schedule(cls, mapreduce_spec):
@@ -1815,8 +1794,8 @@ class CleanUpJobHandler(base_handler.PostJsonHandler):
     if mapreduce_state:
       shard_keys = model.ShardState.calculate_keys_by_mapreduce_state(
           mapreduce_state)
-      db.delete(shard_keys)
-      db.delete(mapreduce_state)
+      ndb.delete_multi(shard_keys)
+      mapreduce_state.key.delete()
     self.json_response["status"] = ("Job %s successfully cleaned up." %
                                     mapreduce_id)
 

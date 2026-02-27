@@ -31,7 +31,7 @@ from google.appengine.api import yaml_builder
 from google.appengine.api import yaml_errors
 from google.appengine.api import yaml_listener
 from google.appengine.api import yaml_object
-from google.appengine.ext import db
+from google.cloud import ndb
 from mapreduce import base_handler
 from mapreduce import errors
 from mapreduce import model
@@ -316,14 +316,15 @@ class ListJobsHandler(base_handler.GetJsonHandler):
     cursor = request.args.get("cursor")
     count = int(request.args.get("count", "50"))
 
-    query = model.MapreduceState.all()
+    query = model.MapreduceState.query()
     if cursor:
-      query.filter("__key__ >=", db.Key(cursor))
-    query.order("__key__")
+      query = query.filter(
+          model.MapreduceState.key >= ndb.Key(urlsafe=cursor))
+    query = query.order(model.MapreduceState.key)
 
     jobs_list = query.fetch(count + 1)
     if len(jobs_list) == (count + 1):
-      self.json_response["cursor"] = str(jobs_list[-1].key())
+      self.json_response["cursor"] = jobs_list[-1].key.urlsafe().decode()
       jobs_list = jobs_list[:-1]
 
     all_jobs = []

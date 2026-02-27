@@ -26,7 +26,7 @@ __all__ = ["start_map"]
 
 import logging
 
-from google.appengine.ext import db
+from google.cloud import ndb
 from mapreduce import handlers
 from mapreduce import model
 from mapreduce import parameters
@@ -107,7 +107,7 @@ def start_map(name,
                                  shard_count,
                                  output_writer_spec=output_writer_spec)
 
-  if in_xg_transaction and not db.is_in_transaction():
+  if in_xg_transaction and not ndb.in_transaction():
     logging.warning("Expects an opened xg transaction to start mapreduce "
                     "when transactional is True.")
 
