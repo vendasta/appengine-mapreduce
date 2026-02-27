@@ -33,10 +33,8 @@ import json
 
 from flask import request
 from google.cloud import ndb
-from google.appengine import runtime
-from google.appengine.api import datastore_errors
-from google.appengine.api import taskqueue
-from google.appengine.ext import db
+from google.api_core import exceptions as api_exceptions
+from pipeline import taskqueue_compat as taskqueue
 from mapreduce import base_handler
 from mapreduce import context
 from mapreduce import errors
@@ -49,7 +47,7 @@ from mapreduce import parameters
 from mapreduce import shard_life_cycle
 from mapreduce import util
 from mapreduce.api import map_job
-from google.appengine.runtime import apiproxy_errors
+from mapreduce.compat import exceptions as compat_exceptions
 
 # A guide to logging.
 # log.critical: messages user absolutely should see, e.g. failed job.

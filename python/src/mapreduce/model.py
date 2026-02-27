@@ -43,9 +43,9 @@ import urllib.error
 import urllib.parse
 import zlib
 
-from google.appengine.api import taskqueue
-from google.appengine.datastore import datastore_rpc
-from google.appengine.ext import db
+from google.cloud import ndb
+from pipeline import taskqueue_compat as taskqueue
+from mapreduce.compat import datastore_config
 
 from mapreduce import context, hooks, json_util, util
 

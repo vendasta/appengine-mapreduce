@@ -45,7 +45,7 @@ import types
 
 from google.cloud import ndb
 
-from google.appengine.datastore import datastore_rpc
+from mapreduce.compat import datastore_config
 from mapreduce import parameters
 
 # Taskqueue task header for mr id. Use internal by MR.
@@ -368,11 +368,7 @@ def create_datastore_write_config(mapreduce_spec):
     operations in the mapreduce.
   """
   force_writes = parse_bool(mapreduce_spec.params.get("force_writes", "false"))
-  if force_writes:
-    return datastore_rpc.Configuration(force_writes=force_writes)
-  else:
-    # dev server doesn't support force_writes.
-    return datastore_rpc.Configuration()
+  return datastore_config.Configuration(force_writes=force_writes)
 
 
 def _set_ndb_cache_policy():

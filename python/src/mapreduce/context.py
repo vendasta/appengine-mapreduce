@@ -36,13 +36,8 @@ import heapq
 import logging
 import threading
 
-try:
-  from google.cloud import ndb
-except ImportError:
-  ndb = None
-from google.appengine.api import datastore
-from google.appengine.ext import db
-from google.appengine.runtime import apiproxy_errors
+from google.cloud import ndb
+from mapreduce.compat import exceptions as compat_exceptions
 
 
 # Maximum number of items. Pool will be flushed when reaches this amount.
@@ -70,21 +65,19 @@ COUNTER_MAPPER_WALLTIME_MS = "mapper-walltime-ms"
 
 def _normalize_entity(value):
   """Return an entity from an entity or model instance."""
-  if ndb is not None and isinstance(value, ndb.Model):
-    return None
-  if getattr(value, "_populate_internal_entity", None):
-    return value._populate_internal_entity()
+  if isinstance(value, ndb.Model):
+    return value
   return value
 
 
 def _normalize_key(value):
   """Return a key from an entity, model instance, key, or key string."""
-  if ndb is not None and isinstance(value, (ndb.Model, ndb.Key)):
-    return None
-  if getattr(value, "key", None):
-    return value.key()
+  if isinstance(value, ndb.Model):
+    return value.key
+  elif isinstance(value, ndb.Key):
+    return value
   elif isinstance(value, str):
-    return datastore.Key(value)
+    return ndb.Key(urlsafe=value)
   else:
     return value
 
@@ -154,17 +147,24 @@ class _ItemList:
         self.__flush_function(self.items, options)
         self.clear()
         break
-      except db.Timeout as e:
+      except compat_exceptions.Timeout as e:
         logging.warning(e)
         logging.warning("Flushing '%s' timed out. Will retry for the %s time.",
                         self, retry)
         retry += 1
         options["deadline"] *= 2
-      except apiproxy_errors.RequestTooLargeError:
+      except compat_exceptions.DeadlineExceededError as e:
+        logging.warning(e)
+        logging.warning("Flushing '%s' timed out. Will retry for the %s time.",
+                        self, retry)
+        retry += 1
+        options["deadline"] *= 2
+      except compat_exceptions.RequestTooLargeError:
         self._log_largest_items()
         raise
     if retry > self.__timeout_retries:
-      raise db.Timeout('Flush operation timed out after %s retries' % retry)
+      raise compat_exceptions.Timeout(
+          'Flush operation timed out after %s retries' % retry)
 
   def _log_largest_items(self):
     if not self.__repr_function:
@@ -219,125 +219,53 @@ class _MutationPool(Pool):
   Properties:
     puts: _ItemList of entities to put to datastore.
     deletes: _ItemList of keys to delete from datastore.
-    ndb_puts: _ItemList of ndb entities to put to datastore.
-    ndb_deletes: _ItemList of ndb keys to delete from datastore.
   """
 
   def __init__(self,
                max_entity_count=MAX_ENTITY_COUNT,
                mapreduce_spec=None):
-    """Constructor.
-
-    Args:
-      max_entity_count: maximum number of entities before flushing it to db.
-      mapreduce_spec: An optional instance of MapperSpec.
-    """
     self.max_entity_count = max_entity_count
     params = mapreduce_spec.params if mapreduce_spec is not None else {}
     self.force_writes = bool(params.get("force_ops_writes", False))
     self.puts = _ItemList(max_entity_count,
                           self._flush_puts,
-                          repr_function=self._db_repr)
+                          repr_function=self._entity_repr)
     self.deletes = _ItemList(max_entity_count,
                              self._flush_deletes)
-    self.ndb_puts = _ItemList(max_entity_count,
-                              self._flush_ndb_puts,
-                              repr_function=self._ndb_repr)
-    self.ndb_deletes = _ItemList(max_entity_count,
-                                 self._flush_ndb_deletes)
+    # Keep ndb_puts/ndb_deletes as aliases for backward compatibility
+    self.ndb_puts = self.puts
+    self.ndb_deletes = self.deletes
 
   def put(self, entity):
-    """Registers entity to put to datastore.
-
-    Args:
-      entity: an entity or model instance to put.
-    """
-    actual_entity = _normalize_entity(entity)
-    if actual_entity is None:
-      return self.ndb_put(entity)
-    self.puts.append(actual_entity)
+    self.puts.append(_normalize_entity(entity))
 
   def ndb_put(self, entity):
-    """Like put(), but for NDB entities."""
-    assert ndb is not None and isinstance(entity, ndb.Model)
-    self.ndb_puts.append(entity)
+    assert isinstance(entity, ndb.Model)
+    self.puts.append(entity)
 
   def delete(self, entity):
-    """Registers entity to delete from datastore.
-
-    Args:
-      entity: an entity, model instance, or key to delete.
-    """
-    key = _normalize_key(entity)
-    if key is None:
-      return self.ndb_delete(entity)
-    self.deletes.append(key)
+    self.deletes.append(_normalize_key(entity))
 
   def ndb_delete(self, entity_or_key):
-    """Like delete(), but for NDB entities/keys."""
-    if ndb is not None and isinstance(entity_or_key, ndb.Model):
+    if isinstance(entity_or_key, ndb.Model):
       key = entity_or_key.key
     else:
       key = entity_or_key
-    self.ndb_deletes.append(key)
+    self.deletes.append(key)
 
   def flush(self):
-    """Flush(apply) all changed to datastore."""
     self.puts.flush()
     self.deletes.flush()
-    self.ndb_puts.flush()
-    self.ndb_deletes.flush()
 
   @classmethod
-  def _db_repr(cls, entity):
-    """Converts entity to a readable repr.
-
-    Args:
-      entity: datastore.Entity or datastore_types.Key.
-
-    Returns:
-      Proto in str.
-    """
-    return str(entity._ToPb())
-
-  @classmethod
-  def _ndb_repr(cls, entity):
-    """Converts entity to a readable repr.
-
-    Args:
-      entity: ndb.Model
-
-    Returns:
-      Proto in str.
-    """
+  def _entity_repr(cls, entity):
     return str(entity._to_pb())
 
   def _flush_puts(self, items, options):
-    """Flush all puts to datastore."""
-    datastore.Put(items, config=self._create_config(options))
+    ndb.put_multi(items)
 
   def _flush_deletes(self, items, options):
-    """Flush all deletes to datastore."""
-    datastore.Delete(items, config=self._create_config(options))
-
-  def _flush_ndb_puts(self, items, options):
-    """Flush all NDB puts to datastore."""
-    assert ndb is not None
-    ndb.put_multi(items, config=self._create_config(options))
-
-  def _flush_ndb_deletes(self, items, options):
-    """Flush all deletes to datastore."""
-    assert ndb is not None
-    ndb.delete_multi(items, config=self._create_config(options))
-
-  def _create_config(self, options):
-    """Creates datastore Config.
-
-    Returns:
-      A datastore_rpc.Configuration instance.
-    """
-    return datastore.CreateConfig(deadline=options["deadline"],
-                                  force_writes=self.force_writes)
+    ndb.delete_multi(items)
 
 
 class _Counters(Pool):

@@ -20,9 +20,6 @@ import logging
 import json
 import types
 
-from google.appengine.api import datastore_errors
-from google.appengine.api import datastore_types
-from google.appengine.ext import db
 from google.cloud import ndb
 
 # pylint: disable=invalid-name
@@ -168,7 +165,7 @@ class JsonMixin:
     return cls.from_json(json.loads(json_str, cls=JsonDecoder))
 
 
-class JsonProperty(db.UnindexedProperty):
+class JsonProperty(ndb.TextProperty):
   """Property type for storing json representation of data.
 
   Requires data types to implement two methods:
@@ -178,94 +175,30 @@ class JsonProperty(db.UnindexedProperty):
   """
 
   def __init__(self, data_type, default=None, **kwargs):
-    """Constructor.
-
-    Args:
-      data_type: underlying data type as class.
-      default: default value for the property. The value is deep copied
-        fore each model instance.
-      **kwargs: remaining arguments.
-    """
-    kwargs["default"] = default
-    super().__init__(**kwargs)
+    kwargs.pop("indexed", None)
+    super().__init__(default=default, **kwargs)
     self.data_type = data_type
 
-  def get_value_for_datastore(self, model_instance):
-    """Gets value for datastore.
+  def _validate(self, value):
+    if value is not None and not isinstance(value, self.data_type):
+      raise ValueError(
+          "Property %s must be convertible to a %s instance (%s)" %
+          (self._name, self.data_type, value))
 
-    Args:
-      model_instance: instance of the model class.
-
-    Returns:
-      datastore-compatible value.
-    """
-    value = super().get_value_for_datastore(model_instance)
-    if not value:
+  def _to_base_type(self, value):
+    if value is None:
       return None
     json_value = value
     if not isinstance(value, dict):
       json_value = value.to_json()
     if not json_value:
       return None
-    return datastore_types.Text(json.dumps(
-        json_value, sort_keys=True, cls=JsonEncoder))
+    return json.dumps(json_value, sort_keys=True, cls=JsonEncoder)
 
-  def make_value_from_datastore(self, value):
-    """Convert value from datastore representation.
-
-    Args:
-      value: datastore value.
-
-    Returns:
-      value to store in the model.
-    """
-
+  def _from_base_type(self, value):
     if value is None:
       return None
     _json = json.loads(value, cls=JsonDecoder)
     if self.data_type == dict:
       return _json
     return self.data_type.from_json(_json)
-
-  def validate(self, value):
-    """Validate value.
-
-    Args:
-      value: model value.
-
-    Returns:
-      Whether the specified value is valid data type value.
-
-    Raises:
-      BadValueError: when value is not of self.data_type type.
-    """
-    if value is not None and not isinstance(value, self.data_type):
-      raise datastore_errors.BadValueError(
-          "Property %s must be convertible to a %s instance (%s)" %
-          (self.name, self.data_type, value))
-    return super().validate(value)
-
-  def empty(self, value):
-    """Checks if value is empty.
-
-    Args:
-      value: model value.
-
-    Returns:
-      True passed value is empty.
-    """
-    return not value
-
-  def default_value(self):
-    """Create default model value.
-
-    If default option was specified, then it will be deeply copied.
-    None otherwise.
-
-    Returns:
-      default model value.
-    """
-    if self.default:
-      return copy.deepcopy(self.default)
-    else:
-      return None
