@@ -1,5 +1,6 @@
 --extra-index-url https://us-central1-python.pkg.dev/repcore-prod/python/simple/
 appengine-python-standard==1.1.5
+google-cloud-ndb==2.3.2
 attrs==24.2.0
 backports.tarfile==1.2.0
 blinker==1.9.0

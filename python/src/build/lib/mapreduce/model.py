@@ -43,7 +43,7 @@ import urllib.error
 import urllib.parse
 import zlib
 
-from google.appengine.api import memcache, taskqueue
+from google.appengine.api import taskqueue
 from google.appengine.datastore import datastore_rpc
 from google.appengine.ext import db
 
@@ -534,17 +534,17 @@ class MapreduceSpec(json_util.JsonMixin):
       return False
     return self.to_json() == other.to_json()
 
+  _spec_cache = {}
+
   @classmethod
   def _get_mapreduce_spec(cls, mr_id):
     """Get Mapreduce spec from mr id."""
-    key = 'GAE-MR-spec: %s' % mr_id
-    spec_json = memcache.get(key)
-    if spec_json:
-      return cls.from_json(spec_json)
+    if mr_id in cls._spec_cache:
+      return cls.from_json(cls._spec_cache[mr_id])
     state = MapreduceState.get_by_job_id(mr_id)
     spec = state.mapreduce_spec
     spec_json = spec.to_json()
-    memcache.set(key, spec_json)
+    cls._spec_cache[mr_id] = spec_json
     return spec
 
 

@@ -41,5 +41,6 @@ setuptools.setup(
     exclude_package_data={"": ["README"]},
     install_requires=[
         "GoogleAppEnginePipeline >= 2.0.0a0",
+        "google-cloud-ndb >= 2.0.0",
     ],
 )

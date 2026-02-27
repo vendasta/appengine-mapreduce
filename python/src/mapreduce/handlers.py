@@ -32,7 +32,7 @@ import zlib
 import json
 
 from flask import request
-from google.appengine.ext import ndb
+from google.cloud import ndb
 from google.appengine import runtime
 from google.appengine.api import datastore_errors
 from google.appengine.api import taskqueue

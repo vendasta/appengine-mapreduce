@@ -51,7 +51,7 @@ import io
 import time
 import zipfile
 
-from google.appengine.ext import ndb
+from google.cloud import ndb
 
 from google.appengine.api import datastore
 from google.appengine.ext import blobstore

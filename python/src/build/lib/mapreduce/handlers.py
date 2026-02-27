@@ -32,7 +32,7 @@ import traceback
 import zlib
 import json
 
-from google.appengine.ext import ndb
+from google.cloud import ndb
 
 from google.appengine import runtime
 from google.appengine.api import datastore_errors

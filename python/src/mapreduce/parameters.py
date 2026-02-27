@@ -32,8 +32,6 @@ try:
 except ImportError:
   pipeline_util = None
 
-from google.appengine.api import lib_config
-
 CONFIG_NAMESPACE = "mapreduce"
 
 
@@ -232,8 +230,7 @@ class _ConfigDefaults:
   _CONTROLLER_PERIOD_SEC = 2
 
 
-# TODO(user): changes this name to app_config
-config = lib_config.register(CONFIG_NAMESPACE, _ConfigDefaults.__dict__)
+config = _ConfigDefaults()
 
 
 # The following are constants that depends on the value of _config.

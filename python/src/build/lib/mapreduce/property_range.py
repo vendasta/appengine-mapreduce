@@ -22,7 +22,7 @@
 import datetime
 import math
 
-from google.appengine.ext import ndb
+from google.cloud import ndb
 
 from google.appengine.ext import db
 from mapreduce import errors

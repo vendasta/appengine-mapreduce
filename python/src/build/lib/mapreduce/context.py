@@ -37,7 +37,7 @@ import logging
 import threading
 
 try:
-  from google.appengine.ext import ndb
+  from google.cloud import ndb
 except ImportError:
   ndb = None
 from google.appengine.api import datastore

@@ -37,8 +37,9 @@ import sys
 
 from flask import Flask, redirect, render_template, request, url_for
 from flask.views import MethodView
-from google.appengine.api import app_identity, users, wrap_wsgi_app
+from google.appengine.api import users
 from google.appengine.ext import blobstore, db
+from pipeline import wrap_wsgi_app
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '../src'))
 
@@ -48,8 +49,9 @@ from mapreduce import base_handler, mapreduce_pipeline
 app = Flask(__name__)
 app.wsgi_app = wrap_wsgi_app(app.wsgi_app, use_legacy_context_mode=True)
 
-project_name = os.getenv('MAPREDUCE_TEST_PROJECT', app_identity.get_application_id())
-bucket_name = os.getenv('MAPREDUCE_TEST_BUCKET', app_identity.get_default_gcs_bucket_name())
+project_name = os.getenv('MAPREDUCE_TEST_PROJECT', os.environ.get('GOOGLE_CLOUD_PROJECT', ''))
+_default_bucket = os.environ.get('GOOGLE_CLOUD_PROJECT', '').split('~')[-1]
+bucket_name = os.getenv('MAPREDUCE_TEST_BUCKET', f"{_default_bucket}.appspot.com" if _default_bucket else '')
 
 class FileMetadata(db.Model):
   """A helper class that will hold metadata for the user's blobs.

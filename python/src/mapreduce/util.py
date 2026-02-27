@@ -43,7 +43,7 @@ import sys
 import time
 import types
 
-from google.appengine.ext import ndb
+from google.cloud import ndb
 
 from google.appengine.datastore import datastore_rpc
 from mapreduce import parameters

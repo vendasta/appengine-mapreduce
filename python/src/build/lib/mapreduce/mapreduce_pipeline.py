@@ -29,9 +29,10 @@ __all__ = [
     ]
 
 
+import os
+
 import pipeline
 from pipeline import common as pipeline_common
-from google.appengine.api import app_identity
 from mapreduce import errors
 from mapreduce import input_readers
 from mapreduce import mapper_pipeline
@@ -204,16 +205,19 @@ class MapreducePipeline(pipeline_base._OutputSlotsMixin,
     # Check that you have a bucket_name set in the mapper_params and set it
     # to the default if not.
     if mapper_params.get("bucket_name") is None:
-      try:
-        mapper_params["bucket_name"] = (
-            app_identity.get_default_gcs_bucket_name())
-      except Exception as e:
-        raise errors.Error("Unable to get the GCS default bucket name. "
-                           "Check to see that GCS is properly activated. "
-                           + str(e))
-    if mapper_params["bucket_name"] is None:
-      raise errors.Error("There is no GCS default bucket name. "
-                         "Check to see that GCS is properly activated.")
+      bucket_name = os.environ.get('GCS_BUCKET')
+      if bucket_name is None:
+        app_id = os.environ.get(
+            'GAE_APPLICATION', os.environ.get('GOOGLE_CLOUD_PROJECT'))
+        if app_id:
+          app_id = app_id.split('~')[-1]
+          bucket_name = f"{app_id}.appspot.com"
+      if bucket_name is None:
+        raise errors.Error(
+            "No default cloud storage bucket has been set. "
+            "Please set the GCS_BUCKET environment variable or ensure "
+            "GAE_APPLICATION or GOOGLE_CLOUD_PROJECT is set.")
+      mapper_params["bucket_name"] = bucket_name
     # TODO(user): Check that the bucket is indeed writable.
 
     map_pipeline = yield MapPipeline(job_name,
