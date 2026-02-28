@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 
 
-
-
 # pylint: disable=g-bad-name
 
 import datetime
@@ -10,22 +8,18 @@ import os
 import string
 import unittest
 
-from google.appengine.ext import ndb
-from google.appengine.api import namespace_manager
-from google.appengine.ext import db
-from google.appengine.ext import testbed
+from google.cloud import ndb
 
 from mapreduce import property_range
 
 
-class FakeEntity(db.Model):
-  """Test entity class."""
+class FakeEntity(ndb.Model):
 
-  datetime_property = db.DateTimeProperty(auto_now=True)
+  datetime_property = ndb.DateTimeProperty(auto_now=True)
 
-  a = db.IntegerProperty()
-  b = db.IntegerProperty()
-  c = db.FloatProperty()
+  a = ndb.IntegerProperty()
+  b = ndb.IntegerProperty()
+  c = ndb.FloatProperty()
 
 
 class NdbTestEntity(ndb.Model):
@@ -36,21 +30,14 @@ class NdbTestEntity(ndb.Model):
 class PropertyRangeTest(unittest.TestCase):
 
   def setUp(self):
-    self.testbed = testbed.Testbed()
-    self.app = "foo"
-    self.testbed.activate()
-    self.testbed.init_datastore_v3_stub()
-    self.testbed.init_memcache_stub()
     self._original_alphabet = property_range._ALPHABET
     self._original_length = property_range._STRING_LENGTH
 
   def tearDown(self):
-    self.testbed.deactivate()
     property_range._ALPHABET = self._original_alphabet
     property_range._STRING_LENGTH = self._original_length
 
   def testGetRangeFromFilters(self):
-    """Tests validating filters parameter."""
     new = datetime.datetime.now()
     old = new.replace(year=new.year-1)
     filters = [("a", "=", 1), ("b", "=", 2)]
@@ -76,14 +63,12 @@ class PropertyRangeTest(unittest.TestCase):
     self.assertEqual(start, ["datetime_property", ">", old])
     self.assertEqual(end, ["datetime_property", "<=", new])
 
-    # Expect a range.
     filters = [("a", "<=", 1)]
     self.assertRaises(property_range.errors.BadReaderParamsError,
                       property_range.PropertyRange._get_range_from_filters,
                       filters,
                       FakeEntity)
 
-    # Expect a closed range.
     filters = [["datetime_property", ">", new],
                ["datetime_property", "<=", old]]
     self.assertRaises(property_range.errors.BadReaderParamsError,
@@ -150,22 +135,20 @@ class PropertyRangeTest(unittest.TestCase):
     a_vals = list(range(10))
     b_vals = list(range(3))
     ns = "foo"
-    namespace_manager.set_namespace(ns)
     for k in keys:
       for a in a_vals:
         for b in b_vals:
-          FakeEntity(key_name=k, a=a, b=b).put()
-    namespace_manager.set_namespace(None)
+          FakeEntity(id=k, namespace=ns, a=a, b=b).put()
 
     r = property_range.PropertyRange(
         [("a", ">", 2), ("a", "<", 4), ("b", "=", 1)], f"{FakeEntity.__module__}.{FakeEntity.__name__}")
     query = r.make_query(ns)
     results = set()
-    for i in query.run():
+    for i in query.iter():
       self.assertEqual(3, i.a)
       self.assertEqual(1, i.b)
-      self.assertFalse(i.key().name() in results)
-      results.add(i.key().name())
+      self.assertFalse(i.key.string_id() in results)
+      results.add(i.key.string_id())
 
   def testMakeNdbQuery(self):
     keys = [str(i) for i in range(30)]
@@ -185,15 +168,13 @@ class PropertyRangeTest(unittest.TestCase):
     for i in query.iter():
       self.assertEqual(3, i.a)
       self.assertEqual(1, i.b)
-      self.assertFalse(i.key.name() in results)
-      results.add(i.key.name())
+      self.assertFalse(i.key.string_id() in results)
+      results.add(i.key.string_id())
 
   def testSplitDateTimeProperty(self):
-    # year, month, day, hour, mim, sec.
     start = datetime.datetime(1, 1, 1, 0, 0, 0, 0)
     end = datetime.datetime(1, 1, 1, 0, 0, 0, 3)
 
-    # Test combinations of inclusion and exclusion of start and end.
     self.assertEqual(
         [start,
          datetime.datetime(1, 1, 1, 0, 0, 0, 1),
@@ -219,7 +200,6 @@ class PropertyRangeTest(unittest.TestCase):
         ],
         property_range._split_datetime_property(start, end, 3, False, True))
 
-    # points >> shards
     end = datetime.datetime(1, 1, 1, 0, 0, 0, 100)
     self.assertEqual(
         [datetime.datetime(1, 1, 1, 0, 0, 0, 1),
@@ -255,7 +235,6 @@ class PropertyRangeTest(unittest.TestCase):
     start = 1
     end = 10
 
-    # Test combinations of inclusion and exclusion of start and end.
     result = property_range._split_integer_property(start, end, 10, True, True)
     for point in result:
       self.assertTrue(isinstance(point, int))
@@ -276,19 +255,16 @@ class PropertyRangeTest(unittest.TestCase):
       self.assertTrue(isinstance(point, int))
     self.assertEqual(list(range(2, 11)), result)
 
-    # Irregular splits
     end = 11
     result = property_range._split_integer_property(start, end, 10, True, True)
     for point in result:
       self.assertTrue(isinstance(point, int))
     self.assertEqual([1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12], result)
 
-    # Points >> shards
     end = 100
     result = property_range._split_integer_property(start, end, 3, True, True)
     self.assertEqual([1, 34, 68, 101], result)
 
-    # Tricky edge cases.
     end = 1
     result = property_range._split_integer_property(start, end, 20, True, True)
     for point in result:
@@ -305,7 +281,6 @@ class PropertyRangeTest(unittest.TestCase):
                 string.printable,
                 string.ascii_letters,
                 string.punctuation,
-                # Invisible control chars in hex.
                 "\x01\x02\x03"]
     for c in contents:
       weights = property_range._get_weights(len(c))
@@ -329,9 +304,6 @@ class PropertyRangeTest(unittest.TestCase):
     start = "a\x01"
     end = "a\x05"
 
-    # Test combinations of inclusion and exclusion of start and end.
-
-    # This should produce intuitive splitting.
     result = property_range._split_byte_string_property(start, end, 4,
                                                         True, False)
     self.assertEqual(["a\x01", "a\x02", "a\x03", "a\x04", "a\x05"], result)
@@ -350,17 +322,11 @@ class PropertyRangeTest(unittest.TestCase):
                                                         False, False)
     self.assertEqual(["a\x02", "a\x03", "a\x04", "a\x05"], result)
 
-    # points >> shards
-    # 100 in decimal
     end = "a\x64"
     result = property_range._split_byte_string_property(start, end, 3,
                                                         True, True)
-    # ord('"') = 34
-    # ord("D") = 68
-    # ord("e") = 101
     self.assertEqual(["a\x01", "a\"", "aD", "ae"], result)
 
-    # Tricky edge cases.
     end = "a\x01"
     result = property_range._split_byte_string_property(start, end, 6,
                                                         True, True)
@@ -370,16 +336,9 @@ class PropertyRangeTest(unittest.TestCase):
                       start, end, 6, False, True)
 
   def testSplitByteStringPropertyComplexLargeRange(self):
-    """User specified a large range.
-
-    Large range has lots of splitpoints so the split looks intuitive.
-    """
     property_range._ALPHABET = "ab"
     start = "aa"
     end = "aa" "bbb"
-    # With "aa" as commom prefix. we are really doing a split on this space.
-    # space = ["", "a", "aa", "aaa", "aab", "ab", "aba", "abb", "b", "ba",
-    #          "baa", "bab", "bb", "bba", "bbb"]
 
     result = property_range._split_byte_string_property(start, end, 2,
                                                         True, False)
@@ -394,17 +353,10 @@ class PropertyRangeTest(unittest.TestCase):
     self.assertEqual(["aa", "aaaab", "aaabb", "aabab", "aabbb"], result)
 
   def testSplitByteStringPropertySmallRange(self):
-    """User specified a small range.
-
-    Small range has few splitpoints comparing to shards. So
-    property_range._STRING_LENGTH should kick in to provide more precision.
-    """
     property_range._ALPHABET = "ab"
     property_range._STRING_LENGTH = 3
     start = "aa" "a"
     end = "aa" "b"
-    # With "aa" as commom prefix. we are really doing a split on this space.
-    # space = ["a", "aa", "aaa", "aab", "ab", "aba", "abb", "b"]
 
     result = property_range._split_byte_string_property(start, end, 2,
                                                         True, False)
@@ -420,15 +372,10 @@ class PropertyRangeTest(unittest.TestCase):
                       result)
 
   def testSplitByteStringPropertyInputWithSuffix(self):
-    """Verify suffix is correctly appended."""
     property_range._ALPHABET = "ab"
     property_range._STRING_LENGTH = 3
-    # With "aa" as commom prefix.
-    # "bbb" and "aaa" are suffixes.
     start = "aa" "aaa" "bbb"
     end = "aa" "baa" "aaa"
-    # we are doing a split on this space.
-    # space = ["aaa", "aab", "ab", "aba", "abb", "b", "ba", "baa", "bab"]
 
     result = property_range._split_byte_string_property(start, end, 2,
                                                         True, False)
@@ -441,8 +388,5 @@ class PropertyRangeTest(unittest.TestCase):
   def testSplitStringProperty(self):
     start = "\x8f"
     end = "\xff"
-    # Doesn't support unicode.
     self.assertRaises(ValueError, property_range._split_string_property,
                       start, end, 1, True, True)
-
-

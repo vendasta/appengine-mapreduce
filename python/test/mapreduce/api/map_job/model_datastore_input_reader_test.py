@@ -1,13 +1,9 @@
 #!/usr/bin/env python
 """Model Datastore Input Reader tests for the map_job API."""
-# os_compat must be first to ensure timezones are UTC.
-# pylint: disable=g-bad-import-order
-from google.appengine.tools import os_compat  # pylint: disable=unused-import
-
 import datetime
 import unittest
 
-from google.appengine.ext import ndb
+from google.cloud import ndb
 from mapreduce import errors
 
 from testlib import testutil
@@ -19,7 +15,6 @@ from mapreduce.api.map_job import model_datastore_input_reader
 
 
 class ModelDBDatastoreInputReaderTest(testutil.CloudStorageTestBase, datastore_input_reader_base_test.DatastoreInputReaderBaseTest):
-  """Test ModelDatastoreInputReader using Model.db."""
 
   @property
   def reader_cls(self):
@@ -30,7 +25,6 @@ class ModelDBDatastoreInputReaderTest(testutil.CloudStorageTestBase, datastore_i
     return testutil.ENTITY_KIND
 
   def testValidate_EntityKindWithNoModel(self):
-    """Test validate function with no model."""
     params = {
         "entity_kind": "foo",
         }
@@ -45,7 +39,6 @@ class ModelDBDatastoreInputReaderTest(testutil.CloudStorageTestBase, datastore_i
                       conf)
 
   def testValidate_Filters(self):
-    """Tests validating filters parameter."""
     params = {
         "entity_kind": self.entity_kind,
         "filters": [("a", "=", 1), ("b", "=", 2)],
@@ -71,19 +64,16 @@ class ModelDBDatastoreInputReaderTest(testutil.CloudStorageTestBase, datastore_i
     conf.input_reader_params["filters"] = [["a", "=", 1]]
     conf.input_reader_cls.validate(conf)
 
-    # Invalid field c
     conf.input_reader_params["filters"] = [("c", "=", 1)]
     self.assertRaises(errors.BadReaderParamsError,
                       conf.input_reader_cls.validate,
                       conf)
 
-    # Expect a range.
     conf.input_reader_params["filters"] = [("a", "<=", 1)]
     self.assertRaises(errors.BadReaderParamsError,
                       conf.input_reader_cls.validate,
                       conf)
 
-    # Value should be a datetime.
     conf.input_reader_params["filters"] = [["datetime_property", ">", 1],
                                            ["datetime_property", "<=",
                                             datetime.datetime.now()]]
@@ -91,7 +81,6 @@ class ModelDBDatastoreInputReaderTest(testutil.CloudStorageTestBase, datastore_i
                       conf.input_reader_cls.validate,
                       conf)
 
-    # Expect a closed range.
     params["filters"] = [["datetime_property", ">", new],
                          ["datetime_property", "<=", old]]
     self.assertRaises(errors.BadReaderParamsError,
@@ -99,7 +88,6 @@ class ModelDBDatastoreInputReaderTest(testutil.CloudStorageTestBase, datastore_i
                       conf)
 
   def _set_vals(self, entities, a_vals, b_vals):
-    """Set a, b values for entities."""
     vals = []
     for a in a_vals:
       for b in b_vals:
@@ -169,7 +157,6 @@ class ModelDBDatastoreInputReaderTest(testutil.CloudStorageTestBase, datastore_i
     self._assertEquals_splitInput(results[2], ["7"])
 
   def testSplitInput_shardByFilters_lotsOfNS(self):
-    """Lots means more than 2 in test cases."""
     entities = self._create_entities(list(range(12)), {}, "f")
     self._set_vals(entities, list(range(6)), list(range(2)))
     entities = self._create_entities(list(range(12, 24)), {}, "g")
@@ -196,7 +183,6 @@ class ModelDBDatastoreInputReaderTest(testutil.CloudStorageTestBase, datastore_i
 
 
 class ModelNDBDatastoreInputReaderTest(testutil.CloudStorageTestBase, datastore_input_reader_base_test.DatastoreInputReaderBaseTest):
-  """Test ModelDatastoreInputReader using Model.ndb."""
 
   @property
   def reader_cls(self):
@@ -211,19 +197,6 @@ class ModelNDBDatastoreInputReaderTest(testutil.CloudStorageTestBase, datastore_
                        key_to_scatter_val,
                        ns=None,
                        entity_model_cls=testutil.NdbTestEntity):
-    """Create ndb entities for tests.
-
-    Args:
-      keys_itr: an iterator that contains all the key names.
-        Will be casted to str.
-      key_to_scatter_val: a dict that maps key names to its scatter values.
-      ns: the namespace to create the entity at.
-      entity_model_cls: entity model class.
-
-    Returns:
-      A list of entities created.
-    """
-    testutil.set_scatter_setter(key_to_scatter_val)
     entities = []
     for i in keys_itr:
       k = ndb.Key(entity_model_cls._get_kind(), str(i), namespace=ns)
@@ -234,4 +207,3 @@ class ModelNDBDatastoreInputReaderTest(testutil.CloudStorageTestBase, datastore_
 
   def _get_keyname(self, entity):
     return entity.key.id()
-

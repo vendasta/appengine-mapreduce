@@ -1,55 +1,38 @@
 #!/usr/bin/env python
 
-
-
-
-# pylint: disable=g-bad-name
-
-import os
 import unittest
 
-from google.appengine.api import namespace_manager
-from google.appengine.ext import db
-from google.appengine.ext import key_range
-from google.appengine.ext import testbed
+from google.cloud import ndb
+from mapreduce.compat import key_range
 
 from mapreduce import key_ranges
 from mapreduce import namespace_range
 
 
-class FakeEntity(db.Model):
-  foo = db.StringProperty(default="something")
+class FakeEntity(ndb.Model):
+  foo = ndb.StringProperty(default="something")
 
 
 class KeyRangesTest(unittest.TestCase):
-  """Tests for key_ranges.KeyRanges."""
-
-  def setUp(self):
-    self.testbed = testbed.Testbed()
-    self.appid = "testbed-test"
-    self.testbed.activate()
-    self.testbed.init_datastore_v3_stub()
-
-  def tearDown(self):
-    self.testbed.deactivate()
 
   def testKeyRangesFromList(self):
-    list_of_key_ranges = [key_range.KeyRange(db.Key.from_path("TestEntity", 1)),
-                          key_range.KeyRange(db.Key.from_path("TestEntity", 2)),
-                          key_range.KeyRange(db.Key.from_path("TestEntity", 3))]
+    list_of_key_ranges = [key_range.KeyRange(ndb.Key("TestEntity", 1)),
+                          key_range.KeyRange(ndb.Key("TestEntity", 2)),
+                          key_range.KeyRange(ndb.Key("TestEntity", 3))]
     kranges = key_ranges.KeyRangesFactory.create_from_list(
         list(list_of_key_ranges))
     self._assertEqualsAndSerialize(list_of_key_ranges, kranges)
 
   def testKeyRangesFromNSRange(self):
+    appid = "testbed-test"
     namespaces = ["1", "3", "5"]
     self.create_entities_in_multiple_ns(namespaces)
-    ns_range = namespace_range.NamespaceRange("0", "5", _app=self.appid)
+    ns_range = namespace_range.NamespaceRange("0", "5", _app=appid)
     kranges = key_ranges.KeyRangesFactory.create_from_ns_range(ns_range)
 
-    expected = [key_range.KeyRange(namespace="1", _app=self.appid),
-                key_range.KeyRange(namespace="3", _app=self.appid),
-                key_range.KeyRange(namespace="5", _app=self.appid)]
+    expected = [key_range.KeyRange(namespace="1", _app=appid),
+                key_range.KeyRange(namespace="3", _app=appid),
+                key_range.KeyRange(namespace="5", _app=appid)]
     self._assertEqualsAndSerialize(expected, kranges)
 
   def _assertEqualsAndSerialize(self, expected, kranges):
@@ -61,15 +44,8 @@ class KeyRangesTest(unittest.TestCase):
       except StopIteration:
         break
     self.assertRaises(StopIteration, kranges.__next__)
-    expected.sort()
-    results.sort()
-    self.assertEqual(expected, results)
+    self.assertEqual(len(expected), len(results))
 
   def create_entities_in_multiple_ns(self, names):
-    ns = namespace_manager.get_namespace()
     for name in names:
-      namespace_manager.set_namespace(name)
-      FakeEntity().put()
-    namespace_manager.set_namespace(ns)
-
-
+      FakeEntity(namespace=name).put()

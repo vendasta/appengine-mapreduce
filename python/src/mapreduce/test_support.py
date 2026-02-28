@@ -131,8 +131,8 @@ def execute_all_tasks(taskqueue, queue="default", app=None, handlers_map=None):
   if not app:
     app = create_test_app(handlers_map)
 
-  tasks = taskqueue.GetTasks(queue)
-  taskqueue.FlushQueue(queue)
+  tasks = taskqueue.get_tasks(queue)
+  taskqueue.clear_queue(queue)
   task_run_counts = collections.defaultdict(int)
   
   for task in tasks:
@@ -173,7 +173,7 @@ def execute_until_empty(taskqueue, queue="default", handlers_map=None):
   empty_checks = 0
   
   while empty_checks < MAX_EMPTY_CHECKS:
-    tasks = taskqueue.GetTasks(queue)
+    tasks = taskqueue.get_tasks(queue)
     if not tasks:
       empty_checks += 1
       time.sleep(EMPTY_CHECK_DELAY)

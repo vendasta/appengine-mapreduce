@@ -2,7 +2,8 @@
 # Copyright 2011 Google Inc. All Rights Reserved.
 
 import pipeline
-from google.appengine.ext import db
+from google.cloud import ndb
+from google.cloud import storage
 
 from mapreduce import errors
 from mapreduce import input_readers
@@ -14,35 +15,27 @@ from mapreduce import test_support
 from testlib import testutil
 
 
-
-class FakeEntity(db.Model):
-  """Test entity class."""
-  data = db.StringProperty()
+class FakeEntity(ndb.Model):
+  data = ndb.StringProperty()
 
 
-class FakeOutputEntity(db.Model):
-  """TestOutput entity class."""
-  data = db.StringProperty()
+class FakeOutputEntity(ndb.Model):
+  data = ndb.StringProperty()
 
 
-class RetryCount(db.Model):
-  """Use to keep track of slice/shard retries."""
-  retries = db.IntegerProperty()
+class RetryCount(ndb.Model):
+  retries = ndb.IntegerProperty()
 
 
-# Map or reduce functions.
 def fake_mapreduce_map(entity):
-  """Test map handler."""
   yield (entity.data, "")
 
 
 def fake_mapreduce_reduce(key, values):
-  """Test reduce handler."""
   yield str((key, values))
 
 
 def fake_failed_map(_):
-  """Always fail the map immediately."""
   raise errors.FailJobError()
 
 
@@ -52,29 +45,24 @@ class FakeFileRecordsOutputWriter(
   RETRIES = 11
 
   def finalize(self, ctx, shard_state):
-    """Simulate output writer finalization Error."""
-    retry_count = RetryCount.get_by_key_name(__name__)
+    retry_count = RetryCount.get_by_id(__name__)
     if not retry_count:
-      retry_count = RetryCount(key_name=__name__, retries=0)
+      retry_count = RetryCount(id=__name__, retries=0)
     if retry_count.retries < self.RETRIES:
       retry_count.retries += 1
       retry_count.put()
-      raise cloudstorage.TransientError("output writer finalize failed.")
+      raise Exception("output writer finalize failed.")
     super().finalize(ctx, shard_state)
 
 
 class MapreducePipelineTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
-  """Tests for MapreducePipeline."""
 
   def testFailedMapReduce(self):
     max_attempts_before = pipeline.pipeline._DEFAULT_MAX_ATTEMPTS
     try:
       pipeline.pipeline._DEFAULT_MAX_ATTEMPTS = 1
 
-      # Add some random data.
       entity_count = 200
-
-      print(dir(pipeline.pipeline))
 
       for i in range(entity_count):
         FakeEntity(data=str(i)).put()
@@ -106,7 +94,6 @@ class MapreducePipelineTest(testutil.CloudStorageTestBase, testutil.HandlerTestB
       pipeline.pipeline._DEFAULT_MAX_ATTEMPTS = max_attempts_before
 
   def testMapReduce(self):
-    # Prepare test data
     job_name = self.gcsPrefix
     entity_count = 200
 
@@ -114,7 +101,6 @@ class MapreducePipelineTest(testutil.CloudStorageTestBase, testutil.HandlerTestB
       FakeEntity(data=str(i)).put()
       FakeEntity(data=str(i)).put()
 
-    # Run Mapreduce
     p = mapreduce_pipeline.MapreducePipeline(
         job_name,
         __name__ + ".fake_mapreduce_map",
@@ -137,7 +123,6 @@ class MapreducePipelineTest(testutil.CloudStorageTestBase, testutil.HandlerTestB
 
     self.assertFalse(p.was_aborted)
 
-    # Verify reduce output.
     p = mapreduce_pipeline.MapreducePipeline.from_id(p.pipeline_id)
     self.assertEqual(model.MapreduceState.RESULT_SUCCESS,
                      p.outputs.result_status.value)
@@ -153,33 +138,28 @@ class MapreducePipelineTest(testutil.CloudStorageTestBase, testutil.HandlerTestB
     output_data.sort()
     self.assertEqual(expected_data, output_data)
 
-    # Verify that mapreduce doesn't leave intermediate files behind.
-    from google.cloud import storage
     _storage_client = storage.Client()
-    temp_file_stats = _storage_client.listbucket(self.TEST_BUCKET, prefix=job_name)
-    for stat in temp_file_stats:
-      if stat.filename:
+    blobs = list(_storage_client.list_blobs(self.TEST_BUCKET, prefix=job_name))
+    for blob in blobs:
+      if blob.name:
         self.assertFalse(
-            stat.filename.startswith("/%s/%s-shuffle-" %
-                                     (self.TEST_BUCKET, job_name)))
+            blob.name.startswith("%s-shuffle-" % job_name))
 
   def testMapReduceWithShardRetry(self):
-    # Prepare test data
     entity_count = 200
-    db.delete(RetryCount.all())
+    ndb.delete_multi(RetryCount.query().fetch(keys_only=True))
 
     for i in range(entity_count):
       FakeEntity(data=str(i)).put()
       FakeEntity(data=str(i)).put()
 
-    # Run Mapreduce
     p = mapreduce_pipeline.MapreducePipeline(
         "test",
-        __name__ + ".test_mapreduce_map",
-        __name__ + ".test_mapreduce_reduce",
+        __name__ + ".fake_mapreduce_map",
+        __name__ + ".fake_mapreduce_reduce",
         input_reader_spec=input_readers.__name__ + ".DatastoreInputReader",
         output_writer_spec=(
-            __name__ + ".TestFileRecordsOutputWriter"),
+            __name__ + ".FakeFileRecordsOutputWriter"),
         mapper_params={
             "input_reader": {
                 "entity_kind": __name__ + "." + FakeEntity.__name__,
@@ -196,25 +176,20 @@ class MapreducePipelineTest(testutil.CloudStorageTestBase, testutil.HandlerTestB
 
     self.assertFalse(p.was_aborted)
 
-    # Verify reduce output.
     p = mapreduce_pipeline.MapreducePipeline.from_id(p.pipeline_id)
     self.assertEqual(model.MapreduceState.RESULT_SUCCESS,
                      p.outputs.result_status.value)
     output_data = []
     retries = 0
     for output_file in p.outputs.default.value:
-      # Get the number of shard retries by parsing filename.
       retries += (int(output_file[-1]) - 1)
       with self.bucket.blob(output_file).open("rb") as f:
         for record in records.RecordsReader(f):
           output_data.append(record)
 
-    # Assert file names also suggest the right number of retries.
     self.assertEqual(44, retries)
     expected_data = [
         str((str(d), ["", ""])) for d in range(entity_count)]
     expected_data.sort()
     output_data.sort()
     self.assertEqual(expected_data, output_data)
-
-

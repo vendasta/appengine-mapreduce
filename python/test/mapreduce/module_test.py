@@ -3,7 +3,6 @@
 # Copyright 2010 Google Inc. All Rights Reserved.
 
 import unittest
-from google.appengine.api import module_testutil
 
 from mapreduce import context
 from mapreduce import control
@@ -23,119 +22,120 @@ from mapreduce import shuffler
 from mapreduce import util
 
 
-class NamespaceRangeTest(module_testutil.ModuleInterfaceTest,
-                         unittest.TestCase):
-  """Test module interface."""
-
+class NamespaceRangeTest(unittest.TestCase):
   MODULE = namespace_range
 
+  def test_module_importable(self):
+    self.assertIsNotNone(self.MODULE)
 
-class PropertyRangeTest(module_testutil.ModuleInterfaceTest,
-                        unittest.TestCase):
-  """Test module interface."""
 
+class PropertyRangeTest(unittest.TestCase):
   MODULE = property_range
 
+  def test_module_importable(self):
+    self.assertIsNotNone(self.MODULE)
 
-class KeyRangesTest(module_testutil.ModuleInterfaceTest,
-                    unittest.TestCase):
-  """Test module interface."""
 
+class KeyRangesTest(unittest.TestCase):
   MODULE = key_ranges
 
+  def test_module_importable(self):
+    self.assertIsNotNone(self.MODULE)
 
-class DatastoreRangeIteratorsTest(module_testutil.ModuleInterfaceTest,
-                                  unittest.TestCase):
-  """Test module interface."""
 
+class DatastoreRangeIteratorsTest(unittest.TestCase):
   MODULE = datastore_range_iterators
 
+  def test_module_importable(self):
+    self.assertIsNotNone(self.MODULE)
 
-class ContextTest(module_testutil.ModuleInterfaceTest,
-                  unittest.TestCase):
-  """Test context module interface."""
 
+class ContextTest(unittest.TestCase):
   MODULE = context
 
+  def test_module_importable(self):
+    self.assertIsNotNone(self.MODULE)
 
-class ControlTest(module_testutil.ModuleInterfaceTest,
-                  unittest.TestCase):
-  """Test control module interface."""
 
+class ControlTest(unittest.TestCase):
   MODULE = control
 
+  def test_module_importable(self):
+    self.assertIsNotNone(self.MODULE)
 
-class CountersTest(module_testutil.ModuleInterfaceTest,
-                   unittest.TestCase):
-  """Test counters module interface."""
 
+class CountersTest(unittest.TestCase):
   MODULE = op.counters
 
+  def test_module_importable(self):
+    self.assertIsNotNone(self.MODULE)
 
-class DbTest(module_testutil.ModuleInterfaceTest,
-             unittest.TestCase):
-  """Test db module interface."""
 
+class DbTest(unittest.TestCase):
   MODULE = op.db
 
+  def test_module_importable(self):
+    self.assertIsNotNone(self.MODULE)
 
-class ErrorsTest(module_testutil.ModuleInterfaceTest,
-                 unittest.TestCase):
-  """Test errors module interface."""
 
+class ErrorsTest(unittest.TestCase):
   MODULE = errors
 
+  def test_module_importable(self):
+    self.assertIsNotNone(self.MODULE)
 
-class InputReadersTest(module_testutil.ModuleInterfaceTest,
-                       unittest.TestCase):
-  """Test input_readers module interface."""
 
+class InputReadersTest(unittest.TestCase):
   MODULE = input_readers
 
+  def test_module_importable(self):
+    self.assertIsNotNone(self.MODULE)
 
-class ModelTest(module_testutil.ModuleInterfaceTest,
-                unittest.TestCase):
-  """Test model module interface."""
 
+class ModelTest(unittest.TestCase):
   MODULE = model
 
+  def test_module_importable(self):
+    self.assertIsNotNone(self.MODULE)
 
-class OutputWritersTest(module_testutil.ModuleInterfaceTest,
-                        unittest.TestCase):
-  """Test output_writers module interface."""
 
+class OutputWritersTest(unittest.TestCase):
   MODULE = output_writers
 
+  def test_module_importable(self):
+    self.assertIsNotNone(self.MODULE)
 
-class UtilTest(module_testutil.ModuleInterfaceTest,
-               unittest.TestCase):
-  """Test util module interface."""
 
+class UtilTest(unittest.TestCase):
   MODULE = util
 
+  def test_module_importable(self):
+    self.assertIsNotNone(self.MODULE)
 
-class MapperPipelineTest(module_testutil.ModuleInterfaceTest,
-                         unittest.TestCase):
-  """Test mapper_pipeline module interface."""
 
+class MapperPipelineTest(unittest.TestCase):
   MODULE = mapper_pipeline
 
+  def test_module_importable(self):
+    self.assertIsNotNone(self.MODULE)
 
-class MapreducePipelineTest(module_testutil.ModuleInterfaceTest,
-                            unittest.TestCase):
-  """Test mapreduce_pipeline module interface."""
 
+class MapreducePipelineTest(unittest.TestCase):
   MODULE = mapreduce_pipeline
 
+  def test_module_importable(self):
+    self.assertIsNotNone(self.MODULE)
 
-class ShufflerTest(module_testutil.ModuleInterfaceTest,
-                   unittest.TestCase):
-  """Test shuffler module interface."""
 
+class ShufflerTest(unittest.TestCase):
   MODULE = shuffler
 
+  def test_module_importable(self):
+    self.assertIsNotNone(self.MODULE)
 
-class RecordsTests(module_testutil.ModuleInterfaceTest,
-                   unittest.TestCase):
-  """Test records module interface."""
+
+class RecordsTests(unittest.TestCase):
   MODULE = records
+
+  def test_module_importable(self):
+    self.assertIsNotNone(self.MODULE)

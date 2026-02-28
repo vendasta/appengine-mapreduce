@@ -3,7 +3,7 @@
 
 """Testing large mapreduce jobs."""
 
-from google.appengine.ext import db
+from google.cloud import ndb
 
 from mapreduce import input_readers
 from mapreduce import mapreduce_pipeline
@@ -13,9 +13,8 @@ from mapreduce import test_support
 from testlib import testutil
 
 
-class FakeEntity(db.Model):
-  """Test entity class."""
-  data = db.TextProperty()
+class FakeEntity(ndb.Model):
+  data = ndb.TextProperty()
 
 
 # pylint: disable=unused-argument
@@ -35,7 +34,6 @@ class LargeMapreduceTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase
 
   def testLotsOfValuesForSingleKey(self):
     FakeEntity(data=str(1)).put()
-    # Run Mapreduce
     p = mapreduce_pipeline.MapreducePipeline(
         self.gcsPrefix,
         __name__ + ".map_yield_lots_of_values",
@@ -58,7 +56,6 @@ class LargeMapreduceTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase
 
     self.assertFalse(p.was_aborted)
 
-    # Verify reduce output.
     p = mapreduce_pipeline.MapreducePipeline.from_id(p.pipeline_id)
     output_data = []
     for output_file in p.outputs.default.value:
@@ -70,4 +67,3 @@ class LargeMapreduceTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase
     expected_data.sort()
     output_data.sort()
     self.assertEqual(expected_data, output_data)
-

@@ -4,25 +4,22 @@
 
 # Using opensource naming conventions, pylint: disable=g-bad-name
 
-from google.appengine.ext import db
+from google.cloud import ndb
 from testlib import testutil
 
 from mapreduce import (input_readers, mapreduce_pipeline, operation,
                        output_writers, shuffler, test_support)
 
 
-class FakeEntity(db.Model):
-  """Test entity class."""
-  data = db.TextProperty()
+class FakeEntity(ndb.Model):
+  data = ndb.TextProperty()
 
 
 def fake_combiner_map(entity):
-  """Tests map handler for use with the Combiner test."""
   yield str(int(entity.data) % 4), entity.data
 
 
 class FakeCombiner:
-  """Test combine handler."""
   invocations = []
 
   def __call__(self, key, values, combiner_values):
@@ -43,7 +40,6 @@ def fake_combiner_reduce(key, values):
 
 
 class CombinerTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
-  """Tests for combiners."""
 
   def setUp(self):
     testutil.HandlerTestBase.setUp(self)
@@ -56,7 +52,6 @@ class CombinerTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
     testutil.HandlerTestBase.tearDown(self)
 
   def testNoCombiner(self):
-    """Test running with low values count but without combiner."""
     entity_count = 50
 
     for i in range(entity_count):
@@ -98,7 +93,6 @@ class CombinerTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
         file_content)
 
   def testCombiner(self):
-    """Test running with low values count but with combiner."""
     entity_count = 50
 
     for i in range(entity_count):
@@ -149,6 +143,3 @@ class CombinerTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
       self.assertTrue(values)
       self.assertEqual(1, len(values))
       self.assertTrue(int(values[0]) % 4 == int(key))
-
-
-

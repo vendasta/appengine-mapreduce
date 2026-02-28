@@ -18,52 +18,41 @@ import random
 import unittest
 from unittest import mock
 
-from google.appengine.ext import ndb
-from google.appengine.api import datastore
-from google.appengine.ext import db
-from google.appengine.runtime import apiproxy_errors
+from google.cloud import ndb
 
+from mapreduce.compat import exceptions as compat_exceptions
 from testlib import testutil
 from mapreduce import context
 
 # pylint: disable=g-bad-name
 
 
-class FakeEntity(db.Model):
-  """Test entity class to test db operations."""
-
-  tag = db.TextProperty()
-
-
-class NdbFakeEntity(ndb.Model):
-  """Test entity class to test ndb operations."""
-
+class FakeEntity(ndb.Model):
   tag = ndb.TextProperty()
 
 
-def new_datastore_entity(key_name=None):
-  return datastore.Entity('FakeEntity', name=key_name)
+def new_ndb_entity(key_name=None):
+  if key_name:
+    return FakeEntity(id=key_name)
+  return FakeEntity()
 
 
 class FlushFunction:
   """Flush function to use for tests."""
 
-  # How many time to raise timeouts.
   timeouts = 0
-  # Records calls to flush function.
   calls = []
-  # Where things are flushed to.
   persistent_storage = []
 
   def flush_function(self, items, options):
     FlushFunction.calls.append((items, dict(options)))
     if len(FlushFunction.calls) <= FlushFunction.timeouts:
-      raise db.Timeout()
+      raise compat_exceptions.Timeout()
     FlushFunction.persistent_storage.extend(items)
 
   # pylint: disable=unused-argument
   def flush_function_too_large_error(self, *args, **kwds):
-    raise apiproxy_errors.RequestTooLargeError()
+    raise compat_exceptions.RequestTooLargeError()
 
   @classmethod
   def reset(cls):
@@ -89,7 +78,6 @@ class ItemListTest(unittest.TestCase):
     self.assertTrue(self.list.should_flush())
 
   def testClear(self):
-    """Test clear method."""
     self.list.append('abc')
     self.list.clear()
     self.assertFieldsMatch([])
@@ -98,7 +86,6 @@ class ItemListTest(unittest.TestCase):
     self.assertFieldsMatch([])
 
   def testAppend(self):
-    """Test append method."""
     self.list.append('abc')
     self.list.append('de')
     self.assertFieldsMatch(['abc', 'de'])
@@ -122,7 +109,7 @@ class ItemListTest(unittest.TestCase):
     random.shuffle(items_copy)
     for _, i in items_copy:
       self.list.append(i)
-    self.assertRaises(apiproxy_errors.RequestTooLargeError,
+    self.assertRaises(compat_exceptions.RequestTooLargeError,
                       self.list.flush)
     self.assertEqual(items[:context._ItemList._LARGEST_ITEMS_TO_LOG],
                      self.list._largest)
@@ -143,12 +130,11 @@ class ItemListTest(unittest.TestCase):
   def testFlushTimeoutTooManyTimes(self):
     FlushFunction.timeouts = context._ItemList.DEFAULT_RETRIES + 1
     self.list.append('abc')
-    self.assertRaises(db.Timeout, self.list.flush)
+    self.assertRaises(compat_exceptions.Timeout, self.list.flush)
     self.assertEqual(context._ItemList.DEFAULT_RETRIES + 1,
                      len(FlushFunction.calls))
 
   def assertFieldsMatch(self, items, item_list=None):
-    """Assert all internal fields are consistent."""
     if item_list is None:
       item_list = self.list
     self.assertEqual(items, item_list.items)
@@ -169,53 +155,34 @@ class MutationPoolTest(testutil.HandlerTestBase):
     self.assertTrue(pool.force_writes)
 
   def testPutEntity(self):
-    """Test put method."""
-    e = new_datastore_entity()
+    e = new_ndb_entity()
     self.pool.put(e)
     self.assertEqual([e], self.pool.puts.items)
-
-    # Mix in a model instance.
-    # Model instance is "normalized", meaning internal fields are populated
-    # in order to accurately calculate size.
-    e2 = FakeEntity()
-    self.pool.put(e2)
-    self.assertEqual([e, context._normalize_entity(e2)], self.pool.puts.items)
-
+    self.assertEqual([e], self.pool.ndb_puts.items)
     self.assertEqual([], self.pool.deletes.items)
-    self.assertEqual([], self.pool.ndb_puts.items)
     self.assertEqual([], self.pool.ndb_deletes.items)
 
   def testDeleteEntity(self):
-    """Test delete method."""
-    # Model instance.
-    e1 = FakeEntity(key_name='goingaway')
+    e1 = new_ndb_entity(key_name='goingaway')
     self.pool.delete(e1)
-    # Datastore instance.
-    e2 = new_datastore_entity(key_name='goingaway')
-    self.pool.delete(e2)
-    # Key.
-    k = db.Key.from_path('MyKind', 'MyKeyName', _app='myapp')
+    k = ndb.Key('MyKind', 'MyKeyName')
     self.pool.delete(k)
-    # String of key.
-    self.pool.delete(str(k))
 
-    self.assertEqual([e1.key(), e2.key(), k, k], self.pool.deletes.items)
+    self.assertEqual([e1.key, k], self.pool.deletes.items)
+    self.assertEqual([e1.key, k], self.pool.ndb_deletes.items)
     self.assertEqual([], self.pool.puts.items)
     self.assertEqual([], self.pool.ndb_puts.items)
-    self.assertEqual([], self.pool.ndb_deletes.items)
 
   def testPutNdbEntity(self):
-    """Test put() using an NDB entity."""
-    e = NdbFakeEntity()
+    e = FakeEntity()
     self.pool.put(e)
     self.assertEqual([e], self.pool.ndb_puts.items)
+    self.assertEqual([e], self.pool.puts.items)
     self.assertEqual([], self.pool.ndb_deletes.items)
-    self.assertEqual([], self.pool.puts.items)
     self.assertEqual([], self.pool.deletes.items)
 
   def testDeleteNdbEntity(self):
-    """Test delete method with an NDB model instance."""
-    e = NdbFakeEntity(id='goingaway')
+    e = FakeEntity(id='goingaway')
     self.pool.delete(e)
     self.assertEqual([], self.pool.ndb_puts.items)
     self.assertEqual([e.key], self.pool.ndb_deletes.items)
@@ -223,8 +190,7 @@ class MutationPoolTest(testutil.HandlerTestBase):
     self.assertEqual([], self.pool.deletes.items)
 
   def testDeleteNdbKey(self):
-    """Test delete method with an NDB key."""
-    e = NdbFakeEntity(id='goingaway')
+    e = FakeEntity(id='goingaway')
     self.pool.delete(e.key)
     self.assertEqual([], self.pool.ndb_puts.items)
     self.assertEqual([e.key], self.pool.ndb_deletes.items)
@@ -232,7 +198,6 @@ class MutationPoolTest(testutil.HandlerTestBase):
     self.assertEqual([], self.pool.deletes.items)
 
   def testFlush(self):
-    """Combined test for all db implicit and explicit flushing."""
     self.pool = context._MutationPool(max_entity_count=3)
 
     for i in range(8):
@@ -240,9 +205,8 @@ class MutationPoolTest(testutil.HandlerTestBase):
       self.assertEqual(len(self.pool.puts.items), (i%3) + 1)
 
     for i in range(5):
-      e = FakeEntity()
-      e.put()
-      self.pool.delete(e)
+      e = FakeEntity(id='key%d' % i)
+      self.pool.delete(e.key)
       self.assertEqual(len(self.pool.deletes.items), (i%3) + 1)
 
     self.pool.flush()
@@ -252,15 +216,14 @@ class MutationPoolTest(testutil.HandlerTestBase):
     self.assertEqual(len(self.pool.ndb_deletes.items), 0)
 
   def testNdbFlush(self):
-    """Combined test for all NDB implicit and explicit flushing."""
     self.pool = context._MutationPool(max_entity_count=3)
 
     for i in range(8):
-      self.pool.put(NdbFakeEntity())
+      self.pool.put(FakeEntity())
       self.assertEqual(len(self.pool.ndb_puts.items), (i%3) + 1)
 
     for i in range(5):
-      self.pool.delete(ndb.Key(NdbFakeEntity, 'x%d' % i))
+      self.pool.delete(ndb.Key(FakeEntity, 'x%d' % i))
       self.assertEqual(len(self.pool.ndb_deletes.items), (i%3) + 1)
 
     self.pool.flush()
@@ -272,12 +235,12 @@ class MutationPoolTest(testutil.HandlerTestBase):
   def testFlushLogLargestItems(self):
     self.pool = context._MutationPool(max_entity_count=3)
     self.pool.put(FakeEntity(tag='a'*1024*1024))
-    self.assertRaises(apiproxy_errors.RequestTooLargeError, self.pool.flush)
+    self.assertRaises(compat_exceptions.RequestTooLargeError, self.pool.flush)
     self.assertTrue(self.pool.puts._largest)
 
     self.pool = context._MutationPool(max_entity_count=3)
-    self.pool.ndb_put(NdbFakeEntity(tag='a'*1024*1024))
-    self.assertRaises(apiproxy_errors.RequestTooLargeError, self.pool.flush)
+    self.pool.ndb_put(FakeEntity(tag='a'*1024*1024))
+    self.assertRaises(compat_exceptions.RequestTooLargeError, self.pool.flush)
     self.assertTrue(self.pool.ndb_puts._largest)
 
 
@@ -285,7 +248,6 @@ class CountersTest(unittest.TestCase):
   """Test for context._Counters class."""
 
   def testIncrement(self):
-    """Test increment() method."""
     shard_state = mock.Mock()
     counters_map = mock.Mock()
     shard_state.counters_map = counters_map
@@ -297,7 +259,6 @@ class CountersTest(unittest.TestCase):
     counters_map.increment.assert_called_once_with('test', 19)
 
   def testFlush(self):
-    """Test flush() method."""
     counters = context._Counters(None)
     counters.flush()
 
@@ -306,7 +267,6 @@ class ContextTest(testutil.HandlerTestBase):
   """Test for context.Context class."""
 
   def testGetSetContext(self):
-    """Test module's get_context and _set functions."""
     ctx = context.Context(None, None)
     self.assertFalse(context.get())
     context.Context._set(ctx)
@@ -315,7 +275,6 @@ class ContextTest(testutil.HandlerTestBase):
     self.assertEqual(None, context.get())
 
   def testArbitraryPool(self):
-    """Test arbitrary pool registration."""
     ctx = context.Context(None, None)
     self.assertFalse(ctx.get_pool("test"))
 

@@ -19,22 +19,17 @@ import os
 import unittest
 from unittest import mock
 
-from google.appengine.api import apiproxy_stub_map
-from google.appengine.api import datastore
-from google.appengine.api import datastore_file_stub
-from google.appengine.api import namespace_manager
-from google.appengine.ext import db
+from google.cloud import ndb
+from google.cloud import datastore as cloud_datastore
 
 from mapreduce import namespace_range
 
 
-class Pet(db.Model):
-  """A test model used to populate namespaces."""
+class Pet(ndb.Model):
   pass
 
 
 class TestOrdinalization(unittest.TestCase):
-  """Tests NamespaceRange.(_ord_to_namespace|_namespace_to_ord)."""
 
   def setUp(self):
     unittest.TestCase.setUp(self)
@@ -68,7 +63,6 @@ class TestOrdinalization(unittest.TestCase):
 
 
 class JsonTest(unittest.TestCase):
-  """Tests JSON serialization and deserialization."""
 
   def testToJsonObject(self):
     self.assertEqual(
@@ -100,7 +94,6 @@ class JsonTest(unittest.TestCase):
 
 
 class NamespaceRangeIterationTest(unittest.TestCase):
-  """Tests iterating over a NamespaceRange."""
 
   def setUp(self):
     unittest.TestCase.setUp(self)
@@ -113,55 +106,52 @@ class NamespaceRangeIterationTest(unittest.TestCase):
     unittest.TestCase.tearDown(self)
 
   def testQueryPaging(self):
-    with mock.patch.object(datastore, 'Query') as mock_query:
-        ns_range = namespace_range.NamespaceRange(
-            namespace_start='a', namespace_end='b', _app=self.app_id)
-        ns_kind = '__namespace__'
-        ns_key = lambda ns: db.Key.from_path(ns_kind, ns)
-        filters = {'__key__ >= ': ns_key('a'), '__key__ <= ': ns_key('b')}
+    with mock.patch.object(cloud_datastore.Client, 'query') as mock_query_method:
+      ns_range = namespace_range.NamespaceRange(
+          namespace_start='a', namespace_end='b', _app=self.app_id)
 
-        mock_query.side_effect = [
-            mock.Mock(Run=lambda limit=None: iter([ns_key(ns) for ns in ['a', 'aa', 'aaa']]), GetCursor=lambda: 'c1'),
-            mock.Mock(Run=lambda limit=None: iter([ns_key(ns) for ns in ['aab', 'ab', 'ac']]), GetCursor=lambda: 'c2'),
-            mock.Mock(Run=lambda limit=None: iter([ns_key('b')]))
-        ]
+      def make_key(ns):
+        client = cloud_datastore.Client()
+        return client.key('__namespace__', ns)
 
-        self.assertEqual(7, len(list(ns_range)))
+      mock_query_obj = mock.Mock()
+      mock_query_method.return_value = mock_query_obj
+
+      ns_keys = ['a', 'aa', 'aaa', 'aab', 'ab', 'ac', 'b']
+
+      def make_entity(ns):
+        client = cloud_datastore.Client()
+        e = cloud_datastore.Entity(key=client.key('__namespace__', ns))
+        return e
+
+      mock_query_obj.fetch.return_value = [make_entity(ns) for ns in ns_keys]
+      mock_query_obj.keys_only = mock.Mock()
+      mock_query_obj.key_filter = mock.Mock()
+
+      self.assertEqual(7, len(list(ns_range)))
 
 
 class NamespaceRangeSplitTest(unittest.TestCase):
-  """Tests namespace_range.NamespaceRange.split()."""
 
   def setUp(self):
     unittest.TestCase.setUp(self)
-
     namespace_range._setup_constants('abc', 3, 3)
     self.app_id = 'testbed-test'
     os.environ['APPLICATION_ID'] = self.app_id
-    self.datastore = datastore_file_stub.DatastoreFileStub(
-        self.app_id, '/dev/null', '/dev/null')
-
-    apiproxy_stub_map.apiproxy = apiproxy_stub_map.APIProxyStubMap()
-    apiproxy_stub_map.apiproxy.RegisterStub('datastore_v3', self.datastore)
-    namespace_manager.set_namespace(None)
 
   def tearDown(self):
     namespace_range._setup_constants()
     unittest.TestCase.tearDown(self)
 
   def CreateInNamespace(self, namespace):
-    old_ns = namespace_manager.get_namespace()
-    try:
-      namespace_manager.set_namespace(namespace)
-      pet = Pet()
-      pet.put()
-    finally:
-      namespace_manager.set_namespace(old_ns)
+    pet = Pet(namespace=namespace)
+    pet.put()
 
   def testSplitMultipleNamespacesPerShard(self):
     ns = [x + y + z
           for x in list('cba') for y in list('abc') for z in list('bac')]
-    db.put([Pet(key=db.Key.from_path('Pet', '1', namespace=x)) for x in ns])
+    for x in ns:
+      ndb.put_multi([Pet(id='1', namespace=x)])
     ranges = namespace_range.NamespaceRange.split(
         3, contiguous=False, can_query=lambda: True)
     self.assertEqual(3, len(ranges))
@@ -246,10 +236,6 @@ class NamespaceRangeSplitTest(unittest.TestCase):
                                              _app=self.app_id))
 
   def testSplitWithInfiniteQueriesSmallerSplitThanNamespaces(self):
-    # Create 6 namespaces and split by 3 ranges. Use contiguous data for this
-    # test (although we are not testing contiguous) and since the mid-point is
-    # rounded down, skip 'aa' and 'aba' so that start and end of each range
-    # will match exactly and contain 2 items.
     self.CreateInNamespace('a')
     self.CreateInNamespace('aaa')
     self.CreateInNamespace('aab')
@@ -269,7 +255,6 @@ class NamespaceRangeSplitTest(unittest.TestCase):
                                              can_query=lambda: True))
 
   def testSplitWithInfiniteQueriesEqualSplitToNamespaces(self):
-    # Create 6 namespaces and split by 6 ranges.
     self.CreateInNamespace('a')
     self.CreateInNamespace('aa')
     self.CreateInNamespace('aab')
@@ -295,7 +280,6 @@ class NamespaceRangeSplitTest(unittest.TestCase):
                                              can_query=lambda: True))
 
   def testSplitWithInfiniteQueriesLargerSplitThanNamespaces(self):
-    # Create 6 namespaces and split by 10 ranges.
     self.CreateInNamespace('a')
     self.CreateInNamespace('aa')
     self.CreateInNamespace('aab')

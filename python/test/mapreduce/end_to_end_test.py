@@ -11,8 +11,8 @@ import datetime
 import random
 import string
 
-from google.appengine.ext import db
-from google.appengine.ext import ndb
+from google.cloud import exceptions
+from google.cloud import ndb
 
 from mapreduce import context
 from mapreduce import control
@@ -32,14 +32,13 @@ def random_string(length):
       random.choice(string.ascii_letters + string.digits) for _ in range(length))
 
 
-class FakeEntity(db.Model):
-  """Test entity class."""
-  int_property = db.IntegerProperty()
-  dt = db.DateTimeProperty(default=datetime.datetime(2000, 1, 1))
+class FakeEntity(ndb.Model):
+  int_property = ndb.IntegerProperty()
+  dt = ndb.DateTimeProperty(default=datetime.datetime(2000, 1, 1))
 
 
 class NdbFakeEntity(ndb.Model):
-  """Test entity class for NDB."""
+  pass
 
 
 class FakeHandler:
@@ -61,7 +60,6 @@ class FakeHandler:
 
   @staticmethod
   def reset():
-    """Clear processed_entites & reset delay to 0."""
     FakeHandler.processed_entites = []
 
 
@@ -69,10 +67,7 @@ class SerializableHandler:
   """Handler that utilize serialization."""
 
   _next_instance_id = 0
-  # The first few instances will keep raising errors.
-  # This is to test that upon shard retry, shard creates a new handler.
   INSTANCES_THAT_RAISE_ERRORS = 3
-  # The first instance is created for validation and not used by any shard.
   FAILURES_INDUCED_BY_INSTANCE = INSTANCES_THAT_RAISE_ERRORS - 1
 
   def __init__(self):
@@ -83,7 +78,6 @@ class SerializableHandler:
   def __call__(self, entity):
     if self.instance < self.INSTANCES_THAT_RAISE_ERRORS:
       raise exceptions.GoogleCloudError("Injected error.")
-    # Increment the int property by one on every call.
     entity.int_property = self.count
     entity.put()
     self.count += 1
@@ -95,7 +89,7 @@ class SerializableHandler:
 
 def fake_handler_yield_key(entity):
   """Test handler which yields entity key."""
-  yield entity.key()
+  yield entity.key
 
 
 def fake_handler_yield_ndb_key(entity):
@@ -165,7 +159,6 @@ class EndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
     for _ in range(entity_count):
       FakeEntity(int_property=-1).put()
 
-    # Force handler to serialize on every call.
     parameters.config._SLICE_DURATION_SEC = 0
 
     control.start_map(
@@ -181,12 +174,9 @@ class EndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
     task_run_counts = test_support.execute_until_empty(self.taskqueue)
     self.assertEqual(
         task_run_counts[handlers.MapperWorkerCallbackHandler],
-        # Shard retries + one per entity + one to exhaust input reader + one for
-        # finalization.
         SerializableHandler.FAILURES_INDUCED_BY_INSTANCE + entity_count + 1 + 1)
-    vals = [e.int_property for e in FakeEntity.all()]
+    vals = [e.int_property for e in FakeEntity.query()]
     vals.sort()
-    # SerializableHandler updates int_property to be incremental from 0 to 9.
     self.assertEqual(list(range(10)), vals)
 
   def testLotsOfEntities(self):
@@ -221,7 +211,6 @@ class EndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
         {
             "entity_kind": __name__ + "." + FakeEntity.__name__,
             "filters": [("int_property", "=", 3),
-                        # Test datetime can be json serialized.
                         ("dt", "=", datetime.datetime(2000, 1, 1))],
         },
         shard_count=4,
@@ -327,7 +316,7 @@ class EndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
     test_filename = f"{self.gcsPrefix}/testfile"
 
     blob = self.bucket.blob(test_filename)
-    
+
     with blob.open("wb") as f:
       with records.RecordsWriter(f) as w:
         for record in input_data:
@@ -341,9 +330,7 @@ class EndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
             "input_reader": {
                 "bucket_name": self.TEST_BUCKET,
                 "objects": [test_filename],
-                # the parameter will be compressed and should fit into
-                # taskqueue payload
-                "huge_parameter": "0" * 200000,  # 200K
+                "huge_parameter": "0" * 200000,
             }
         },
         shard_count=4,
@@ -351,7 +338,7 @@ class EndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
 
     test_support.execute_until_empty(self.taskqueue)
     self.assertEqual(100, len(FakeHandler.processed_entites))
-    self.assertEqual([], model._HugeTaskPayload.all().fetch(100))
+    self.assertEqual([], model._HugeTaskPayload.query().fetch(100))
 
   def testHugeTaskUseDatastore(self):
     """Test map job with huge parameter values."""
@@ -374,8 +361,6 @@ class EndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
             "input_reader": {
                 "bucket_name": self.TEST_BUCKET,
                 "objects": [test_filename],
-                # the parameter can't be compressed and wouldn't fit into
-                # taskqueue payload
                 "huge_parameter": random_string(900000)
             }
         },
@@ -384,7 +369,7 @@ class EndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
 
     test_support.execute_until_empty(self.taskqueue)
     self.assertEqual(100, len(FakeHandler.processed_entites))
-    self.assertEqual([], model._HugeTaskPayload.all().fetch(100))
+    self.assertEqual([], model._HugeTaskPayload.query().fetch(100))
 
 
 class GCSOutputWriterTestBase(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
@@ -395,15 +380,11 @@ class GCSOutputWriterTestBase(testutil.CloudStorageTestBase, testutil.HandlerTes
     self.original_slice_duration = parameters.config._SLICE_DURATION_SEC
     self.writer_cls = output_writers._GoogleCloudStorageOutputWriter
 
-    # Populate datastore with inputs.
     entity_count = 30
     for i in range(entity_count):
       FakeEntity(int_property=i).put()
 
-    # Make slice short.
     parameters.config._SLICE_DURATION_SEC = 1
-    # 5 items per second. This effectively terminates a slice after
-    # processing 5 items.
     self.processing_rate = 5
 
   def tearDown(self):
@@ -415,10 +396,6 @@ class GCSOutputWriterNoDupModeTest(GCSOutputWriterTestBase):
   """Test GCS output writer slice recovery."""
 
   def testSliceRecoveryWithForcedFlushing(self):
-    # Force a flush to GCS on every character wrote.
-    # storage_api.StreamingBuffer._blocksize = 1
-    # storage_api.StreamingBuffer._flushsize = 1
-
     mr_id = control.start_map(
         self.gcsPrefix,
         __name__ + ".FaultyHandler",
@@ -439,32 +416,24 @@ class GCSOutputWriterNoDupModeTest(GCSOutputWriterTestBase):
 
     test_support.execute_until_empty(self.taskqueue)
     mr_state = model.MapreduceState.get_by_job_id(mr_id)
-    # Verify MR is successful.
     self.assertEqual(model.MapreduceState.RESULT_SUCCESS,
                      mr_state.result_status)
 
-    # Read output info from shard states.
     shard_state = next(model.ShardState.find_all_by_mapreduce_state(mr_state))
     writer_state = shard_state.writer_state
     last_seg_index = writer_state[self.writer_cls._LAST_SEG_INDEX]
     seg_prefix = writer_state[self.writer_cls._SEG_PREFIX]
 
-    # Verify we have 5 segs.
     self.assertEqual(4, last_seg_index)
 
     self._assertOutputEqual(seg_prefix, last_seg_index)
 
-    # Check there are indeed duplicated data.
     f1 = {line for line in self.bucket.blob(seg_prefix + "0").open("rb")}
     f2 = {line for line in self.bucket.blob(seg_prefix + "1").open("rb")}
     common = f1.intersection(f2)
     self.assertEqual({"10\n", "11\n"}, common)
 
   def testSliceRecoveryWithFrequentFlushing(self):
-    # Force a flush to GCS on every 8 chars.
-    # storage_api.StreamingBuffer._blocksize = 8
-    # storage_api.StreamingBuffer._flushsize = 8
-
     mr_id = control.start_map(
         self.gcsPrefix,
         __name__ + ".FaultyHandler",
@@ -485,23 +454,19 @@ class GCSOutputWriterNoDupModeTest(GCSOutputWriterTestBase):
 
     test_support.execute_until_empty(self.taskqueue)
     mr_state = model.MapreduceState.get_by_job_id(mr_id)
-    # Verify MR is successful.
     self.assertEqual(model.MapreduceState.RESULT_SUCCESS,
                      mr_state.result_status)
 
-    # Read output info from shard states.
     shard_state = next(model.ShardState.find_all_by_mapreduce_state(mr_state))
     writer_state = shard_state.writer_state
     last_seg_index = writer_state[self.writer_cls._LAST_SEG_INDEX]
     seg_prefix = writer_state[self.writer_cls._SEG_PREFIX]
 
-    # Verify we have 5 segs.
     self.assertEqual(4, last_seg_index)
 
     self._assertOutputEqual(seg_prefix, last_seg_index)
 
   def testSliceRecoveryWithNoFlushing(self):
-    # Flushing is done every 256K, which means never until slice recovery.
     mr_id = control.start_map(
         self.gcsPrefix,
         __name__ + ".FaultyHandler",
@@ -522,23 +487,19 @@ class GCSOutputWriterNoDupModeTest(GCSOutputWriterTestBase):
 
     test_support.execute_until_empty(self.taskqueue)
     mr_state = model.MapreduceState.get_by_job_id(mr_id)
-    # Verify MR is successful.
     self.assertEqual(model.MapreduceState.RESULT_SUCCESS,
                      mr_state.result_status)
 
-    # Read output info from shard states.
     shard_state = next(model.ShardState.find_all_by_mapreduce_state(mr_state))
     writer_state = shard_state.writer_state
     last_seg_index = writer_state[self.writer_cls._LAST_SEG_INDEX]
     seg_prefix = writer_state[self.writer_cls._SEG_PREFIX]
 
-    # Verify we have 5 segs.
     self.assertEqual(4, last_seg_index)
 
     self._assertOutputEqual(seg_prefix, last_seg_index)
 
   def _assertOutputEqual(self, seg_prefix, last_seg_index):
-    # Read back outputs.
     reader = gcs_file_seg_reader._GCSFileSegReader(self.bucket, seg_prefix, last_seg_index)
     result = b""
     while True:
@@ -547,7 +508,6 @@ class GCSOutputWriterNoDupModeTest(GCSOutputWriterTestBase):
         break
       result += tmp
 
-    # Verify output has no duplicates.
     expected = b""
     for i in range(30):
       expected += b"%d\n" % i
@@ -561,16 +521,12 @@ class FaultyHandler:
 
   # pylint: disable=unused-argument
   def __setstate__(self, state):
-    # Reset at beginning of each slice.
     self.slice_count = 0
 
   def __call__(self, entity):
     self.slice_count += 1
     yield "%s\n" % entity.int_property
     slice_id = context.get()._shard_state.slice_id
-    # Raise exception when processing the 2 item in a slice every 3 slices.
     if (self.slice_count == 2 and
         (slice_id + 1) % 3 == 0):
       raise Exception("Intentionally raise an exception")
-
-

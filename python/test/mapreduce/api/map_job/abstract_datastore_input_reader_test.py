@@ -3,11 +3,7 @@
 import os
 import unittest
 
-from google.appengine.api import datastore_types
-from google.appengine.api import namespace_manager
-from google.appengine.datastore import datastore_stub_util
-from google.appengine.ext import key_range
-from google.appengine.ext import testbed
+from mapreduce.compat import key_range
 from mapreduce import errors
 from mapreduce import model
 from testlib import testutil
@@ -18,29 +14,16 @@ from mapreduce.api.map_job import abstract_datastore_input_reader
 
 
 class AbstractDatastoreInputReaderTest(testutil.CloudStorageTestBase, unittest.TestCase):
-  """Tests for AbstractDatastoreInputReader."""
 
   @property
   def reader_cls(self):
     return abstract_datastore_input_reader.AbstractDatastoreInputReader
 
   def setUp(self):
-    self.testbed = testbed.Testbed()
     self.appid = "testbed-test"
-    self.testbed.activate()
-    self.testbed.init_datastore_v3_stub()
-    self.testbed.init_memcache_stub()
-    namespace_manager.set_namespace(None)
-
-  def tearDown(self):
-    # Restore the scatter property setter to the original one.
-    datastore_stub_util._SPECIAL_PROPERTY_MAP[
-        datastore_types.SCATTER_SPECIAL_PROPERTY] = (
-            False, True, datastore_stub_util._GetScatterProperty)
-    self.testbed.deactivate()
+    super().setUp()
 
   def testValidate_Passes(self):
-    """Test validate function accepts valid parameters."""
     params = {
         "entity_kind": testutil.ENTITY_KIND,
         }
@@ -53,7 +36,6 @@ class AbstractDatastoreInputReaderTest(testutil.CloudStorageTestBase, unittest.T
     self.reader_cls.validate(conf)
 
   def testValidate_NoEntityFails(self):
-    """Test validate function raises exception with no entity parameter."""
     params = {}
     conf = map_job.JobConfig(
         job_name=self.gcsPrefix,
@@ -66,7 +48,6 @@ class AbstractDatastoreInputReaderTest(testutil.CloudStorageTestBase, unittest.T
                       conf)
 
   def testValidate_EntityKindWithNoModel(self):
-    """Test validate function with bad entity kind."""
     params = {
         "entity_kind": "foo",
         }
@@ -79,7 +60,6 @@ class AbstractDatastoreInputReaderTest(testutil.CloudStorageTestBase, unittest.T
     self.reader_cls.validate(conf)
 
   def testValidate_BadBatchSize(self):
-    """Test validate function rejects bad batch sizes."""
     params = {
         "entity_kind": testutil.ENTITY_KIND,
         "batch_size": "xxx"
@@ -93,7 +73,6 @@ class AbstractDatastoreInputReaderTest(testutil.CloudStorageTestBase, unittest.T
     self.assertRaises(errors.BadReaderParamsError,
                       self.reader_cls.validate,
                       conf)
-    # Batch size of 0 is invalid.
     params = {
         "entity_kind": testutil.ENTITY_KIND,
         "batch_size": "0"
@@ -108,7 +87,6 @@ class AbstractDatastoreInputReaderTest(testutil.CloudStorageTestBase, unittest.T
                       self.reader_cls.validate,
                       conf)
 
-    # Batch size of -1 is invalid.
     params = {
         "entity_kind": testutil.ENTITY_KIND,
         "batch_size": "-1"
@@ -124,7 +102,6 @@ class AbstractDatastoreInputReaderTest(testutil.CloudStorageTestBase, unittest.T
                       conf)
 
   def testValidate_WrongTypeNamespace(self):
-    """Tests validate function rejects namespace of incorrect type."""
     params = {
         "entity_kind": testutil.ENTITY_KIND,
         "namespace": 5
@@ -140,7 +117,6 @@ class AbstractDatastoreInputReaderTest(testutil.CloudStorageTestBase, unittest.T
                       conf)
 
   def testChooseSplitPoints(self):
-    """Tests Abstract Datastore Input Reader._choose_split_points."""
     self.assertEqual(
         [5],
         self.reader_cls._choose_split_points(
@@ -156,7 +132,6 @@ class AbstractDatastoreInputReaderTest(testutil.CloudStorageTestBase, unittest.T
         self.reader_cls._choose_split_points(
             sorted([0, 1, 7, 8, 9, 3, 2, 4, 6, 5]), 10))
 
-    # Too few random keys
     self.assertRaises(
         AssertionError,
         self.reader_cls._choose_split_points,
@@ -168,7 +143,6 @@ class AbstractDatastoreInputReaderTest(testutil.CloudStorageTestBase, unittest.T
     self.assertEqual(expected, results)
 
   def testSplitNSByScatter_NotEnoughData(self):
-    """Splits should not intersect, if there's not enough data for each."""
     testutil._create_entities(list(range(2)), {"1": 1})
 
     expected = [key_range.KeyRange(key_start=None,
@@ -189,7 +163,6 @@ class AbstractDatastoreInputReaderTest(testutil.CloudStorageTestBase, unittest.T
     self._assertEquals_splitNSByScatter(4, expected)
 
   def testSplitNSByScatter_NotEnoughData2(self):
-    """Splits should not intersect, if there's not enough data for each."""
     testutil._create_entities(list(range(10)), {"2": 2, "4": 4})
     expected = [key_range.KeyRange(key_start=None,
                                    key_end=testutil.key("2"),
@@ -216,7 +189,6 @@ class AbstractDatastoreInputReaderTest(testutil.CloudStorageTestBase, unittest.T
     self._assertEquals_splitNSByScatter(4, expected)
 
   def testSplitNSByScatter_LotsOfData(self):
-    """Split lots of data for each shard."""
     testutil._create_entities(list(range(100)),
                               {"80": 80, "50": 50, "30": 30, "10": 10},
                               ns="google")
@@ -322,7 +294,6 @@ class AbstractDatastoreInputReaderTest(testutil.CloudStorageTestBase, unittest.T
     shards = 3
 
     expected = [
-        # shard 1
         key_range.KeyRange(key_start=None,
                            key_end=testutil.key("5", namespace="0"),
                            direction="ASC",
@@ -344,7 +315,6 @@ class AbstractDatastoreInputReaderTest(testutil.CloudStorageTestBase, unittest.T
                            include_end=False,
                            namespace="2",
                            _app=self.appid),
-        # shard 2
         key_range.KeyRange(key_start=testutil.key("5", namespace="0"),
                            key_end=None,
                            direction="ASC",
@@ -366,7 +336,6 @@ class AbstractDatastoreInputReaderTest(testutil.CloudStorageTestBase, unittest.T
                            include_end=False,
                            namespace="2",
                            _app=self.appid),
-        # shard 3
         key_range.KeyRange(key_start=testutil.key("6", namespace="1"),
                            key_end=None,
                            direction="ASC",
@@ -393,5 +362,3 @@ class AbstractDatastoreInputReaderTest(testutil.CloudStorageTestBase, unittest.T
       results.extend(list(kranges))
     results.sort()
     self.assertEqual(expected, results)
-
-

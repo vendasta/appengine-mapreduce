@@ -9,27 +9,24 @@
 import datetime
 
 import pipeline
-from google.appengine.ext import db
+from google.cloud import ndb
 from testlib import testutil
 
 from mapreduce import (context, errors, input_readers, mapper_pipeline, model,
                        test_support)
 
 
-class FakeEntity(db.Model):
-  """Test entity class."""
-  data = db.StringProperty()
-  dt = db.DateTimeProperty(default=datetime.datetime(2000, 1, 1))
+class FakeEntity(ndb.Model):
+  data = ndb.StringProperty()
+  dt = ndb.DateTimeProperty(default=datetime.datetime(2000, 1, 1))
 
 
-class FakeOutputEntity(db.Model):
-  """TestOutput entity class."""
-  data = db.StringProperty()
+class FakeOutputEntity(ndb.Model):
+  data = ndb.StringProperty()
 
 
-class RetryCount(db.Model):
-  """Use to keep track of slice/shard retries."""
-  retries = db.IntegerProperty()
+class RetryCount(ndb.Model):
+  retries = ndb.IntegerProperty()
 
 
 def fake_fail_map(_):
@@ -40,40 +37,40 @@ def fake_fail_map(_):
 def fake_slice_retry_map(entity):
   """Raise exception for 11 times when data is 100."""
   if entity.data == "100":
-    retry_count = RetryCount.get_by_key_name(entity.data)
+    retry_count = RetryCount.get_by_id(entity.data)
     if not retry_count:
-      retry_count = RetryCount(key_name=entity.data, retries=0)
+      retry_count = RetryCount(id=entity.data, retries=0)
     if retry_count.retries < 11:
       retry_count.retries += 1
       retry_count.put()
       raise Exception()
-  FakeOutputEntity(key_name=entity.data, data=entity.data).put()
+  FakeOutputEntity(id=entity.data, data=entity.data).put()
 
 
 def fake_shard_retry_map(entity):
   """Raise exception 12 times when data is 100."""
   if entity.data == "100":
-    retry_count = RetryCount.get_by_key_name(entity.data)
+    retry_count = RetryCount.get_by_id(entity.data)
     if not retry_count:
-      retry_count = RetryCount(key_name=entity.data, retries=0)
+      retry_count = RetryCount(id=entity.data, retries=0)
     if retry_count.retries < 12:
       retry_count.retries += 1
       retry_count.put()
       raise Exception()
-  FakeOutputEntity(key_name=entity.data, data=entity.data).put()
+  FakeOutputEntity(id=entity.data, data=entity.data).put()
 
 
 def fake_shard_retry_too_many_map(entity):
   """Raise shard retry exception 45 times when data is 100."""
   if entity.data == "100":
-    retry_count = RetryCount.get_by_key_name(entity.data)
+    retry_count = RetryCount.get_by_id(entity.data)
     if not retry_count:
-      retry_count = RetryCount(key_name=entity.data, retries=0)
+      retry_count = RetryCount(id=entity.data, retries=0)
     if retry_count.retries < 45:
       retry_count.retries += 1
       retry_count.put()
       raise Exception()
-  FakeOutputEntity(key_name=entity.data, data=entity.data).put()
+  FakeOutputEntity(id=entity.data, data=entity.data).put()
 
 
 def fake_map(entity):
@@ -99,7 +96,6 @@ class MapperPipelineTest(testutil.HandlerTestBase):
         params={
             "input_reader": {
                 "entity_kind": __name__ + ".FakeEntity",
-                # Test datetime can be json serialized.
                 "filters": [("dt", "=", datetime.datetime(2000, 1, 1))],
                 },
             },
@@ -110,18 +106,13 @@ class MapperPipelineTest(testutil.HandlerTestBase):
     self.assertFalse(p.was_aborted)
 
     p = mapper_pipeline.MapperPipeline.from_id(p.pipeline_id)
-    # Verify outputs.
-    # Counter output
     counters = p.outputs.counters.value
     self.assertTrue(counters)
     self.assertTrue(context.COUNTER_MAPPER_WALLTIME_MS in counters)
-    # Default output.
     self.assertEqual([], p.outputs.default.value)
-    # Job id output.
     self.assertTrue(p.outputs.job_id.filled)
     state = model.MapreduceState.get_by_job_id(p.outputs.job_id.value)
     self.assertEqual(model.MapreduceState.RESULT_SUCCESS, state.result_status)
-    # Result status output.
     self.assertEqual(model.MapreduceState.RESULT_SUCCESS,
                      p.outputs.result_status.value)
 
@@ -188,8 +179,8 @@ class MapperPipelineTest(testutil.HandlerTestBase):
 
   def testSliceRetry(self):
     entity_count = 200
-    db.delete(FakeOutputEntity.all())
-    db.delete(RetryCount.all())
+    ndb.delete_multi(FakeOutputEntity.query().fetch(keys_only=True))
+    ndb.delete_multi(RetryCount.query().fetch(keys_only=True))
 
     for i in range(entity_count):
       FakeEntity(data=str(i)).put()
@@ -211,7 +202,7 @@ class MapperPipelineTest(testutil.HandlerTestBase):
 
     p = mapper_pipeline.MapperPipeline.from_id(p.pipeline_id)
     outputs = []
-    for output in FakeOutputEntity.all():
+    for output in FakeOutputEntity.query():
       outputs.append(int(output.data))
     outputs.sort()
 
@@ -221,8 +212,8 @@ class MapperPipelineTest(testutil.HandlerTestBase):
 
   def testShardRetry(self):
     entity_count = 200
-    db.delete(FakeOutputEntity.all())
-    db.delete(RetryCount.all())
+    ndb.delete_multi(FakeOutputEntity.query().fetch(keys_only=True))
+    ndb.delete_multi(RetryCount.query().fetch(keys_only=True))
 
     for i in range(entity_count):
       FakeEntity(data=str(i)).put()
@@ -244,7 +235,7 @@ class MapperPipelineTest(testutil.HandlerTestBase):
 
     p = mapper_pipeline.MapperPipeline.from_id(p.pipeline_id)
     outputs = []
-    for output in FakeOutputEntity.all():
+    for output in FakeOutputEntity.query():
       outputs.append(int(output.data))
     outputs.sort()
 
@@ -254,8 +245,8 @@ class MapperPipelineTest(testutil.HandlerTestBase):
 
   def testShardRetryTooMany(self):
     entity_count = 200
-    db.delete(FakeOutputEntity.all())
-    db.delete(RetryCount.all())
+    ndb.delete_multi(FakeOutputEntity.query().fetch(keys_only=True))
+    ndb.delete_multi(RetryCount.query().fetch(keys_only=True))
 
     for i in range(entity_count):
       FakeEntity(data=str(i)).put()
@@ -274,5 +265,5 @@ class MapperPipelineTest(testutil.HandlerTestBase):
     p.start()
     test_support.execute_until_empty(self.taskqueue)
 
-    state = model.MapreduceState.all().get()
+    state = model.MapreduceState.query().get()
     self.assertEqual(model.MapreduceState.RESULT_FAILED, state.result_status)

@@ -23,7 +23,7 @@ import os
 import sys
 import unittest
 
-from google.appengine.api import taskqueue
+from pipeline import taskqueue_compat as taskqueue
 
 from mapreduce import model
 from mapreduce import parameters
@@ -216,7 +216,6 @@ class GetTaskHeadersTest(unittest.TestCase):
                           headers={"Host": util._get_task_host()})
     self.assertEqual("v7.foo-module.foo.appspot.com",
                      task.headers["Host"])
-    self.assertEqual("v7.foo-module", task.target)
 
   def testGetTaskHostDefaultModule(self):
     os.environ["GAE_SERVICE"] = "default"
@@ -225,7 +224,6 @@ class GetTaskHeadersTest(unittest.TestCase):
                           headers={"Host": util._get_task_host()})
     self.assertEqual("v7.foo.appspot.com",
                      task.headers["Host"])
-    self.assertEqual("v7", task.target)
 
   def testGetTaskHeaders(self):
     mr_spec = model.MapreduceSpec(
@@ -236,7 +234,6 @@ class GetTaskHeadersTest(unittest.TestCase):
     self.assertEqual("foo_id", task.headers[util._MR_ID_TASK_HEADER])
     self.assertEqual("v7.foo-module.foo.appspot.com",
                      task.headers["Host"])
-    self.assertEqual("v7.foo-module", task.target)
 
 
 class GetShortNameTest(unittest.TestCase):

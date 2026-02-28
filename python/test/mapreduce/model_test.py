@@ -27,8 +27,7 @@ import unittest
 from unittest import mock
 import urllib.parse
 
-from google.appengine.ext import db
-from google.appengine.ext import testbed
+from google.cloud import ndb
 from mapreduce import hooks
 from mapreduce import model
 
@@ -252,14 +251,6 @@ class MapreduceSpecTest(unittest.TestCase):
 class ShardStateTest(unittest.TestCase):
   """Tests model.ShardState."""
 
-  def setUp(self):
-    self.testbed = testbed.Testbed()
-    self.testbed.activate()
-    self.testbed.init_datastore_v3_stub()
-
-  def tearDown(self):
-    self.testbed.deactivate()
-
   def testAccessors(self):
     """Tests simple accessors."""
     shard = model.ShardState.create_new("my-map-job1", 14)
@@ -295,7 +286,7 @@ class ShardStateTest(unittest.TestCase):
     mr_state.put()
     for i in range(304):
       model.ShardState.create_new("mapreduce-id", i).put()
-    @db.transactional(xg=False)
+    @ndb.transactional()
     def non_xg_tx():
       # Open a single non-related entity group to ensure
       # find_all_by_mapreduce_state does not attempt to use outer transaction
@@ -368,5 +359,3 @@ class CountersMapTest(unittest.TestCase):
     counters_map.clear()
 
     self.assertEqual(0, counters_map.get("1"))
-
-

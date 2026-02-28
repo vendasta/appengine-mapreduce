@@ -9,7 +9,7 @@
 
 import unittest
 
-from google.appengine.ext import db
+from google.cloud import ndb
 
 from mapreduce import control
 from mapreduce import input_readers
@@ -27,8 +27,8 @@ DATASTORE_READER_NAME = (input_readers.__name__ + "." +
                          input_readers.DatastoreInputReader.__name__)
 
 
-class FakeEntity(db.Model):
-  """Test entity class."""
+class FakeEntity(ndb.Model):
+  pass
 
 
 def fake_handler_yield_key_str(entity):
@@ -72,8 +72,6 @@ class GoogleCloudStorageOutputWriterEndToEndTest(testutil.CloudStorageTestBase, 
       self.assertTrue(filenames[shard].startswith(job_name))
       blob = self.bucket.blob(filenames[shard])
       data = blob.download_as_string()
-      # strip() is used to remove the last newline of each file so that split()
-      # does not retrun extraneous empty entries.
       total_entries += len(data.strip().split(b"\n"))
     self.assertEqual(entity_count, total_entries)
 
@@ -119,8 +117,6 @@ class GCSRecordOutputWriterEndToEndTestBase(testutil.CloudStorageTestBase, testu
       self.assertTrue(filenames[shard].startswith(job_name))
       data = b"".join([_ for _ in records.RecordsReader(
           self.bucket.blob(filenames[shard]).open("rb"))])
-      # strip() is used to remove the last newline of each file so that split()
-      # does not return extraneous empty entries.
       total_entries += len(data.strip().split(b"\n"))
     self.assertEqual(entity_count, total_entries)
 
@@ -186,17 +182,13 @@ class GoogleCloudStorageConsistentOutputWriterEndToEndTest(
     for shard in range(num_shards):
       self.assertTrue(filenames[shard].startswith(job_name))
       data = self.bucket.blob(filenames[shard]).download_as_bytes()
-      # strip() is used to remove the last newline of each file so that split()
-      # does not retrun extraneous empty entries.
       total_entries += len(data.strip().split(b"\n"))
     self.assertEqual(entity_count, total_entries)
 
-    # no files left in tmpbucket
     bucket = _storage_client.bucket(self.TEST_TMP_BUCKET)
     blobs = list(bucket.list_blobs())
     self.assertFalse(blobs)
 
-    # and only expected files in regular bucket
     bucket = _storage_client.bucket(self.TEST_BUCKET)
     blobs = list(bucket.list_blobs())
     files_in_bucket = [blob.name for blob in blobs]
@@ -207,5 +199,3 @@ class GoogleCloudStorageConsistentOutputWriterEndToEndTest(
 
   def testMultipleShards(self):
     self._runTest(num_shards=4)
-
-

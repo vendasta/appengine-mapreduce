@@ -21,7 +21,7 @@ import string
 import time
 import unittest
 
-from google.appengine.ext import db
+from google.cloud import ndb
 
 from mapreduce import control
 from mapreduce import hooks
@@ -32,17 +32,15 @@ from mapreduce.api import map_job
 
 
 def random_string(length):
-  """Generate a random string of given length."""
   return "".join(
       random.choice(string.ascii_letters + string.digits) for _ in range(length))
 
 
-class FakeEntity(db.Model):
-  """Test entity class."""
+class FakeEntity(ndb.Model):
+  pass
 
 
 class FakeHooks(hooks.Hooks):
-  """Test hooks class."""
 
   enqueue_kickoff_task_calls = []
 
@@ -51,12 +49,10 @@ class FakeHooks(hooks.Hooks):
 
 
 def fake_handler(entity):
-  """Test handler function."""
   pass
 
 
 class ControlTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
-  """Tests for control module."""
 
   QUEUE_NAME = "crazy-queue"
 
@@ -65,19 +61,15 @@ class ControlTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
     FakeHooks.enqueue_kickoff_task_calls = []
 
   def get_mapreduce_spec(self, task):
-    """Get mapreduce spec form kickoff task payload."""
     payload = test_support.decode_task_payload(task)
     return model.MapreduceSpec.from_json_str(payload["mapreduce_spec"])
 
   def validate_map_started(self, mapreduce_id, queue_name=None):
-    """Tests that the map has been started."""
     queue_name = queue_name or self.QUEUE_NAME
     self.assertTrue(mapreduce_id)
 
-    # Note: only a kickoff job is pending at this stage, shards come later.
-    tasks = self.taskqueue.GetTasks(queue_name)
+    tasks = self.taskqueue.get_tasks(queue_name)
     self.assertEqual(1, len(tasks))
-    # Checks that tasks are scheduled into the future.
     task = tasks[0]
     self.assertEqual("/mapreduce/kickoffjob_callback/" + mapreduce_id,
                      task["url"])
@@ -94,11 +86,6 @@ class ControlTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
     return task["eta"]
 
   def testStartMap(self):
-    """Test start_map function.
-
-    Most of start_map functionality is already tested by handlers_test.
-    Just a smoke test is enough.
-    """
     FakeEntity().put()
 
     shard_count = 4
@@ -116,14 +103,8 @@ class ControlTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
     self.validate_map_started(mapreduce_id)
 
   def testStartMap_Countdown(self):
-    """Test that MR can be scheduled into the future.
-
-    Most of start_map functionality is already tested by handlers_test.
-    Just a smoke test is enough.
-    """
     FakeEntity().put()
 
-    # MR should be scheduled into the future.
     now_sec = int(time.time())
 
     shard_count = 4
@@ -144,14 +125,8 @@ class ControlTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
     self.assertTrue(now_sec + 1000 <= eta_sec)
 
   def testStartMap_Eta(self):
-    """Test that MR can be scheduled into the future.
-
-    Most of start_map functionality is already tested by handlers_test.
-    Just a smoke test is enough.
-    """
     FakeEntity().put()
 
-    # MR should be scheduled into the future.
     eta = datetime.datetime.utcnow() + datetime.timedelta(hours=1)
 
     shard_count = 4
@@ -171,7 +146,6 @@ class ControlTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
     self.assertEqual(eta.strftime("%Y/%m/%d %H:%M:%S"), task_eta)
 
   def testStartMap_QueueEnvironment(self):
-    """Test that the start_map inherits its queue from the enviornment."""
     FakeEntity().put()
 
     shard_count = 4
@@ -193,11 +167,6 @@ class ControlTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
     self.validate_map_started(mapreduce_id)
 
   def testStartMap_Hooks(self):
-    """Tests that MR can be scheduled with a hook class installed.
-
-    Most of start_map functionality is already tested by handlers_test.
-    Just a smoke test is enough.
-    """
     FakeEntity().put()
 
     shard_count = 4
@@ -220,14 +189,6 @@ class ControlTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
     self.assertEqual("crazy-queue", queue_name)
 
   def testStartMap_RaisingHooks(self):
-    """Tests that MR can be scheduled with a dummy hook class installed.
-
-    The dummy hook class raises NotImplementedError for all method calls so the
-    default scheduling logic should be used.
-
-    Most of start_map functionality is already tested by handlers_test.
-    Just a smoke test is enough.
-    """
     FakeEntity().put()
 
     shard_count = 4
@@ -246,11 +207,6 @@ class ControlTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
     self.validate_map_started(mapreduce_id)
 
   def testStartMap_HugePayload(self):
-    """Test start_map function.
-
-    Most of start_map functionality is already tested by handlers_test.
-    Just a smoke test is enough.
-    """
     FakeEntity().put()
 
     shard_count = 4
@@ -270,17 +226,12 @@ class ControlTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
     self.validate_map_started(mapreduce_id)
 
   def testStartMapTransactional(self):
-    """Test start_map function.
-
-    Most of start_map functionality is already tested by handlers_test.
-    Just a smoke test is enough.
-    """
     FakeEntity().put()
 
     shard_count = 4
     mapreduce_id = ""
 
-    @db.transactional(xg=True)
+    @ndb.transactional()
     def tx():
       some_entity = FakeEntity()
       some_entity.put()
@@ -299,17 +250,12 @@ class ControlTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
     self.validate_map_started(mapreduce_id)
 
   def testStartMapTransactional_HugePayload(self):
-    """Test start_map function.
-
-    Most of start_map functionality is already tested by handlers_test.
-    Just a smoke test is enough.
-    """
     FakeEntity().put()
 
     shard_count = 4
     mapreduce_id = ""
 
-    @db.transactional(xg=True)
+    @ndb.transactional()
     def tx():
       some_entity = FakeEntity()
       some_entity.put()
@@ -327,5 +273,3 @@ class ControlTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
           in_xg_transaction=True)
     mapreduce_id = tx()
     self.validate_map_started(mapreduce_id)
-
-

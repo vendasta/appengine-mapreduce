@@ -3,10 +3,6 @@
 import random
 import unittest
 
-from google.appengine.api import datastore_types
-from google.appengine.api import namespace_manager
-from google.appengine.datastore import datastore_stub_util
-from google.appengine.ext import testbed
 from testlib import testutil
 from mapreduce.api import map_job
 
@@ -14,51 +10,35 @@ from mapreduce.api import map_job
 
 
 class SkipTestsMeta(type):
-  """Enables skipping tests from the base class but not when sub-classed."""
 
   def __init__(cls, name, bases, dct):
     super().__init__(name, bases, dct)
     if cls.__name__ == "DatastoreInputReaderBaseTest":
       unittest.skip("Skip tests when testing from the base class.")(cls)
     else:
-      # Since there is no unittest.unskip(), do it manually.
       cls.__unittest_skip__ = False
       cls.__unittest_skip_why__ = None
 
 
 class DatastoreInputReaderBaseTest(unittest.TestCase, metaclass=SkipTestsMeta):
-  """Base test class used by concrete DatastoreInputReaders."""
 
-  # Subclass should override with its own create entities function.
   @property
   def _create_entities(self):
     return testutil._create_entities
 
-  # Subclass should override with its own entity kind or model class path
   @property
   def entity_kind(self):
     return "TestEntity"
 
-  # Subclass should override with its own reader class.
   @property
   def reader_cls(self):
     raise NotImplementedError("reader_cls() not implemented in %s"
                               % self.__class__)
 
   def _get_keyname(self, entity):
-    """Get keyname from an entity of certain type."""
-    return entity.key().name()
+    return entity.key.string_id()
 
-  # Subclass should override with its own assert equals.
   def _assertEquals_splitInput(self, itr, keys):
-    """AssertEquals helper for splitInput tests.
-
-    Check the outputs from a single shard.
-
-    Args:
-      itr: input reader returned from splitInput.
-      keys: a set of expected key names from this iterator.
-    """
     results = []
     while True:
       try:
@@ -70,20 +50,7 @@ class DatastoreInputReaderBaseTest(unittest.TestCase, metaclass=SkipTestsMeta):
     keys.sort()
     self.assertEqual(keys, results)
 
-  # Subclass should override with its own assert equals.
   def _assertEqualsForAllShards_splitInput(self, keys, max_read, *itrs):
-    """AssertEquals helper for splitInput tests.
-
-    Check the outputs from all shards. This is used when sharding
-    has random factor.
-
-    Args:
-      keys: a set of expected key names from this iterator.
-      max_read: limit number of results read from the iterators before failing
-        or None for no limit. Useful for preventing infinite loops or bounding
-        the execution of the test.
-      *itrs: input readers returned from splitInput.
-    """
     results = []
     for itr in itrs:
       while True:
@@ -99,25 +66,14 @@ class DatastoreInputReaderBaseTest(unittest.TestCase, metaclass=SkipTestsMeta):
     self.assertEqual(keys, results)
 
   def setUp(self):
-    self.testbed = testbed.Testbed()
     unittest.TestCase.setUp(self)
-    self.testbed.activate()
-    self.testbed.init_datastore_v3_stub()
-    self.testbed.init_memcache_stub()
-    namespace_manager.set_namespace(None)
     self._original_max = (
         self.reader_cls.MAX_NAMESPACES_FOR_KEY_SHARD)
     self.reader_cls.MAX_NAMESPACES_FOR_KEY_SHARD = 2
 
   def tearDown(self):
-    # Restore the scatter property set to the original one.
-    datastore_stub_util._SPECIAL_PROPERTY_MAP[
-        datastore_types.SCATTER_SPECIAL_PROPERTY] = (
-            False, True, datastore_stub_util._GetScatterProperty)
-    # Restore max limit on ns sharding.
     self.reader_cls.MAX_NAMESPACES_FOR_KEY_SHARD = (
         self._original_max)
-    self.testbed.deactivate()
 
   def testSplitInput_withNs(self):
     self._create_entities(list(range(3)), {"1": 1}, "f")
@@ -219,14 +175,10 @@ class DatastoreInputReaderBaseTest(unittest.TestCase, metaclass=SkipTestsMeta):
 
   def testSplitInput_withNsAndDefaultNs(self):
     shards = 2
-    # 10 entities in the default namespace
     empty_ns_keys = [str(k) for k in range(10)]
     self._create_entities(empty_ns_keys,
                           {k: 1 for k in empty_ns_keys},
                           None)
-    # 10 entities for each of N different non-default namespaces. The number
-    # of namespaces, N, is set to be twice the cutoff for switching to sharding
-    # by namespace instead of keys.
     non_empty_ns_keys = []
     for ns_num in range(self.reader_cls.MAX_NAMESPACES_FOR_KEY_SHARD * 2):
       ns_keys = ["n-%02d-k-%02d" % (ns_num, k) for k in range(10)]
@@ -235,7 +187,6 @@ class DatastoreInputReaderBaseTest(unittest.TestCase, metaclass=SkipTestsMeta):
                             {k: 1 for k in ns_keys},
                             "%02d" % ns_num)
 
-    # Test a query over all namespaces
     params = {
         "entity_kind": self.entity_kind,
         "namespace": None}
@@ -251,5 +202,3 @@ class DatastoreInputReaderBaseTest(unittest.TestCase, metaclass=SkipTestsMeta):
     self._assertEqualsForAllShards_splitInput(all_keys,
                                               len(all_keys),
                                               *results)
-
-
