@@ -326,7 +326,7 @@ class AbstractDatastoreInputReader(InputReader):
       # If the number of ns is small, we shard each ns by key and assign each
       # shard a piece of a ns.
       elif len(ns_keys) <= cls.MAX_NAMESPACES_FOR_KEY_SHARD:
-        namespaces = [ns_key.name() or "" for ns_key in ns_keys]
+        namespaces = [ns_key.name or "" for ns_key in ns_keys]
         k_ranges = cls._to_key_ranges_by_shard(
             query_spec.app, namespaces, shard_count, query_spec)
       # When number of ns is large, we can only split lexicographically by ns.

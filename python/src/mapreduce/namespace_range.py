@@ -95,19 +95,12 @@ def _namespace_to_ord(namespace):
 
 
 def _key_for_namespace(namespace, app):
-  """Return the __namespace__ key for a namespace.
-
-  Args:
-    namespace: The namespace whose key is requested.
-    app: The id of the application that the key belongs to.
-
-  Returns:
-    An ndb.Key representing the namespace.
-  """
+  """Return the __namespace__ key for a namespace."""
+  client = cloud_datastore.Client(project=app)
   if namespace:
-    return ndb.Key(_NAMESPACE_KIND, namespace)
+    return client.key(_NAMESPACE_KIND, namespace)
   else:
-    return ndb.Key(_NAMESPACE_KIND, _EMPTY_NAMESPACE_ID)
+    return client.key(_NAMESPACE_KIND, _EMPTY_NAMESPACE_ID)
 
 
 class NamespaceRange:

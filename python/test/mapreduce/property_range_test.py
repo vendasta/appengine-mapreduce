@@ -50,7 +50,7 @@ class PropertyRangeTest(unittest.TestCase):
     filters = [["a", ">", 1], ["a", "<", 2]]
     prop, start, end = property_range.PropertyRange._get_range_from_filters(
         filters, FakeEntity)
-    self.assertEqual(prop, FakeEntity.a)
+    self.assertIs(prop, FakeEntity.a)
     self.assertEqual(start, ["a", ">", 1])
     self.assertEqual(end, ["a", "<", 2])
 
@@ -59,7 +59,7 @@ class PropertyRangeTest(unittest.TestCase):
                ["a", "=", 1]]
     prop, start, end = property_range.PropertyRange._get_range_from_filters(
         filters, FakeEntity)
-    self.assertEqual(prop, FakeEntity.datetime_property)
+    self.assertIs(prop, FakeEntity.datetime_property)
     self.assertEqual(start, ["datetime_property", ">", old])
     self.assertEqual(end, ["datetime_property", "<=", new])
 

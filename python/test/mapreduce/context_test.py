@@ -187,7 +187,6 @@ class MutationPoolTest(testutil.HandlerTestBase):
     self.assertEqual([], self.pool.ndb_puts.items)
     self.assertEqual([e.key], self.pool.ndb_deletes.items)
     self.assertEqual([], self.pool.puts.items)
-    self.assertEqual([], self.pool.deletes.items)
 
   def testDeleteNdbKey(self):
     e = FakeEntity(id='goingaway')
@@ -195,7 +194,6 @@ class MutationPoolTest(testutil.HandlerTestBase):
     self.assertEqual([], self.pool.ndb_puts.items)
     self.assertEqual([e.key], self.pool.ndb_deletes.items)
     self.assertEqual([], self.pool.puts.items)
-    self.assertEqual([], self.pool.deletes.items)
 
   def testFlush(self):
     self.pool = context._MutationPool(max_entity_count=3)

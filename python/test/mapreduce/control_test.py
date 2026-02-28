@@ -121,7 +121,10 @@ class ControlTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
         countdown=1000)
 
     task_eta = self.validate_map_started(mapreduce_id)
-    eta_sec = time.mktime(time.strptime(task_eta, "%Y/%m/%d %H:%M:%S"))
+    if isinstance(task_eta, datetime.datetime):
+      eta_sec = time.mktime(task_eta.timetuple())
+    else:
+      eta_sec = time.mktime(time.strptime(task_eta, "%Y/%m/%d %H:%M:%S"))
     self.assertTrue(now_sec + 1000 <= eta_sec)
 
   def testStartMap_Eta(self):
@@ -143,7 +146,10 @@ class ControlTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
         eta=eta)
 
     task_eta = self.validate_map_started(mapreduce_id)
-    self.assertEqual(eta.strftime("%Y/%m/%d %H:%M:%S"), task_eta)
+    if isinstance(task_eta, datetime.datetime):
+      self.assertEqual(eta.replace(microsecond=0), task_eta.replace(microsecond=0))
+    else:
+      self.assertEqual(eta.strftime("%Y/%m/%d %H:%M:%S"), task_eta)
 
   def testStartMap_QueueEnvironment(self):
     FakeEntity().put()

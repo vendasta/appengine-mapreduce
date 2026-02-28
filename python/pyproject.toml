@@ -1,6 +1,7 @@
 [tool.pytest.ini_options]
 pythonpath = ["src", "test"]
 testpaths = ["test"]
+timeout = 30
 env = [
     "GOOGLE_CLOUD_PROJECT=repcore-prod"
 ]

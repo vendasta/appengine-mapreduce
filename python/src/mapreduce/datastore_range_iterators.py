@@ -102,10 +102,8 @@ class _PropertyRangeModelIterator(RangeIterator):
   def __iter__(self):
     for ns in self._ns_range:
       self._query = self._property_range.make_query(ns)
-      self._query = self._query.iter(batch_size=self._query_spec.batch_size,
-                                     keys_only=self._query_spec.keys_only,
-                                     start_cursor=self._cursor,
-                                     produce_cursors=True)
+      self._query = self._query.iter(keys_only=self._query_spec.keys_only,
+                                     start_cursor=self._cursor)
       yield from self._query
       self._query = None
       self._cursor = None
@@ -297,10 +295,8 @@ class KeyRangeModelIterator(AbstractKeyRangeIterator):
         util.for_name(self._query_spec.model_class_path),
         filters=self._query_spec.filters)
 
-    self._query = self._query.iter(batch_size=self._query_spec.batch_size,
-                                   keys_only=self._query_spec.keys_only,
-                                   start_cursor=self._cursor,
-                                   produce_cursors=True)
+    self._query = self._query.iter(keys_only=self._query_spec.keys_only,
+                                   start_cursor=self._cursor)
     yield from self._query
 
   def _get_cursor(self):
@@ -318,10 +314,8 @@ class KeyRangeEntityIterator(AbstractKeyRangeIterator):
     self._query = self._key_range.make_ascending_datastore_query(
         self._query_spec.entity_kind, filters=self._query_spec.filters)
     self._query = self._query.iter(
-        batch_size=self._query_spec.batch_size,
         keys_only=self._query_spec.keys_only or self._KEYS_ONLY,
-        start_cursor=self._cursor,
-        produce_cursors=True)
+        start_cursor=self._cursor)
     yield from self._query
 
   def _get_cursor(self):
@@ -347,9 +341,7 @@ class KeyRangeEntityProtoIterator(AbstractKeyRangeIterator):
     query = self._key_range.make_ascending_datastore_query(
         self._query_spec.entity_kind, filters=self._query_spec.filters)
     self._query = query.iter(
-        batch_size=self._query_spec.batch_size,
-        start_cursor=self._cursor,
-        produce_cursors=True)
+        start_cursor=self._cursor)
     yield from self._query
 
   def _get_cursor(self):

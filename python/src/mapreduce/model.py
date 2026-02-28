@@ -145,8 +145,9 @@ class HugeTask:
         if not parent:
           raise ValueError("Huge tasks should specify parent entity.")
 
+        parent_key = parent.key if hasattr(parent, 'key') else parent
         payload_entity = _HugeTaskPayload(payload=compressed_payload,
-                          parent=parent)
+                          parent=parent_key)
         payload_key = payload_entity.put()
         self._payload = self.PAYLOAD_KEY_PARAM + payload_key.urlsafe().decode()
 
@@ -883,10 +884,14 @@ class ShardState(ndb.Model):
   @classmethod
   def find_all_by_mapreduce_state(cls, mapreduce_state):
     keys = cls.calculate_keys_by_mapreduce_state(mapreduce_state)
+    use_cache = not ndb.in_transaction()
     i = 0
     while i < len(keys):
       batch = keys[i:i+cls._MAX_STATES_IN_MEMORY]
-      states = ndb.get_multi(batch)
+      if use_cache:
+        states = ndb.get_multi(batch)
+      else:
+        states = ndb.get_multi(batch, use_cache=False, use_global_cache=False)
       for s in states:
         i += 1
         if s is not None:

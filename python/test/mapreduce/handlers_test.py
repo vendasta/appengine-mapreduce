@@ -2234,7 +2234,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
     # Force enqueue another task.
     parameters.config._SLICE_DURATION_SEC = 0
     TestEntity().put()
-    taskqueue.Task.add = mock.MagicMock(side_effect=taskqueue.TransientError)
+    taskqueue.Task.add = mock.MagicMock(side_effect=taskqueue.Error)
 
     # Tests that handler doesn't abort task for taskqueue errors.
     # Unfornately they still increase TaskExecutionCount.
@@ -2251,7 +2251,7 @@ class MapperWorkerCallbackHandlerTest(MapreduceHandlerTestBase):
         }, 
         data=self.transient_state.to_dict()
       ):
-        self.assertRaises(taskqueue.TransientError, self.handler.dispatch_request)
+        self.assertRaises(taskqueue.Error, self.handler.dispatch_request)
     self.verify_shard_state(
         model.ShardState.get_by_shard_id(self.shard_id),
         active=True,

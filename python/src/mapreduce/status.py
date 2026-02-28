@@ -21,6 +21,7 @@ __author__ = ("aizatsky@google.com (Mike Aizatsky)",
 
 import os
 import pkgutil
+import re
 import time
 import zipfile
 
@@ -174,10 +175,21 @@ def parse_mapreduce_yaml(contents):
       raise errors.BadYamlError("Each mapreduce entry needs 'name' and 'mapper'")
 
     mapper_dict = entry["mapper"]
+    if not isinstance(mapper_dict, dict):
+      raise errors.BadYamlError("'mapper' must be a mapping")
+    if "handler" not in mapper_dict:
+      raise errors.BadYamlError("Missing required field 'handler' in mapper")
+    if "input_reader" not in mapper_dict:
+      raise errors.BadYamlError("Missing required field 'input_reader' in mapper")
+
     mapper_params = None
     if "params" in mapper_dict:
-      mapper_params = [UserParam(p["name"], p.get("default"), p.get("value"))
-                       for p in mapper_dict["params"]]
+      mapper_params = []
+      for p in mapper_dict["params"]:
+        name = p.get("name", "")
+        if not re.match(r'^[a-zA-Z0-9_\.]+$', name):
+          raise errors.BadYamlError("Invalid param name: %s" % name)
+        mapper_params.append(UserParam(name, p.get("default"), p.get("value")))
 
     mapper = MapperInfo(
         handler=mapper_dict["handler"],
@@ -324,7 +336,7 @@ class GetJobDetailHandler(base_handler.GetJsonHandler):
     mapreduce_id = request.args.get("mapreduce_id")
     if not mapreduce_id:
       raise BadStatusParameterError("'mapreduce_id' was invalid")
-    job = model.MapreduceState.get_by_key_name(mapreduce_id)
+    job = model.MapreduceState.get_by_job_id(mapreduce_id)
     if job is None:
       raise KeyError("Could not find job with ID %r" % mapreduce_id)
 
