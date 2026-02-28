@@ -32,12 +32,12 @@ def random_string(length):
       random.choice(string.ascii_letters + string.digits) for _ in range(length))
 
 
-class FakeEntity(ndb.Model):
+class E2EFakeEntity(ndb.Model):
   int_property = ndb.IntegerProperty()
   dt = ndb.DateTimeProperty(default=datetime.datetime(2000, 1, 1))
 
 
-class NdbFakeEntity(ndb.Model):
+class NdbE2EFakeEntity(ndb.Model):
   pass
 
 
@@ -157,7 +157,7 @@ class EndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
     entity_count = 10
 
     for _ in range(entity_count):
-      FakeEntity(int_property=-1).put()
+      E2EFakeEntity(int_property=-1).put()
 
     parameters.config._SLICE_DURATION_SEC = 0
 
@@ -166,7 +166,7 @@ class EndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
         __name__ + ".SerializableHandler",
         input_readers.__name__ + ".DatastoreInputReader",
         {
-            "entity_kind": __name__ + "." + FakeEntity.__name__,
+            "entity_kind": __name__ + "." + E2EFakeEntity.__name__,
         },
         shard_count=1,
     )
@@ -175,7 +175,7 @@ class EndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
     self.assertEqual(
         task_run_counts[handlers.MapperWorkerCallbackHandler],
         SerializableHandler.FAILURES_INDUCED_BY_INSTANCE + entity_count + 1 + 1)
-    vals = [e.int_property for e in FakeEntity.query()]
+    vals = [e.int_property for e in E2EFakeEntity.query()]
     vals.sort()
     self.assertEqual(list(range(10)), vals)
 
@@ -183,14 +183,14 @@ class EndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
     entity_count = 1000
 
     for _ in range(entity_count):
-      FakeEntity().put()
+      E2EFakeEntity().put()
 
     control.start_map(
         "fake_map",
         __name__ + ".FakeHandler",
         input_readers.__name__ + ".DatastoreInputReader",
         {
-            "entity_kind": __name__ + "." + FakeEntity.__name__,
+            "entity_kind": __name__ + "." + E2EFakeEntity.__name__,
         },
         shard_count=4,
        )
@@ -202,14 +202,14 @@ class EndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
     entity_count = 1000
 
     for i in range(entity_count):
-      FakeEntity(int_property=i % 5).put()
+      E2EFakeEntity(int_property=i % 5).put()
 
     control.start_map(
         "fake_map",
         __name__ + ".FakeHandler",
         input_readers.__name__ + ".DatastoreInputReader",
         {
-            "entity_kind": __name__ + "." + FakeEntity.__name__,
+            "entity_kind": __name__ + "." + E2EFakeEntity.__name__,
             "filters": [("int_property", "=", 3),
                         ("dt", "=", datetime.datetime(2000, 1, 1))],
         },
@@ -223,14 +223,14 @@ class EndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
     entity_count = 1000
 
     for _ in range(entity_count):
-      NdbFakeEntity().put()
+      NdbE2EFakeEntity().put()
 
     control.start_map(
         "fake_map",
         __name__ + ".FakeHandler",
         input_readers.__name__ + ".DatastoreInputReader",
         {
-            "entity_kind": __name__ + "." + NdbFakeEntity.__name__,
+            "entity_kind": __name__ + "." + NdbE2EFakeEntity.__name__,
         },
         shard_count=4,
       )
@@ -242,7 +242,7 @@ class EndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
     entity_count = 100
 
     for _ in range(entity_count):
-      FakeEntity().put()
+      E2EFakeEntity().put()
 
     control.start_map(
         "fake_map",
@@ -250,7 +250,7 @@ class EndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
         input_readers.__name__ + ".DatastoreInputReader",
         {
             "input_reader": {
-                "entity_kind": __name__ + "." + FakeEntity.__name__,
+                "entity_kind": __name__ + "." + E2EFakeEntity.__name__,
             },
         },
         shard_count=4,
@@ -264,14 +264,14 @@ class EndToEndTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
     entity_count = 1000
 
     for _ in range(entity_count):
-      FakeEntity().put()
+      E2EFakeEntity().put()
 
     control.start_map(
         "fake_map",
         __name__ + ".fake_handler_yield_key",
         input_readers.__name__ + ".DatastoreInputReader",
         {
-            "entity_kind": __name__ + "." + FakeEntity.__name__,
+            "entity_kind": __name__ + "." + E2EFakeEntity.__name__,
         },
         shard_count=4,
         output_writer_spec=__name__ + ".FakeOutputWriter")
@@ -382,7 +382,7 @@ class GCSOutputWriterTestBase(testutil.CloudStorageTestBase, testutil.HandlerTes
 
     entity_count = 30
     for i in range(entity_count):
-      FakeEntity(int_property=i).put()
+      E2EFakeEntity(int_property=i).put()
 
     parameters.config._SLICE_DURATION_SEC = 1
     self.processing_rate = 5
@@ -407,7 +407,7 @@ class GCSOutputWriterNoDupModeTest(GCSOutputWriterTestBase):
         input_readers.__name__ + ".DatastoreInputReader",
         {
             "input_reader": {
-                "entity_kind": __name__ + "." + FakeEntity.__name__,
+                "entity_kind": __name__ + "." + E2EFakeEntity.__name__,
             },
             "output_writer": {
                 "bucket_name": self.TEST_BUCKET,
@@ -445,7 +445,7 @@ class GCSOutputWriterNoDupModeTest(GCSOutputWriterTestBase):
         input_readers.__name__ + ".DatastoreInputReader",
         {
             "input_reader": {
-                "entity_kind": __name__ + "." + FakeEntity.__name__,
+                "entity_kind": __name__ + "." + E2EFakeEntity.__name__,
             },
             "output_writer": {
                 "bucket_name": self.TEST_BUCKET,
@@ -478,7 +478,7 @@ class GCSOutputWriterNoDupModeTest(GCSOutputWriterTestBase):
         input_readers.__name__ + ".DatastoreInputReader",
         {
             "input_reader": {
-                "entity_kind": __name__ + "." + FakeEntity.__name__,
+                "entity_kind": __name__ + "." + E2EFakeEntity.__name__,
             },
             "output_writer": {
                 "bucket_name": self.TEST_BUCKET,
