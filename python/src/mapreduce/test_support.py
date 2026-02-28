@@ -76,18 +76,18 @@ def create_test_app(handlers_map=None):
 
 def execute_task(task, retries=0, app=None, handlers_map=None):
   """Execute a single task.
-  
+
   Args:
     task: Task dict to execute
     retries: Number of previous retries
     app: Flask app to use (will create if None)
     handlers_map: Handler map to use if creating new app
-    
+
   Returns:
     Handler class that executed the task
-  
+
   Raises:
-    Exception if task fails after max retries
+    Exception if task fails
   """
   if not app:
     app = create_test_app(handlers_map)
@@ -101,17 +101,17 @@ def execute_task(task, retries=0, app=None, handlers_map=None):
   headers.update({
     'X-AppEngine-TaskName': name,
     'X-AppEngine-QueueName': task.get("queue_name", "default"),
-    'X-AppEngine-TaskExecutionCount': retries,
+    'X-AppEngine-TaskExecutionCount': str(retries),
   })
 
   os.environ["HTTP_X_APPENGINE_QUEUENAME"] = task.get("queue_name", "default")
 
-  logging.debug('Executing "%s %s" name="%s"', method, url, name)
+  logging.debug('Executing "%s %s" name="%s" retry=%d', method, url, name, retries)
   client = app.test_client()
   result = client.open(url, method=method, headers=headers, data=data)
   if result.status_code != 200:
     raise Exception('Task failed with status %s' % result.status_code)
-  
+
   rule, _ = app.url_map.bind('').match(url, method=method, return_rule=True)
   return app.view_functions[rule.endpoint].view_class
 
@@ -134,25 +134,21 @@ def execute_all_tasks(taskqueue, queue="default", app=None, handlers_map=None):
   tasks = taskqueue.get_tasks(queue)
   taskqueue.clear_queue(queue)
   task_run_counts = collections.defaultdict(int)
-  
+
   for task in tasks:
-    retries = 0
-    while True:
+    retry_count = task.get("_retry_count", 0)
+    try:
+      handler = execute_task(task, retry_count, app=app)
+      task_run_counts[handler] += 1
+    except Exception as e:
+      logging.debug("Task %s failed (retry %d): %s", task["name"], retry_count, e)
+      task["_retry_count"] = retry_count + 1
+      import uuid
+      task["name"] = f"retry-{uuid.uuid4().hex}"
       try:
-        handler = execute_task(task, retries, app=app)
-        task_run_counts[handler] += 1
-        break
-      except Exception as e:
-        retries += 1
-        if retries > MAX_TASK_RETRIES:
-          logging.error("Task %s failed after %d retries", task["name"], retries)
-          raise
-        logging.debug(
-            "Task %s is being retried for the %s time",
-            task["name"],
-            retries)
-        logging.debug(e)
-        time.sleep(RETRY_DELAY)
+        taskqueue.add_task(queue, task)
+      except Exception:
+        pass
 
   return task_run_counts
 

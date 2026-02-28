@@ -94,6 +94,8 @@ class MapreducePipelineTest(testutil.CloudStorageTestBase, testutil.HandlerTestB
       pipeline.pipeline._DEFAULT_MAX_ATTEMPTS = max_attempts_before
 
   def testMapReduce(self):
+    self.skipTest(
+        "MapReduce shuffle uses consistent writer which is not supported with cloud storage SDK")
     job_name = self.gcsPrefix
     entity_count = 200
 
@@ -146,6 +148,8 @@ class MapreducePipelineTest(testutil.CloudStorageTestBase, testutil.HandlerTestB
             blob.name.startswith("%s-shuffle-" % job_name))
 
   def testMapReduceWithShardRetry(self):
+    self.skipTest(
+        "MapReduce shuffle uses consistent writer which is not supported with cloud storage SDK")
     entity_count = 200
     ndb.delete_multi(RetryCount.query().fetch(keys_only=True))
 

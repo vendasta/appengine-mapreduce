@@ -318,7 +318,7 @@ class CountersMap(json_util.JsonMixin):
       an instance of CountersMap with all data deserialized from json.
     """
     counters_map = cls()
-    counters_map.counters = json["counters"]
+    counters_map.counters = dict(json.get("counters", {}))
     return counters_map
 
   def to_dict(self):
@@ -764,7 +764,7 @@ class ShardState(ndb.Model):
   writer_state = json_util.JsonProperty(dict)
   slice_id = ndb.IntegerProperty(default=0)
   slice_start_time = ndb.DateTimeProperty()
-  slice_request_id = ndb.BlobProperty()
+  slice_request_id = ndb.StringProperty()
   slice_retries = ndb.IntegerProperty(default=0)
   acquired_once = ndb.BooleanProperty(default=False)
 

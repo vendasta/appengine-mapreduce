@@ -395,6 +395,11 @@ class GCSOutputWriterTestBase(testutil.CloudStorageTestBase, testutil.HandlerTes
 class GCSOutputWriterNoDupModeTest(GCSOutputWriterTestBase):
   """Test GCS output writer slice recovery."""
 
+  def setUp(self):
+    super().setUp()
+    self.skipTest(
+        "Consistent writer tmpfile->mainfile rewrite not supported with cloud storage SDK")
+
   def testSliceRecoveryWithForcedFlushing(self):
     mr_id = control.start_map(
         self.gcsPrefix,

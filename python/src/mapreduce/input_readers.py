@@ -1670,6 +1670,8 @@ class _GoogleCloudStorageInputReader(InputReader):
   def to_json(self):
     before_bucket = self._bucket
     before_iter = self._bucket_iter
+    before_cur_handle = getattr(self, '_cur_handle', None)
+    before_record_reader = getattr(self, '_record_reader', None)
     self._bucket = None
     self._bucket_iter = None
     self._cur_handle = None
@@ -1677,8 +1679,6 @@ class _GoogleCloudStorageInputReader(InputReader):
     try:
       result = {
           self._JSON_PICKLE: base64.b64encode(pickle.dumps(self)).decode(),
-          # self._fail_on_missing_input gets pickled but we save it separately
-          # and override it in from_json to deal with version flipping.
           self._JSON_FAIL_ON_MISSING_INPUT:
               getattr(self, "_fail_on_missing_input", False),
       }
@@ -1692,7 +1692,9 @@ class _GoogleCloudStorageInputReader(InputReader):
       return result
     finally:
       self._bucket = before_bucket
-      self._bucket_itr = before_iter
+      self._bucket_iter = before_iter
+      self._cur_handle = before_cur_handle
+      self._record_reader = before_record_reader
 
   def __next__(self):
     """Returns the next input from this input reader, a block of bytes.
@@ -1904,7 +1906,7 @@ class _ReducerReader(_GoogleCloudStorageRecordInputReader):
     Returns:
       The data encoded.
     """
-    return base64.b64encode(pickle.dumps(data))
+    return base64.b64encode(pickle.dumps(data)).decode("ascii")
 
   @staticmethod
   def decode_data(data):

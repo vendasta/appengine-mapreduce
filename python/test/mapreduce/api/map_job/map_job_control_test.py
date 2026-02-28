@@ -48,9 +48,9 @@ class MapJobStartTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
 
   def validate_map_started(self):
     # Only one kickoff task.
-    tasks = self.taskqueue.GetTasks(self.config.queue_name)
+    tasks = self.taskqueue.get_tasks(self.config.queue_name)
     self.assertEqual(1, len(tasks))
-    self.taskqueue.FlushQueue(self.config.queue_name)
+    self.taskqueue.clear_queue(self.config.queue_name)
     # Hook was run.
     self.assertEqual(1, len(FakeHooks.enqueue_kickoff_task_calls))
 
@@ -72,7 +72,7 @@ class MapJobStartTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
     test_support.execute_task(task)
 
     # controller + shard tasks.
-    tasks = self.taskqueue.GetTasks(self.config.queue_name)
+    tasks = self.taskqueue.get_tasks(self.config.queue_name)
     self.assertEqual(1 + self.config.shard_count, len(tasks))
 
     state = model.MapreduceState.get_by_job_id(self.config.job_id)
@@ -129,8 +129,8 @@ class MapJobStatusTest(testutil.CloudStorageTestBase, testutil.HandlerTestBase):
     self.assertEqual(self.config, job.job_config)
 
     # Execute Kickoff task.
-    tasks = self.taskqueue.GetTasks(self.config.queue_name)
-    self.taskqueue.FlushQueue(self.config.queue_name)
+    tasks = self.taskqueue.get_tasks(self.config.queue_name)
+    self.taskqueue.clear_queue(self.config.queue_name)
     task = tasks[0]
     test_support.execute_task(task)
 

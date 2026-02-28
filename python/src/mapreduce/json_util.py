@@ -176,8 +176,28 @@ class JsonProperty(ndb.TextProperty):
 
   def __init__(self, data_type, default=None, **kwargs):
     kwargs.pop("indexed", None)
-    super().__init__(default=default, **kwargs)
+    self._json_default_factory = default
+    super().__init__(**kwargs)
     self.data_type = data_type
+    if default is not None:
+      self._default = self._make_default()
+
+  def _make_default(self):
+    d = self._json_default_factory
+    if d is None:
+      return None
+    if hasattr(d, 'to_json'):
+      return self.data_type.from_json(copy.deepcopy(d.to_json()))
+    if isinstance(d, dict):
+      return copy.deepcopy(d)
+    return copy.deepcopy(d)
+
+  def _retrieve_value(self, entity, default=None):
+    val = super()._retrieve_value(entity, None)
+    if val is None and self._json_default_factory is not None:
+      val = self._make_default()
+      self._store_value(entity, val)
+    return val
 
   def _validate(self, value):
     if value is not None and not isinstance(value, self.data_type):

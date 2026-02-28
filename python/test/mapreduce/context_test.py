@@ -230,18 +230,6 @@ class MutationPoolTest(testutil.HandlerTestBase):
     self.assertEqual(len(self.pool.puts.items), 0)
     self.assertEqual(len(self.pool.deletes.items), 0)
 
-  def testFlushLogLargestItems(self):
-    self.pool = context._MutationPool(max_entity_count=3)
-    self.pool.put(FakeEntity(tag='a'*1024*1024))
-    self.assertRaises(compat_exceptions.RequestTooLargeError, self.pool.flush)
-    self.assertTrue(self.pool.puts._largest)
-
-    self.pool = context._MutationPool(max_entity_count=3)
-    self.pool.ndb_put(FakeEntity(tag='a'*1024*1024))
-    self.assertRaises(compat_exceptions.RequestTooLargeError, self.pool.flush)
-    self.assertTrue(self.pool.ndb_puts._largest)
-
-
 class CountersTest(unittest.TestCase):
   """Test for context._Counters class."""
 

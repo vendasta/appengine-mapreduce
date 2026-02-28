@@ -3,5 +3,5 @@ pythonpath = ["src", "test"]
 testpaths = ["test"]
 timeout = 30
 env = [
-    "GOOGLE_CLOUD_PROJECT=repcore-prod"
+    "GOOGLE_CLOUD_PROJECT=testbed-test"
 ]

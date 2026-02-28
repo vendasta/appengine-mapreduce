@@ -690,6 +690,8 @@ class _GoogleCloudStorageOutputWriter(_GoogleCloudStorageOutputWriterBase):
         super().validate(mapper_spec)
 
     def _get_write_buffer(self):
+        if self._streaming_buffer is None:
+            raise ValueError("Writer has been finalized or not initialized.")
         return self._streaming_buffer
 
     @classmethod
@@ -903,8 +905,12 @@ class GoogleCloudStorageConsistentOutputWriter(
 
     self.status = status
     self._data_written_to_slice = False
+    self._finalized = False
 
   def _get_write_buffer(self):
+    if self._finalized:
+      raise ValueError("Writer has been finalized.")
+
     # If tmpfile exists and is open, return it
     if self.status.tmpfile and not getattr(self.status.tmpfile, 'closed', True):
       return self.status.tmpfile
@@ -1151,6 +1157,7 @@ class GoogleCloudStorageConsistentOutputWriter(
       logging.warning(f"Error reconstructing blob references: {e}")
     
     result = cls(status)
+    result._finalized = state.get("_finalized", False)
     return result
 
   def end_slice(self, slice_ctx):
@@ -1233,6 +1240,7 @@ class GoogleCloudStorageConsistentOutputWriter(
       "mainfile_gcs_url": mainfile_gcs_url,
       "tmpfile_gcs_url": tmpfile_gcs_url,
       "tmpfile_1ago_gcs_url": tmpfile_1ago_gcs_url,
+      "_finalized": self._finalized,
     }
 
   def write(self, data):
@@ -1262,6 +1270,7 @@ class GoogleCloudStorageConsistentOutputWriter(
             blob.delete()
 
   def finalize(self, ctx, shard_state):
+    self._finalized = True
     if self._data_written_to_slice:
       raise errors.FailJobError(
           "finalize() called after data was written")

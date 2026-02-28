@@ -107,7 +107,8 @@ class HandlerTestBase(unittest.TestCase):
 
   def tearDown(self):
     for key in ("GOOGLE_CLOUD_PROJECT", "GAE_VERSION", "GAE_SERVICE",
-                "DEFAULT_VERSION_HOSTNAME", "HTTP_HOST"):
+                "DEFAULT_VERSION_HOSTNAME", "HTTP_HOST",
+                "HTTP_X_APPENGINE_QUEUENAME"):
       os.environ.pop(key, None)
 
     unittest.TestCase.tearDown(self)

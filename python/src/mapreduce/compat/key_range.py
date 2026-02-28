@@ -75,7 +75,10 @@ class KeyRange:
       An ndb.Query.
     """
     from mapreduce import util
-    model_class = util.for_name(kind)
+    try:
+      model_class = util.for_name(kind)
+    except (ImportError, ValueError):
+      model_class = None
     if model_class and isinstance(model_class, type) and issubclass(model_class, ndb.Model):
       return self.make_ascending_query(model_class, filters=filters)
 
@@ -97,7 +100,7 @@ class KeyRange:
       for prop_name, op, value in filters:
         query = query.filter(ndb.FilterNode(prop_name, op, value))
 
-    query = query.order(ndb.Key)
+    query = query.order('__key__')
     return query
 
   def to_json(self):
@@ -136,6 +139,24 @@ class KeyRange:
         include_end=json_obj.get("include_end", True),
         namespace=json_obj.get("namespace"),
         _app=json_obj.get("_app"))
+
+  def __eq__(self, other):
+    if not isinstance(other, KeyRange):
+      return NotImplemented
+    return (self.key_start == other.key_start and
+            self.key_end == other.key_end and
+            self.namespace == other.namespace and
+            self.direction == other.direction)
+
+  def __lt__(self, other):
+    if not isinstance(other, KeyRange):
+      return NotImplemented
+    self_key = self.key_start.urlsafe() if self.key_start else b""
+    other_key = other.key_start.urlsafe() if other.key_start else b""
+    return self_key < other_key
+
+  def __hash__(self):
+    return hash((self.key_start, self.key_end, self.namespace))
 
   def __repr__(self):
     return "KeyRange(key_start=%r, key_end=%r, namespace=%r)" % (

@@ -341,7 +341,9 @@ class GCSInputReader(map_job.InputReader):
       try:
         start_time = time.time()
         bucket = _storage_client.get_bucket(self._bucket_name)
-        blob = bucket.blob(filename)
+        blob = bucket.get_blob(filename)
+        if blob is None:
+          raise exceptions.NotFound(filename)
         handle = blob.open("rb")
 
         self._slice_ctx.incr(self.COUNTER_IO_READ_MSEC,
@@ -398,11 +400,10 @@ class GCSRecordInputReader(GCSInputReader):
 
   def __getstate__(self):
     result = self.__dict__.copy()
-    # record reader may not exist if reader has not been used
     if "_record_reader" in result:
-      # RecordsReader has no buffering, it can safely be reconstructed after
-      # deserialization
       result.pop("_record_reader")
+    if "_cur_handle" in result:
+      result.pop("_cur_handle")
     return result
 
   def __next__(self):
