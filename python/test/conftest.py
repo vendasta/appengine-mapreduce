@@ -8,6 +8,8 @@ import pytest
 import requests
 from google.cloud import ndb
 
+from mapreduce import parameters
+
 
 def _find_free_port():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -26,8 +28,18 @@ def _wait_for_emulator(host, timeout=30):
     return False
 
 
+_PARAMETERS_DEFAULTS = None
+
+
 @pytest.fixture(scope="session")
 def datastore_emulator():
+    global _PARAMETERS_DEFAULTS
+    _PARAMETERS_DEFAULTS = {
+        attr: getattr(parameters.config, attr)
+        for attr in dir(parameters.config)
+        if not attr.startswith("__")
+    }
+
     port = _find_free_port()
     host = f"localhost:{port}"
     os.environ["DATASTORE_EMULATOR_HOST"] = host
@@ -57,7 +69,14 @@ def datastore_emulator():
 
 @pytest.fixture(autouse=True)
 def ndb_context(datastore_emulator):
-    client = ndb.Client(project="testbed-test")
-    with client.context(cache_policy=False) as ctx:
-        yield ctx
     requests.post(f"http://{datastore_emulator}/reset")
+    os.environ["GOOGLE_CLOUD_PROJECT"] = "testbed-test"
+
+    client = ndb.Client(project="testbed-test")
+    with client.context(cache_policy=False, global_cache_policy=False) as ctx:
+        yield ctx
+
+    os.environ["GOOGLE_CLOUD_PROJECT"] = "testbed-test"
+
+    for attr, value in _PARAMETERS_DEFAULTS.items():
+        setattr(parameters.config, attr, value)
