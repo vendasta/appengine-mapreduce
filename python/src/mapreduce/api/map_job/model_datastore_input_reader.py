@@ -17,7 +17,6 @@ import copy
 
 from google.cloud import ndb
 
-from google.appengine.ext import db
 from mapreduce import datastore_range_iterators as db_iters
 from mapreduce import errors
 from mapreduce import namespace_range
@@ -33,7 +32,6 @@ class ModelDatastoreInputReader(abstract_datastore_input_reader
   """Implementation of an input reader for Datastore.
 
   Iterates over a Model and yields model instances.
-  Supports both db.model and ndb.model.
   """
 
   _KEY_RANGE_ITER_CLS = db_iters.KeyRangeModelIterator
@@ -41,9 +39,7 @@ class ModelDatastoreInputReader(abstract_datastore_input_reader
   @classmethod
   def _get_raw_entity_kind(cls, model_classpath):
     entity_type = util.for_name(model_classpath)
-    if isinstance(entity_type, db.Model):
-      return entity_type.kind()
-    elif isinstance(entity_type, (ndb.Model, ndb.MetaModel)):
+    if isinstance(entity_type, (ndb.Model, ndb.MetaModel)):
       # pylint: disable=protected-access
       return entity_type._get_kind()
     else:
@@ -108,46 +104,8 @@ class ModelDatastoreInputReader(abstract_datastore_input_reader
       raise errors.BadReaderParamsError("Bad entity kind: %s" % e)
     if cls.FILTERS_PARAM in params:
       filters = params[cls.FILTERS_PARAM]
-      if issubclass(model_class, db.Model):
-        cls._validate_filters(filters, model_class)
-      else:
-        cls._validate_filters_ndb(filters, model_class)
+      cls._validate_filters_ndb(filters, model_class)
       property_range.PropertyRange(filters, entity_kind)
-
-  @classmethod
-  def _validate_filters(cls, filters, model_class):
-    """Validate user supplied filters.
-
-    Validate filters are on existing properties and filter values
-    have valid semantics.
-
-    Args:
-      filters: user supplied filters. Each filter should be a list or tuple of
-        format (<property_name_as_str>, <query_operator_as_str>,
-        <value_of_certain_type>). Value type is up to the property's type.
-      model_class: the db.Model class for the entity type to apply filters on.
-
-    Raises:
-      BadReaderParamsError: if any filter is invalid in any way.
-    """
-    if not filters:
-      return
-
-    properties = model_class.properties()
-
-    for f in filters:
-      prop, _, val = f
-      if prop not in properties:
-        raise errors.BadReaderParamsError(
-            "Property %s is not defined for entity type %s",
-            prop, model_class.kind())
-
-      # Validate the value of each filter. We need to know filters have
-      # valid value to carry out splits.
-      try:
-        properties[prop].validate(val)
-      except db.BadValueError as e:
-        raise errors.BadReaderParamsError(e)
 
   @classmethod
   # pylint: disable=protected-access
@@ -169,6 +127,6 @@ class ModelDatastoreInputReader(abstract_datastore_input_reader
       # valid value to carry out splits.
       try:
         properties[prop]._do_validate(val)
-      except db.BadValueError as e:
+      except Exception as e:
         raise errors.BadReaderParamsError(e)
 

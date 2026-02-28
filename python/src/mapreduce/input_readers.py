@@ -52,12 +52,8 @@ import time
 import zipfile
 
 from google.cloud import ndb
-
-from google.appengine.api import datastore
-from google.appengine.ext import blobstore
-from google.appengine.ext import db
-from google.appengine.ext import key_range
-from google.appengine.ext.db import metadata
+from google.cloud import datastore as cloud_datastore
+from mapreduce.compat import key_range
 from mapreduce import context
 from mapreduce import datastore_range_iterators as db_iters
 from mapreduce import errors
@@ -420,28 +416,34 @@ class AbstractDatastoreInputReader(InputReader):
       # With one shard we don't need to calculate any split points at all.
       return [key_range.KeyRange(namespace=namespace, _app=app)]
 
-    ds_query = datastore.Query(kind=raw_entity_kind,
-                               namespace=namespace,
-                               _app=app,
-                               keys_only=True)
-    ds_query.Order("__scatter__")
+    client = cloud_datastore.Client()
     oversampling_factor = 32
     random_keys = None
     if filters:
-      ds_query_with_filters = copy.copy(ds_query)
-      for (key, op, value) in filters:
-        ds_query_with_filters.update({'{} {}'.format(key, op): value})
-        try:
-          random_keys = ds_query_with_filters.Get(shard_count *
-                                                  oversampling_factor)
-        except db.NeedIndexError as why:
-          logging.warning('Need to add an index for optimal mapreduce-input'
-                          ' splitting:\n%s' % why)
-          # We'll try again without the filter.  We hope the filter
-          # will filter keys uniformly across the key-name space!
+      try:
+        ds_query = client.query(kind=raw_entity_kind, namespace=namespace)
+        ds_query.order = ["__scatter__"]
+        ds_query.keys_only()
+        for (prop, op, value) in filters:
+          ds_query.add_filter(prop, op, value)
+        results = list(ds_query.fetch(
+            limit=shard_count * oversampling_factor))
+        random_keys = [ndb.Key(e.key.kind, e.key.id or e.key.name,
+                               namespace=namespace)
+                       for e in results]
+      except Exception as why:
+        logging.warning('Need to add an index for optimal mapreduce-input'
+                        ' splitting:\n%s' % why)
 
     if not random_keys:
-      random_keys = ds_query.Get(shard_count * oversampling_factor)
+      ds_query = client.query(kind=raw_entity_kind, namespace=namespace)
+      ds_query.order = ["__scatter__"]
+      ds_query.keys_only()
+      results = list(ds_query.fetch(
+          limit=shard_count * oversampling_factor))
+      random_keys = [ndb.Key(e.key.kind, e.key.id or e.key.name,
+                             namespace=namespace)
+                     for e in results]
 
     if not random_keys:
       # There are no entities with scatter property. We have no idea
@@ -585,19 +587,14 @@ class RawDatastoreInputReader(AbstractDatastoreInputReader):
 
 
 class DatastoreInputReader(AbstractDatastoreInputReader):
-  """Iterates over a Model and yields model instances.
-
-  Supports both db.model and ndb.model.
-  """
+  """Iterates over a Model and yields model instances."""
 
   _KEY_RANGE_ITER_CLS = db_iters.KeyRangeModelIterator
 
   @classmethod
   def _get_raw_entity_kind(cls, model_classpath):
     entity_type = util.for_name(model_classpath)
-    if isinstance(entity_type, db.Model):
-      return entity_type.kind()
-    elif isinstance(entity_type, (ndb.Model, ndb.MetaModel)):
+    if isinstance(entity_type, (ndb.Model, ndb.MetaModel)):
       # pylint: disable=protected-access
       return entity_type._get_kind()
     else:
@@ -616,46 +613,8 @@ class DatastoreInputReader(AbstractDatastoreInputReader):
       raise BadReaderParamsError("Bad entity kind: %s" % e)
     if cls.FILTERS_PARAM in params:
       filters = params[cls.FILTERS_PARAM]
-      if issubclass(model_class, db.Model):
-        cls._validate_filters(filters, model_class)
-      else:
-        cls._validate_filters_ndb(filters, model_class)
+      cls._validate_filters_ndb(filters, model_class)
       property_range.PropertyRange(filters, entity_kind)
-
-  @classmethod
-  def _validate_filters(cls, filters, model_class):
-    """Validate user supplied filters.
-
-    Validate filters are on existing properties and filter values
-    have valid semantics.
-
-    Args:
-      filters: user supplied filters. Each filter should be a list or tuple of
-        format (<property_name_as_str>, <query_operator_as_str>,
-        <value_of_certain_type>). Value type is up to the property's type.
-      model_class: the db.Model class for the entity type to apply filters on.
-
-    Raises:
-      BadReaderParamsError: if any filter is invalid in any way.
-    """
-    if not filters:
-      return
-
-    properties = model_class.properties()
-
-    for f in filters:
-      prop, _, val = f
-      if prop not in properties:
-        raise errors.BadReaderParamsError(
-            "Property %s is not defined for entity type %s",
-            prop, model_class.kind())
-
-      # Validate the value of each filter. We need to know filters have
-      # valid value to carry out splits.
-      try:
-        properties[prop].validate(val)
-      except db.BadValueError as e:
-        raise errors.BadReaderParamsError(e)
 
   @classmethod
   # pylint: disable=protected-access
@@ -689,7 +648,7 @@ class DatastoreInputReader(AbstractDatastoreInputReader):
       # valid value to carry out splits.
       try:
         properties[prop]._do_validate(val)
-      except db.BadValueError as e:
+      except Exception as e:
         raise errors.BadReaderParamsError(e)
 
   @classmethod
@@ -901,12 +860,11 @@ class _OldAbstractDatastoreInputReader(InputReader):
     """Iterates over self._ns_range, delegating to self._iter_key_range()."""
     while True:
       if self._current_key_range is None:
-        query = self._ns_range.make_datastore_query()
-        namespace_result = query.Get(1)
-        if not namespace_result:
+        results = self._ns_range._query_namespaces(limit=1)
+        if not results:
           break
 
-        namespace = namespace_result[0].name() or ""
+        namespace = results[0].key.name or ""
         self._current_key_range = key_range.KeyRange(
             namespace=namespace, _app=self._ns_range.app)
         yield ALLOW_CHECKPOINT
@@ -981,12 +939,15 @@ class _OldAbstractDatastoreInputReader(InputReader):
       # With one shard we don't need to calculate any splitpoints at all.
       return [key_range.KeyRange(namespace=namespace, _app=app)]
 
-    ds_query = datastore.Query(kind=raw_entity_kind,
-                               namespace=namespace,
-                               _app=app,
-                               keys_only=True)
-    ds_query.Order("__scatter__")
-    random_keys = ds_query.Get(shard_count * cls._OVERSAMPLING_FACTOR)
+    client = cloud_datastore.Client()
+    ds_query = client.query(kind=raw_entity_kind, namespace=namespace)
+    ds_query.order = ["__scatter__"]
+    ds_query.keys_only()
+    results = list(ds_query.fetch(
+        limit=shard_count * cls._OVERSAMPLING_FACTOR))
+    random_keys = [ndb.Key(e.key.kind, e.key.id or e.key.name,
+                           namespace=namespace)
+                   for e in results]
 
     if not random_keys:
       # There are no entities with scatter property. We have no idea
@@ -1150,11 +1111,8 @@ class _OldAbstractDatastoreInputReader(InputReader):
       #    sharding because namespaces can contain very different numbers of
       #    entities and each NamespaceRange may contain very different numbers
       #    of namespaces.
-      namespace_query = datastore.Query("__namespace__",
-                                        keys_only=True,
-                                        _app=app)
-      namespace_keys = namespace_query.Get(
-          limit=cls.MAX_NAMESPACES_FOR_KEY_SHARD+1)
+      namespace_keys = namespace_range.get_namespace_keys(
+          app, cls.MAX_NAMESPACES_FOR_KEY_SHARD+1)
 
       if len(namespace_keys) > cls.MAX_NAMESPACES_FOR_KEY_SHARD:
         ns_ranges = namespace_range.NamespaceRange.split(n=shard_count,
@@ -1173,7 +1131,7 @@ class _OldAbstractDatastoreInputReader(InputReader):
                     batch_size=shard_count,
                     filters=filters)]
       else:
-        namespaces = [namespace_key.name() or ""
+        namespaces = [namespace_key.name or ""
                       for namespace_key in namespace_keys]
     else:
       namespaces = [namespace]
@@ -1262,551 +1220,30 @@ class _OldAbstractDatastoreInputReader(InputReader):
 
 
 class BlobstoreLineInputReader(InputReader):
-  """Input reader for a newline delimited blob in Blobstore."""
+  """Deprecated: Use GoogleCloudStorageLineInputReader instead."""
 
-  # TODO(user): Should we set this based on MAX_BLOB_FETCH_SIZE?
-  _BLOB_BUFFER_SIZE = 64000
-
-  # Maximum number of shards to allow.
-  _MAX_SHARD_COUNT = 256
-
-  # Maximum number of blobs to allow.
-  _MAX_BLOB_KEYS_COUNT = 246
-
-  # Mapreduce parameters.
-  BLOB_KEYS_PARAM = "blob_keys"
-
-  # Serialization parmaeters.
-  INITIAL_POSITION_PARAM = "initial_position"
-  END_POSITION_PARAM = "end_position"
-  BLOB_KEY_PARAM = "blob_key"
-
-  def __init__(self, blob_key, start_position, end_position):
-    """Initializes this instance with the given blob key and character range.
-
-    This BlobstoreInputReader will read from the first record starting after
-    strictly after start_position until the first record ending at or after
-    end_position (exclusive). As an exception, if start_position is 0, then
-    this InputReader starts reading at the first record.
-
-    Args:
-      blob_key: the BlobKey that this input reader is processing.
-      start_position: the position to start reading at.
-      end_position: a position in the last record to read.
-    """
-    self._blob_key = blob_key
-    self._blob_reader = blobstore.BlobReader(blob_key,
-                                             self._BLOB_BUFFER_SIZE,
-                                             start_position)
-    self._end_position = end_position
-    self._has_iterated = False
-    self._read_before_start = bool(start_position)
-
-  def __next__(self):
-    """Returns the next input from as an (offset, line) tuple."""
-    self._has_iterated = True
-
-    if self._read_before_start:
-      self._blob_reader.readline()
-      self._read_before_start = False
-    start_position = self._blob_reader.tell()
-
-    if start_position > self._end_position:
-      raise StopIteration()
-
-    line = self._blob_reader.readline()
-
-    if not line:
-      raise StopIteration()
-
-    return start_position, line.rstrip(b"\n")
-
-  def to_json(self):
-    """Returns an json-compatible input shard spec for remaining inputs."""
-    new_pos = self._blob_reader.tell()
-    if self._has_iterated:
-      new_pos -= 1
-    return {self.BLOB_KEY_PARAM: self._blob_key,
-            self.INITIAL_POSITION_PARAM: new_pos,
-            self.END_POSITION_PARAM: self._end_position}
-
-  def __str__(self):
-    """Returns the string representation of this BlobstoreLineInputReader."""
-    return "blobstore.BlobKey(%r):[%d, %d]" % (
-        self._blob_key, self._blob_reader.tell(), self._end_position)
-
-  @classmethod
-  def from_json(cls, json):
-    """Instantiates an instance of this InputReader for the given shard spec."""
-    return cls(json[cls.BLOB_KEY_PARAM],
-               json[cls.INITIAL_POSITION_PARAM],
-               json[cls.END_POSITION_PARAM])
-
-  @classmethod
-  def validate(cls, mapper_spec):
-    """Validates mapper spec and all mapper parameters.
-
-    Args:
-      mapper_spec: The MapperSpec for this InputReader.
-
-    Raises:
-      BadReaderParamsError: required parameters are missing or invalid.
-    """
-    if mapper_spec.input_reader_class() != cls:
-      raise BadReaderParamsError("Mapper input reader class mismatch")
-    params = _get_params(mapper_spec)
-    if cls.BLOB_KEYS_PARAM not in params:
-      raise BadReaderParamsError("Must specify 'blob_keys' for mapper input")
-    blob_keys = params[cls.BLOB_KEYS_PARAM]
-    if isinstance(blob_keys, str):
-      # This is a mechanism to allow multiple blob keys (which do not contain
-      # commas) in a single string. It may go away.
-      blob_keys = blob_keys.split(",")
-    if len(blob_keys) > cls._MAX_BLOB_KEYS_COUNT:
-      raise BadReaderParamsError("Too many 'blob_keys' for mapper input")
-    if not blob_keys:
-      raise BadReaderParamsError("No 'blob_keys' specified for mapper input")
-    for blob_key in blob_keys:
-      blob_info = blobstore.BlobInfo.get(blobstore.BlobKey(blob_key))
-      if not blob_info:
-        raise BadReaderParamsError("Could not find blobinfo for key %s" %
-                                   blob_key)
-
-  @classmethod
-  def split_input(cls, mapper_spec):
-    """Returns a list of shard_count input_spec_shards for input_spec.
-
-    Args:
-      mapper_spec: The mapper specification to split from. Must contain
-          'blob_keys' parameter with one or more blob keys.
-
-    Returns:
-      A list of BlobstoreInputReaders corresponding to the specified shards.
-    """
-    params = _get_params(mapper_spec)
-    blob_keys = params[cls.BLOB_KEYS_PARAM]
-    if isinstance(blob_keys, str):
-      # This is a mechanism to allow multiple blob keys (which do not contain
-      # commas) in a single string. It may go away.
-      blob_keys = blob_keys.split(",")
-
-    blob_sizes = {}
-    for blob_key in blob_keys:
-      blob_info = blobstore.BlobInfo.get(blobstore.BlobKey(blob_key))
-      blob_sizes[blob_key] = blob_info.size
-
-    shard_count = min(cls._MAX_SHARD_COUNT, mapper_spec.shard_count)
-    shards_per_blob = shard_count // len(blob_keys)
-    if shards_per_blob == 0:
-      shards_per_blob = 1
-
-    chunks = []
-    for blob_key, blob_size in list(blob_sizes.items()):
-      blob_chunk_size = blob_size // shards_per_blob
-      for i in range(shards_per_blob - 1):
-        chunks.append(BlobstoreLineInputReader.from_json(
-            {cls.BLOB_KEY_PARAM: blob_key,
-             cls.INITIAL_POSITION_PARAM: blob_chunk_size * i,
-             cls.END_POSITION_PARAM: blob_chunk_size * (i + 1)}))
-      chunks.append(BlobstoreLineInputReader.from_json(
-          {cls.BLOB_KEY_PARAM: blob_key,
-           cls.INITIAL_POSITION_PARAM: blob_chunk_size * (shards_per_blob - 1),
-           cls.END_POSITION_PARAM: blob_size}))
-    return chunks
+  def __init__(self, *args, **kwargs):
+    raise NotImplementedError(
+        "BlobstoreLineInputReader is deprecated. "
+        "Use GoogleCloudStorageLineInputReader instead.")
 
 
 class BlobstoreZipInputReader(InputReader):
-  """Input reader for files from a zip archive stored in the Blobstore.
+  """Deprecated: Use GoogleCloudStorageInputReader instead."""
 
-  Each instance of the reader will read the TOC, from the end of the zip file,
-  and then only the contained files which it is responsible for.
-  """
-
-  # Maximum number of shards to allow.
-  _MAX_SHARD_COUNT = 256
-
-  # Mapreduce parameters.
-  BLOB_KEY_PARAM = "blob_key"
-  START_INDEX_PARAM = "start_index"
-  END_INDEX_PARAM = "end_index"
-
-  def __init__(self, blob_key, start_index, end_index,
-               _reader=blobstore.BlobReader):
-    """Initializes this instance with the given blob key and file range.
-
-    This BlobstoreZipInputReader will read from the file with index start_index
-    up to but not including the file with index end_index.
-
-    Args:
-      blob_key: the BlobKey that this input reader is processing.
-      start_index: the index of the first file to read.
-      end_index: the index of the first file that will not be read.
-      _reader: a callable that returns a file-like object for reading blobs.
-          Used for dependency injection.
-    """
-    self._blob_key = blob_key
-    self._start_index = start_index
-    self._end_index = end_index
-    self._reader = _reader
-    self._zip = None
-    self._entries = None
-
-  def __next__(self):
-    """Returns the next input from this input reader as (ZipInfo, opener) tuple.
-
-    Returns:
-      The next input from this input reader, in the form of a 2-tuple.
-      The first element of the tuple is a zipfile.ZipInfo object.
-      The second element of the tuple is a zero-argument function that, when
-      called, returns the complete body of the file.
-    """
-    if not self._zip:
-      self._zip = zipfile.ZipFile(self._reader(self._blob_key))
-      # Get a list of entries, reversed so we can pop entries off in order
-      self._entries = self._zip.infolist()[self._start_index:self._end_index]
-      self._entries.reverse()
-    if not self._entries:
-      raise StopIteration()
-    entry = self._entries.pop()
-    self._start_index += 1
-    return (entry, lambda: self._read(entry))
-
-  def _read(self, entry):
-    """Read entry content.
-
-    Args:
-      entry: zip file entry as zipfile.ZipInfo.
-    Returns:
-      Entry content as string.
-    """
-    start_time = time.time()
-    content = self._zip.read(entry.filename)
-
-    ctx = context.get()
-    if ctx:
-      operation.counters.Increment(COUNTER_IO_READ_BYTES, len(content))(ctx)
-      operation.counters.Increment(
-          COUNTER_IO_READ_MSEC, int((time.time() - start_time) * 1000))(ctx)
-
-    return content
-
-  @classmethod
-  def from_json(cls, json):
-    """Creates an instance of the InputReader for the given input shard state.
-
-    Args:
-      json: The InputReader state as a dict-like object.
-
-    Returns:
-      An instance of the InputReader configured using the values of json.
-    """
-    return cls(json[cls.BLOB_KEY_PARAM],
-               json[cls.START_INDEX_PARAM],
-               json[cls.END_INDEX_PARAM])
-
-  def to_json(self):
-    """Returns an input shard state for the remaining inputs.
-
-    Returns:
-      A json-izable version of the remaining InputReader.
-    """
-    return {self.BLOB_KEY_PARAM: self._blob_key,
-            self.START_INDEX_PARAM: self._start_index,
-            self.END_INDEX_PARAM: self._end_index}
-
-  def __str__(self):
-    """Returns the string representation of this BlobstoreZipInputReader."""
-    return "blobstore.BlobKey(%r):[%d, %d]" % (
-        self._blob_key, self._start_index, self._end_index)
-
-  @classmethod
-  def validate(cls, mapper_spec):
-    """Validates mapper spec and all mapper parameters.
-
-    Args:
-      mapper_spec: The MapperSpec for this InputReader.
-
-    Raises:
-      BadReaderParamsError: required parameters are missing or invalid.
-    """
-    if mapper_spec.input_reader_class() != cls:
-      raise BadReaderParamsError("Mapper input reader class mismatch")
-    params = _get_params(mapper_spec)
-    if cls.BLOB_KEY_PARAM not in params:
-      raise BadReaderParamsError("Must specify 'blob_key' for mapper input")
-    blob_key = params[cls.BLOB_KEY_PARAM]
-    blob_info = blobstore.BlobInfo.get(blobstore.BlobKey(blob_key))
-    if not blob_info:
-      raise BadReaderParamsError("Could not find blobinfo for key %s" %
-                                 blob_key)
-
-  @classmethod
-  def split_input(cls, mapper_spec, _reader=blobstore.BlobReader):
-    """Returns a list of input shard states for the input spec.
-
-    Args:
-      mapper_spec: The MapperSpec for this InputReader. Must contain
-          'blob_key' parameter with one blob key.
-      _reader: a callable that returns a file-like object for reading blobs.
-          Used for dependency injection.
-
-    Returns:
-      A list of InputReaders spanning files within the zip.
-    """
-    params = _get_params(mapper_spec)
-    blob_key = params[cls.BLOB_KEY_PARAM]
-    zip_input = zipfile.ZipFile(_reader(blob_key))
-    zfiles = zip_input.infolist()
-    total_size = sum(x.file_size for x in zfiles)
-    num_shards = min(mapper_spec.shard_count, cls._MAX_SHARD_COUNT)
-    size_per_shard = total_size // num_shards
-
-    # Break the list of files into sublists, each of approximately
-    # size_per_shard bytes.
-    shard_start_indexes = [0]
-    current_shard_size = 0
-    for i, fileinfo in enumerate(zfiles):
-      current_shard_size += fileinfo.file_size
-      if current_shard_size >= size_per_shard:
-        shard_start_indexes.append(i + 1)
-        current_shard_size = 0
-
-    if shard_start_indexes[-1] != len(zfiles):
-      shard_start_indexes.append(len(zfiles))
-
-    return [cls(blob_key, start_index, end_index, _reader)
-            for start_index, end_index
-            in zip(shard_start_indexes, shard_start_indexes[1:])]
+  def __init__(self, *args, **kwargs):
+    raise NotImplementedError(
+        "BlobstoreZipInputReader is deprecated. "
+        "Use GoogleCloudStorageInputReader instead.")
 
 
 class BlobstoreZipLineInputReader(InputReader):
-  """Input reader for newline delimited files in zip archives from Blobstore.
+  """Deprecated: Use GoogleCloudStorageLineInputReader instead."""
 
-  This has the same external interface as the BlobstoreLineInputReader, in that
-  it takes a list of blobs as its input and yields lines to the reader.
-  However the blobs themselves are expected to be zip archives of line delimited
-  files instead of the files themselves.
-
-  This is useful as many line delimited files gain greatly from compression.
-  """
-
-  # Maximum number of shards to allow.
-  _MAX_SHARD_COUNT = 256
-
-  # Maximum number of blobs to allow.
-  _MAX_BLOB_KEYS_COUNT = 246
-
-  # Mapreduce parameters.
-  BLOB_KEYS_PARAM = "blob_keys"
-
-  # Serialization parameters.
-  BLOB_KEY_PARAM = "blob_key"
-  START_FILE_INDEX_PARAM = "start_file_index"
-  END_FILE_INDEX_PARAM = "end_file_index"
-  OFFSET_PARAM = "offset"
-
-  def __init__(self, blob_key, start_file_index, end_file_index, offset,
-               _reader=blobstore.BlobReader):
-    """Initializes this instance with the given blob key and file range.
-
-    This BlobstoreZipLineInputReader will read from the file with index
-    start_file_index up to but not including the file with index end_file_index.
-    It will return lines starting at offset within file[start_file_index]
-
-    Args:
-      blob_key: the BlobKey that this input reader is processing.
-      start_file_index: the index of the first file to read within the zip.
-      end_file_index: the index of the first file that will not be read.
-      offset: the byte offset within blob_key.zip[start_file_index] to start
-        reading. The reader will continue to the end of the file.
-      _reader: a callable that returns a file-like object for reading blobs.
-          Used for dependency injection.
-    """
-    self._blob_key = blob_key
-    self._start_file_index = start_file_index
-    self._end_file_index = end_file_index
-    self._initial_offset = offset
-    self._reader = _reader
-    self._zip = None
-    self._entries = None
-    self._filestream = None
-
-  @classmethod
-  def validate(cls, mapper_spec):
-    """Validates mapper spec and all mapper parameters.
-
-    Args:
-      mapper_spec: The MapperSpec for this InputReader.
-
-    Raises:
-      BadReaderParamsError: required parameters are missing or invalid.
-    """
-    if mapper_spec.input_reader_class() != cls:
-      raise BadReaderParamsError("Mapper input reader class mismatch")
-    params = _get_params(mapper_spec)
-    if cls.BLOB_KEYS_PARAM not in params:
-      raise BadReaderParamsError("Must specify 'blob_keys' for mapper input")
-
-    blob_keys = params[cls.BLOB_KEYS_PARAM]
-    if isinstance(blob_keys, str):
-      # This is a mechanism to allow multiple blob keys (which do not contain
-      # commas) in a single string. It may go away.
-      blob_keys = blob_keys.split(",")
-    if len(blob_keys) > cls._MAX_BLOB_KEYS_COUNT:
-      raise BadReaderParamsError("Too many 'blob_keys' for mapper input")
-    if not blob_keys:
-      raise BadReaderParamsError("No 'blob_keys' specified for mapper input")
-    for blob_key in blob_keys:
-      blob_info = blobstore.BlobInfo.get(blobstore.BlobKey(blob_key))
-      if not blob_info:
-        raise BadReaderParamsError("Could not find blobinfo for key %s" %
-                                   blob_key)
-
-  @classmethod
-  def split_input(cls, mapper_spec, _reader=blobstore.BlobReader):
-    """Returns a list of input readers for the input spec.
-
-    Args:
-      mapper_spec: The MapperSpec for this InputReader. Must contain
-          'blob_keys' parameter with one or more blob keys.
-      _reader: a callable that returns a file-like object for reading blobs.
-          Used for dependency injection.
-
-    Returns:
-      A list of InputReaders spanning the subfiles within the blobs.
-      There will be at least one reader per blob, but it will otherwise
-      attempt to keep the expanded size even.
-    """
-    params = _get_params(mapper_spec)
-    blob_keys = params[cls.BLOB_KEYS_PARAM]
-    if isinstance(blob_keys, str):
-      # This is a mechanism to allow multiple blob keys (which do not contain
-      # commas) in a single string. It may go away.
-      blob_keys = blob_keys.split(",")
-
-    blob_files = {}
-    total_size = 0
-    for blob_key in blob_keys:
-      zip_input = zipfile.ZipFile(_reader(blob_key))
-      blob_files[blob_key] = zip_input.infolist()
-      total_size += sum(x.file_size for x in blob_files[blob_key])
-
-    shard_count = min(cls._MAX_SHARD_COUNT, mapper_spec.shard_count)
-
-    # We can break on both blob key and file-within-zip boundaries.
-    # A shard will span at minimum a single blob key, but may only
-    # handle a few files within a blob.
-
-    size_per_shard = total_size // shard_count
-
-    readers = []
-    for blob_key in blob_keys:
-      bfiles = blob_files[blob_key]
-      current_shard_size = 0
-      start_file_index = 0
-      next_file_index = 0
-      for fileinfo in bfiles:
-        next_file_index += 1
-        current_shard_size += fileinfo.file_size
-        if current_shard_size >= size_per_shard:
-          readers.append(cls(blob_key, start_file_index, next_file_index, 0,
-                             _reader))
-          current_shard_size = 0
-          start_file_index = next_file_index
-      if current_shard_size != 0:
-        readers.append(cls(blob_key, start_file_index, next_file_index, 0,
-                           _reader))
-
-    return readers
-
-  def __next__(self):
-    """Returns the next line from this input reader as (lineinfo, line) tuple.
-
-    Returns:
-      The next input from this input reader, in the form of a 2-tuple.
-      The first element of the tuple describes the source, it is itself
-        a tuple (blobkey, filenumber, byteoffset).
-      The second element of the tuple is the line found at that offset.
-    """
-    if not self._filestream:
-      if not self._zip:
-        self._zip = zipfile.ZipFile(self._reader(self._blob_key))
-        # Get a list of entries, reversed so we can pop entries off in order
-        self._entries = self._zip.infolist()[self._start_file_index:
-                                             self._end_file_index]
-        self._entries.reverse()
-      if not self._entries:
-        raise StopIteration()
-      entry = self._entries.pop()
-      value = self._zip.read(entry.filename)
-      self._filestream = io.BytesIO(value)
-      if self._initial_offset:
-        self._filestream.seek(self._initial_offset)
-        self._filestream.readline()
-
-    start_position = self._filestream.tell()
-    line = self._filestream.readline()
-
-    if not line:
-      # Done with this file in the zip. Move on to the next file.
-      self._filestream.close()
-      self._filestream = None
-      self._start_file_index += 1
-      self._initial_offset = 0
-      return next(self)
-
-    return ((self._blob_key, self._start_file_index, start_position),
-            line.rstrip(b"\n"))
-
-  def _next_offset(self):
-    """Return the offset of the next line to read."""
-    if self._filestream:
-      offset = self._filestream.tell()
-      if offset:
-        offset -= 1
-    else:
-      offset = self._initial_offset
-
-    return offset
-
-  def to_json(self):
-    """Returns an input shard state for the remaining inputs.
-
-    Returns:
-      A json-izable version of the remaining InputReader.
-    """
-
-    return {self.BLOB_KEY_PARAM: self._blob_key,
-            self.START_FILE_INDEX_PARAM: self._start_file_index,
-            self.END_FILE_INDEX_PARAM: self._end_file_index,
-            self.OFFSET_PARAM: self._next_offset()}
-
-  @classmethod
-  def from_json(cls, json, _reader=blobstore.BlobReader):
-    """Creates an instance of the InputReader for the given input shard state.
-
-    Args:
-      json: The InputReader state as a dict-like object.
-      _reader: For dependency injection.
-
-    Returns:
-      An instance of the InputReader configured using the values of json.
-    """
-    return cls(json[cls.BLOB_KEY_PARAM],
-               json[cls.START_FILE_INDEX_PARAM],
-               json[cls.END_FILE_INDEX_PARAM],
-               json[cls.OFFSET_PARAM],
-               _reader)
-
-  def __str__(self):
-    """Returns the string representation of this reader.
-
-    Returns:
-      string blobkey:[start file num, end file num]:current offset.
-    """
-    return "blobstore.BlobKey(%r):[%d, %d]:%d" % (
-        self._blob_key, self._start_file_index, self._end_file_index,
-        self._next_offset())
+  def __init__(self, *args, **kwargs):
+    raise NotImplementedError(
+        "BlobstoreZipLineInputReader is deprecated. "
+        "Use GoogleCloudStorageLineInputReader instead.")
 
 
 class RandomStringInputReader(InputReader):
@@ -1984,12 +1421,12 @@ class NamespaceInputReader(InputReader):
 
   def __iter__(self):
     while True:
-      keys = self.ns_range.make_datastore_query().Get(limit=self._batch_size)
-      if not keys:
+      results = self.ns_range._query_namespaces(limit=self._batch_size)
+      if not results:
         break
 
-      for key in keys:
-        namespace = metadata.Namespace.key_to_namespace(key)
+      for entity in results:
+        namespace = entity.key.name or ''
         self.ns_range = self.ns_range.with_start_after(namespace)
         yield namespace
 

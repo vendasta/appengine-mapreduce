@@ -15,8 +15,9 @@
 """Abstract Datastore Input Reader implementation for the map_job API."""
 import random
 
-from google.appengine.api import datastore
-from google.appengine.ext import key_range
+from google.cloud import ndb
+from google.cloud import datastore as cloud_datastore
+from mapreduce.compat import key_range
 from mapreduce import datastore_range_iterators as db_iters
 from mapreduce import errors
 from mapreduce import key_ranges
@@ -119,7 +120,7 @@ class AbstractDatastoreInputReader(input_reader.InputReader):
       # If the number of ns is small, we shard each ns by key and assign each
       # shard a piece of a ns.
       elif len(ns_keys) <= cls.MAX_NAMESPACES_FOR_KEY_SHARD:
-        namespaces = [ns_key.name() or "" for ns_key in ns_keys]
+        namespaces = [ns_key.name or "" for ns_key in ns_keys]
         k_ranges = cls._to_key_ranges_by_shard(
             query_spec.app, namespaces, shard_count, query_spec)
       # When number of ns is large, we can only split lexicographically by ns.
@@ -207,13 +208,15 @@ class AbstractDatastoreInputReader(input_reader.InputReader):
       # With one shard we don't need to calculate any split points at all.
       return [key_range.KeyRange(namespace=namespace, _app=app)]
 
-    ds_query = datastore.Query(kind=raw_entity_kind,
-                               namespace=namespace,
-                               _app=app,
-                               keys_only=True)
-    ds_query.Order("__scatter__")
+    client = cloud_datastore.Client()
+    ds_query = client.query(kind=raw_entity_kind, namespace=namespace)
+    ds_query.order = ["__scatter__"]
+    ds_query.keys_only()
     oversampling_factor = 32
-    random_keys = ds_query.Get(shard_count * oversampling_factor)
+    results = list(ds_query.fetch(limit=shard_count * oversampling_factor))
+    random_keys = [ndb.Key(e.key.kind, e.key.id or e.key.name,
+                           namespace=namespace)
+                   for e in results]
 
     if not random_keys:
       # There are no entities with scatter property. We have no idea

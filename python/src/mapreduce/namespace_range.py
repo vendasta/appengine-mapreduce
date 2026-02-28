@@ -31,9 +31,11 @@ __all__ = [
 import itertools
 import string
 
-from google.appengine.api import datastore
-from google.appengine.ext import db
-from google.appengine.ext.db import metadata
+from google.cloud import ndb
+from google.cloud import datastore as cloud_datastore
+
+_NAMESPACE_KIND = '__namespace__'
+_EMPTY_NAMESPACE_ID = 1
 
 NAMESPACE_CHARACTERS = "".join(
     sorted(string.digits + string.ascii_lowercase + string.ascii_uppercase + "._-")
@@ -60,26 +62,6 @@ def _setup_constants(alphabet=NAMESPACE_CHARACTERS,
   MAX_NAMESPACE = NAMESPACE_CHARACTERS[-1] * MAX_NAMESPACE_LENGTH
   NAMESPACE_BATCH_SIZE = batch_size
 
-  # _LEX_DISTANCE will contain the lexical distance between two adjacent
-  # characters in NAMESPACE_CHARACTERS at each character index. This is used
-  # to calculate the ordinal for each string. Example:
-  # NAMESPACE_CHARACTERS = 'ab'
-  # MAX_NAMESPACE_LENGTH = 3
-  # _LEX_DISTANCE = [1, 3, 7]
-  # ''    => 0
-  # 'a'   => 1
-  # 'aa'  => 2
-  # 'aaa' => 3
-  # 'aab' => 4 - Distance between 'aaa' and 'aab' is 1.
-  # 'ab'  => 5 - Distance between 'aa' and 'ab' is 3.
-  # 'aba' => 6
-  # 'abb' => 7
-  # 'b'   => 8 - Distance between 'a' and 'b' is 7.
-  # 'ba'  => 9
-  # 'baa' => 10
-  # 'bab' => 11
-  # ...
-  # _namespace_to_ord('bab') = (1 * 7 + 1) + (0 * 3 + 1) + (1 * 1 + 1) = 11
   _LEX_DISTANCE = [1]
   for i in range(1, MAX_NAMESPACE_LENGTH):
     _LEX_DISTANCE.append(
@@ -90,26 +72,7 @@ _setup_constants()
 
 
 def _ord_to_namespace(n, _max_length=None):
-  """Convert a namespace ordinal to a namespace string.
-
-  Converts an int, representing the sequence number of a namespace ordered
-  lexographically, into a namespace string.
-
-  >>> _ord_to_namespace(0)
-  ''
-  >>> _ord_to_namespace(1)
-  '-'
-  >>> _ord_to_namespace(2)
-  '--'
-  >>> _ord_to_namespace(3)
-  '---'
-
-  Args:
-    n: A number representing the lexographical ordering of a namespace.
-    _max_length: The maximum namespace length.
-  Returns:
-    A string representing the nth namespace in lexographical order.
-  """
+  """Convert a namespace ordinal to a namespace string."""
   if _max_length is None:
     _max_length = MAX_NAMESPACE_LENGTH
 
@@ -122,21 +85,7 @@ def _ord_to_namespace(n, _max_length=None):
 
 
 def _namespace_to_ord(namespace):
-  """Converts a namespace string into an int representing its lexographic order.
-
-  >>> _namespace_to_ord('')
-  ''
-  >>> _namespace_to_ord('_')
-  1
-  >>> _namespace_to_ord('__')
-  2
-
-  Args:
-    namespace: A namespace string.
-
-  Returns:
-    An int representing the lexographical order of the given namespace string.
-  """
+  """Converts a namespace string into an int representing its lexographic order."""
   n = 0
   for i, c in enumerate(namespace):
     n += (_LEX_DISTANCE[MAX_NAMESPACE_LENGTH - i- 1] *
@@ -153,16 +102,12 @@ def _key_for_namespace(namespace, app):
     app: The id of the application that the key belongs to.
 
   Returns:
-    A db.Key representing the namespace.
+    An ndb.Key representing the namespace.
   """
   if namespace:
-    return db.Key.from_path(metadata.Namespace.KIND_NAME,
-                            namespace,
-                            _app=app)
+    return ndb.Key(_NAMESPACE_KIND, namespace)
   else:
-    return db.Key.from_path(metadata.Namespace.KIND_NAME,
-                            metadata.Namespace.EMPTY_NAMESPACE_ID,
-                            _app=app)
+    return ndb.Key(_NAMESPACE_KIND, _EMPTY_NAMESPACE_ID)
 
 
 class NamespaceRange:
@@ -175,21 +120,6 @@ class NamespaceRange:
                namespace_start=None,
                namespace_end=None,
                _app=None):
-    # pylint: disable=g-doc-args
-    """Initializes a NamespaceRange instance.
-
-    Args:
-      namespace_start: A string representing the start of the namespace range.
-          namespace_start is included in the range. If namespace_start is None
-          then the lexographically first namespace is used.
-      namespace_end: A string representing the end of the namespace range.
-          namespace_end is included in the range and must be >= namespace_start.
-          If namespace_end is None then the lexographically last namespace is
-          used.
-
-    Raises:
-      ValueError: if namespace_start > namespace_end.
-    """
     if namespace_start is None:
       namespace_start = MIN_NAMESPACE
 
@@ -221,14 +151,7 @@ class NamespaceRange:
     return self.namespace_start == self.namespace_end
 
   def split_range(self):
-    """Splits the NamespaceRange into two nearly equal-sized ranges.
-
-    Returns:
-      If this NamespaceRange contains a single namespace then a list containing
-      this NamespaceRange is returned. Otherwise a two-element list containing
-      two NamespaceRanges whose total range is identical to this
-      NamespaceRange's is returned.
-    """
+    """Splits the NamespaceRange into two nearly equal-sized ranges."""
     if self.is_single_namespace:
       return [self]
 
@@ -263,59 +186,38 @@ class NamespaceRange:
           self.namespace_start, self.namespace_end, self.app)
 
   def with_start_after(self, after_namespace):
-    """Returns a copy of this NamespaceName with a new namespace_start.
-
-    Args:
-      after_namespace: A namespace string.
-
-    Returns:
-      A NamespaceRange object whose namespace_start is the lexographically next
-      namespace after the given namespace string.
-
-    Raises:
-      ValueError: if the NamespaceRange includes only a single namespace.
-    """
+    """Returns a copy of this NamespaceName with a new namespace_start."""
     namespace_start = _ord_to_namespace(_namespace_to_ord(after_namespace) + 1)
     return NamespaceRange(namespace_start, self.namespace_end, _app=self.app)
 
-  def make_datastore_query(self, cursor=None):
-    """Returns a datastore.Query that generates all namespaces in the range.
-
-    Args:
-      cursor: start cursor for the query.
+  def _query_namespaces(self, limit=None):
+    """Query __namespace__ entities using Cloud Datastore client.
 
     Returns:
-      A datastore.Query instance that generates db.Keys for each namespace in
-      the NamespaceRange.
+      A list of namespace key objects.
     """
-    filters = {}
-    filters['__key__ >= '] = _key_for_namespace(
-        self.namespace_start, self.app)
-    filters['__key__ <= '] = _key_for_namespace(
-        self.namespace_end, self.app)
+    client = cloud_datastore.Client()
+    query = client.query(kind=_NAMESPACE_KIND)
 
-    return datastore.Query('__namespace__',
-                           filters=filters,
-                           keys_only=True,
-                           cursor=cursor,
-                           _app=self.app)
+    start_key = _key_for_namespace(self.namespace_start, self.app)
+    end_key = _key_for_namespace(self.namespace_end, self.app)
+
+    query.key_filter(start_key, '>=')
+    query.key_filter(end_key, '<=')
+    query.keys_only()
+
+    results = list(query.fetch(limit=limit))
+    return results
 
   def normalized_start(self):
-    """Returns a NamespaceRange with leading non-existant namespaces removed.
+    """Returns a NamespaceRange with leading non-existant namespaces removed."""
+    results = self._query_namespaces(limit=1)
 
-    Returns:
-      A copy of this NamespaceRange whose namespace_start is adjusted to exclude
-      the portion of the range that contains no actual namespaces in the
-      datastore. None is returned if the NamespaceRange contains no actual
-      namespaces in the datastore.
-    """
-    namespaces_after_key = list(self.make_datastore_query().Run(limit=1))
-
-    if not namespaces_after_key:
+    if not results:
       return None
 
-    namespace_after_key = namespaces_after_key[0].name() or ''
-    return NamespaceRange(namespace_after_key,
+    ns_name = results[0].key.name or ''
+    return NamespaceRange(ns_name,
                           self.namespace_end,
                           _app=self.app)
 
@@ -334,9 +236,6 @@ class NamespaceRange:
                json['namespace_end'],
                _app=json.get('app'))
 
-  # TODO(user): Implement an option where the returned namespace range is
-  # not normalized using with_start_after to support consistent namespace
-  # queries.
   @classmethod
   def split(cls,
             n,
@@ -344,29 +243,6 @@ class NamespaceRange:
             can_query=itertools.chain(itertools.repeat(True, 50),
                                       itertools.repeat(False)).__next__,
             _app=None):
-    # pylint: disable=g-doc-args
-    """Splits the complete NamespaceRange into n equally-sized NamespaceRanges.
-
-    Args:
-      n: The maximum number of NamespaceRanges to return. Fewer than n
-          namespaces may be returned.
-      contiguous: If True then the returned NamespaceRanges will cover the
-          entire space of possible namespaces (i.e. from MIN_NAMESPACE to
-          MAX_NAMESPACE) without gaps. If False then the returned
-          NamespaceRanges may exclude namespaces that don't appear in the
-          datastore.
-      can_query: A function that returns True if split() can query the datastore
-          to generate more fair namespace range splits, and False otherwise.
-          If not set then split() is allowed to make 50 datastore queries.
-
-    Returns:
-      A list of at most n NamespaceRanges representing a near-equal distribution
-      of actual existant datastore namespaces. The returned list will be sorted
-      lexographically.
-
-    Raises:
-      ValueError: if n is < 1.
-    """
     if n < 1:
       raise ValueError('n must be >= 1')
 
@@ -378,17 +254,14 @@ class NamespaceRange:
           return []
         else:
           if len(ns_keys) <= n:
-            # If you have less actual namespaces than number of NamespaceRanges
-            # to return, then just return the list of those namespaces.
             ns_range = []
             for ns_key in ns_keys:
-              ns_range.append(NamespaceRange(ns_key.name() or '',
-                                             ns_key.name() or '',
+              ns_range.append(NamespaceRange(ns_key.name or '',
+                                             ns_key.name or '',
                                              _app=_app))
             return sorted(ns_range,
                           key=lambda ns_range: ns_range.namespace_start)
-          # Use the first key and save the initial normalized_start() call.
-          ranges = [NamespaceRange(ns_keys[0].name() or '', _app=_app)]
+          ranges = [NamespaceRange(ns_keys[0].name or '', _app=_app)]
       else:
         ns_range = NamespaceRange(_app=_app).normalized_start()
         if ns_range is None:
@@ -414,8 +287,6 @@ class NamespaceRange:
 
     if contiguous:
       if not ns_ranges:
-        # This condition is possible if every namespace was deleted after the
-        # first call to ns_range.normalized_start().
         return [NamespaceRange(_app=_app)]
 
       continuous_ns_ranges = []
@@ -440,19 +311,14 @@ class NamespaceRange:
 
   def __iter__(self):
     """Iterate over all the namespaces within this range."""
-    cursor = None
-    while True:
-      query = self.make_datastore_query(cursor=cursor)
-      count = 0
-      for ns_key in query.Run(limit=NAMESPACE_BATCH_SIZE):
-        count += 1
-        yield ns_key.name() or ''
-      if count < NAMESPACE_BATCH_SIZE:
-        break
-      cursor = query.GetCursor()
+    results = self._query_namespaces(limit=None)
+    for entity in results:
+      yield entity.key.name or ''
 
 
 def get_namespace_keys(app, limit):
   """Get namespace keys."""
-  ns_query = datastore.Query('__namespace__', keys_only=True, _app=app)
-  return list(ns_query.Run(limit=limit, batch_size=limit))
+  client = cloud_datastore.Client()
+  query = client.query(kind=_NAMESPACE_KIND)
+  query.keys_only()
+  return [entity.key for entity in query.fetch(limit=limit)]

@@ -16,7 +16,7 @@
 
 
 
-from google.appengine.ext import key_range
+from mapreduce.compat import key_range
 from mapreduce import namespace_range
 
 
