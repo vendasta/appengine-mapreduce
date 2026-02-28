@@ -1,6 +1,6 @@
 --extra-index-url https://us-central1-python.pkg.dev/repcore-prod/python/simple/
-appengine-python-standard==1.1.5
 google-cloud-ndb==2.3.2
+google-cloud-datastore==2.19.0
 attrs==24.2.0
 backports.tarfile==1.2.0
 blinker==1.9.0
@@ -56,6 +56,7 @@ requests-toolbelt==1.0.0
 rfc3986==2.0.0
 rich==13.9.4
 rsa==4.9
+PyYAML==6.0.2
 ruamel.yaml==0.18.6
 ruamel.yaml.clib==0.2.12
 six==1.17.0

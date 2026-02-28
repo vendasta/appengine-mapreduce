@@ -37,8 +37,8 @@ import sys
 
 from flask import Flask, redirect, render_template, request, url_for
 from flask.views import MethodView
-from google.appengine.api import users
-from google.appengine.ext import blobstore, db
+from google.cloud import ndb, storage
+from pipeline import users_compat as users
 from pipeline import wrap_wsgi_app
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '../src'))
@@ -53,82 +53,30 @@ project_name = os.getenv('MAPREDUCE_TEST_PROJECT', os.environ.get('GOOGLE_CLOUD_
 _default_bucket = os.environ.get('GOOGLE_CLOUD_PROJECT', '').split('~')[-1]
 bucket_name = os.getenv('MAPREDUCE_TEST_BUCKET', f"{_default_bucket}.appspot.com" if _default_bucket else '')
 
-class FileMetadata(db.Model):
-  """A helper class that will hold metadata for the user's blobs.
+class FileMetadata(ndb.Model):
+  _SEP = ".."
+  _NEXT = "./"
 
-  Specifially, we want to keep track of who uploaded it, where they uploaded it
-  from (right now they can only upload from their computer, but in the future
-  urlfetch would be nice to add), and links to the results of their MR jobs. To
-  enable our querying to scan over our input data, we store keys in the form
-  'user/date/blob_key', where 'user' is the given user's e-mail address, 'date'
-  is the date and time that they uploaded the item on, and 'blob_key'
-  indicates the location in the Blobstore that the item can be found at. '/'
-  is not the actual separator between these values - we use '..' since it is
-  an illegal set of characters for an e-mail address to contain.
-  """
-
-  __SEP = ".."
-  __NEXT = "./"
-
-  owner = db.UserProperty()
-  filename = db.StringProperty()
-  uploadedOn = db.DateTimeProperty()
-  source = db.StringProperty()
-  blobkey = db.StringProperty()
-  wordcount_link = db.StringProperty()
-  index_link = db.StringProperty()
-  phrases_link = db.StringProperty()
+  owner = ndb.StringProperty()
+  filename = ndb.StringProperty()
+  uploadedOn = ndb.DateTimeProperty()
+  source = ndb.StringProperty()
+  blobkey = ndb.StringProperty()
+  wordcount_link = ndb.StringProperty()
+  index_link = ndb.StringProperty()
+  phrases_link = ndb.StringProperty()
 
   @staticmethod
   def getFirstKeyForUser(username):
-    """Helper function that returns the first possible key a user could own.
-
-    This is useful for table scanning, in conjunction with getLastKeyForUser.
-
-    Args:
-      username: The given user's e-mail address.
-    Returns:
-      The internal key representing the earliest possible key that a user could
-      own (although the value of this key is not able to be used for actual
-      user data).
-    """
-
-    return db.Key.from_path("FileMetadata", username + FileMetadata.__SEP)
+    return ndb.Key("FileMetadata", username + FileMetadata._SEP)
 
   @staticmethod
   def getLastKeyForUser(username):
-    """Helper function that returns the last possible key a user could own.
-
-    This is useful for table scanning, in conjunction with getFirstKeyForUser.
-
-    Args:
-      username: The given user's e-mail address.
-    Returns:
-      The internal key representing the last possible key that a user could
-      own (although the value of this key is not able to be used for actual
-      user data).
-    """
-
-    return db.Key.from_path("FileMetadata", username + FileMetadata.__NEXT)
+    return ndb.Key("FileMetadata", username + FileMetadata._NEXT)
 
   @staticmethod
   def getKeyName(username, date, blob_key):
-    """Returns the internal key for a particular item in the database.
-
-    Our items are stored with keys of the form 'user/date/blob_key' ('/' is
-    not the real separator, but __SEP is).
-
-    Args:
-      username: The given user's e-mail address.
-      date: A datetime object representing the date and time that an input
-        file was uploaded to this app.
-      blob_key: The blob key corresponding to the location of the input file
-        in the Blobstore.
-    Returns:
-      The internal key for the item specified by (username, date, blob_key).
-    """
-
-    sep = FileMetadata.__SEP
+    sep = FileMetadata._SEP
     return str(username + sep + str(date) + sep + blob_key)
 
 
@@ -140,15 +88,13 @@ class IndexHandler(MethodView):
         first = FileMetadata.getFirstKeyForUser(username)
         last = FileMetadata.getLastKeyForUser(username)
 
-        q = FileMetadata.all()
-        q.filter("__key__ >", first)
-        q.filter("__key__ < ", last)
-        results = q.fetch(10)
-
-        items = [result for result in results]
+        q = FileMetadata.query()
+        q = q.filter(FileMetadata.key > first)
+        q = q.filter(FileMetadata.key < last)
+        items = q.fetch(10)
         length = len(items)
 
-        upload_url = blobstore.create_upload_url("/upload", gs_bucket_name=bucket_name)
+        upload_url = "/upload"
 
         return render_template("index.html", username=username, items=items, length=length, upload_url=upload_url)
 
@@ -264,11 +210,13 @@ class WordCountPipeline(base_handler.PipelineBase):
         "word_count",
         "main.word_count_map",
         "main.word_count_reduce",
-        "mapreduce.input_readers.BlobstoreZipInputReader",
+        "mapreduce.input_readers.GoogleCloudStorageInputReader",
         "mapreduce.output_writers.GoogleCloudStorageOutputWriter",
         mapper_params={
-            "blob_key": blobkey,
-            "bucket_name": bucket_name,
+            "input_reader": {
+                "bucket_name": bucket_name,
+                "objects": [blobkey],
+            },
         },
         reducer_params={
             "output_writer": {
@@ -294,11 +242,13 @@ class IndexPipeline(base_handler.PipelineBase):
         "index",
         "main.index_map",
         "main.index_reduce",
-        "mapreduce.input_readers.BlobstoreZipInputReader",
+        "mapreduce.input_readers.GoogleCloudStorageInputReader",
         "mapreduce.output_writers.GoogleCloudStorageOutputWriter",
         mapper_params={
-            "blob_key": blobkey,
-            "bucket_name": bucket_name,
+            "input_reader": {
+                "bucket_name": bucket_name,
+                "objects": [blobkey],
+            },
         },
         reducer_params={
             "output_writer": {
@@ -323,11 +273,13 @@ class PhrasesPipeline(base_handler.PipelineBase):
         "phrases",
         "main.phrases_map",
         "main.phrases_reduce",
-        "mapreduce.input_readers.BlobstoreZipInputReader",
+        "mapreduce.input_readers.GoogleCloudStorageInputReader",
         "mapreduce.output_writers.GoogleCloudStorageOutputWriter",
         mapper_params={
-            "blob_key": blobkey,
-            "bucket_name": bucket_name,
+            "input_reader": {
+                "bucket_name": bucket_name,
+                "objects": [blobkey],
+            },
         },
         reducer_params={
             "output_writer": {
@@ -350,12 +302,11 @@ class StoreOutput(base_handler.PipelineBase):
 
   def run(self, mr_type, encoded_key, output):
     logging.debug("output is %s" % str(output))
-    key = db.Key(encoded=encoded_key)
-    m = FileMetadata.get(key)
+    key = ndb.Key(urlsafe=encoded_key)
+    m = key.get()
 
-    blobstore_filename = "/gs" + output[0]
-    blobstore_gs_key = blobstore.create_gs_key(blobstore_filename)
-    url_path = "/blobstore/" + blobstore_gs_key
+    gcs_path = output[0]
+    url_path = "/gcs/" + gcs_path.lstrip("/")
 
     if mr_type == "WordCount":
       m.wordcount_link = url_path
@@ -366,50 +317,41 @@ class StoreOutput(base_handler.PipelineBase):
 
     m.put()
 
-class UploadHandler(blobstore.BlobstoreUploadHandler):
-  """Handler to upload data to blobstore."""
-
-  def post(self):
+@app.route('/upload', methods=['POST'])
+def upload():
     source = "uploaded by user"
-    upload_files = self.get_uploads(request.environ)
-    blob_key = upload_files[0].key()
-    name = request.form.get('name')
+    uploaded_file = request.files.get('file')
+    name = request.form.get('name') or uploaded_file.filename
+
+    gcs_client = storage.Client()
+    bucket = gcs_client.bucket(bucket_name)
+    blob_name = f"uploads/{datetime.datetime.now().isoformat()}/{name}"
+    blob = bucket.blob(blob_name)
+    blob.upload_from_file(uploaded_file)
 
     user = users.get_current_user()
-
     username = user.nickname()
     date = datetime.datetime.now()
-    str_blob_key = str(blob_key)
-    key = FileMetadata.getKeyName(username, date, str_blob_key)
+    key_name = FileMetadata.getKeyName(username, date, blob_name)
 
-    m = FileMetadata(key_name = key)
-    m.owner = user
+    m = FileMetadata(id=key_name)
+    m.owner = str(user)
     m.filename = name
     m.uploadedOn = date
     m.source = source
-    m.blobkey = str_blob_key
+    m.blobkey = blob_name
     m.put()
-    
+
     return redirect(url_for('index'))
 
 
-@app.route('/upload', methods=['POST'])
-def upload():
-  return UploadHandler().post()
-
-
-class DownloadHandler(blobstore.BlobstoreDownloadHandler):
-  """Handler to download blob by blobkey."""
-
-  def get(self, key):
-    headers = self.send_blob(request.environ, key)
-    headers['Content-Type'] = None
-    return '', headers
-
-
-@app.route('/blobstore/<path:key>')
+@app.route('/gcs/<path:key>')
 def download(key):
-  return DownloadHandler().get(key)
+    gcs_client = storage.Client()
+    bucket = gcs_client.bucket(bucket_name)
+    blob = bucket.blob(key)
+    content = blob.download_as_bytes()
+    return content, 200, {'Content-Type': 'application/octet-stream'}
 
 mapreduce_handlers = mapreduce.create_handlers_map("/mapreduce")
 for route, handler in mapreduce_handlers:

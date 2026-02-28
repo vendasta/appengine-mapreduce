@@ -41,6 +41,10 @@ setuptools.setup(
     exclude_package_data={"": ["README"]},
     install_requires=[
         "GoogleAppEnginePipeline >= 2.0.0a0",
-        "google-cloud-ndb >= 2.0.0",
+        "google-cloud-ndb >= 2.3.0",
+        "google-cloud-datastore >= 2.19.0",
+        "google-cloud-storage >= 2.0.0",
+        "google-api-core >= 2.0.0",
+        "pyyaml >= 6.0",
     ],
 )
