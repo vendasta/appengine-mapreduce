@@ -24,13 +24,9 @@ import pkgutil
 import time
 import zipfile
 
+import yaml
 from flask import Response, request
 from flask.views import MethodView
-from google.appengine.api import validation
-from google.appengine.api import yaml_builder
-from google.appengine.api import yaml_errors
-from google.appengine.api import yaml_listener
-from google.appengine.api import yaml_object
 from google.cloud import ndb
 from mapreduce import base_handler
 from mapreduce import errors
@@ -49,87 +45,39 @@ class BadStatusParameterError(Exception):
   """A parameter passed to a status handler was invalid."""
 
 
-class UserParam(validation.Validated):
-  """A user-supplied parameter to a mapreduce job."""
-
-  ATTRIBUTES = {
-      "name":  r"[a-zA-Z0-9_\.]+",
-      "default": validation.Optional(r".*"),
-      "value": validation.Optional(r".*"),
-  }
+class UserParam:
+  def __init__(self, name, default=None, value=None):
+    self.name = name
+    self.default = default
+    self.value = value
 
 
-class MapperInfo(validation.Validated):
-  """Configuration parameters for the mapper part of the job."""
-
-  ATTRIBUTES = {
-    "handler": r".+",
-    "input_reader": r".+",
-    "output_writer": validation.Optional(r".+"),
-    "params": validation.Optional(validation.Repeated(UserParam)),
-    "params_validator": validation.Optional(r".+"),
-  }
+class MapperInfo:
+  def __init__(self, handler, input_reader, output_writer=None,
+               params=None, params_validator=None):
+    self.handler = handler
+    self.input_reader = input_reader
+    self.output_writer = output_writer
+    self.params = params
+    self.params_validator = params_validator
 
 
-class MapreduceInfo(validation.Validated):
-  """Mapreduce description in mapreduce.yaml."""
-
-  ATTRIBUTES = {
-      "name": r".+",
-      "mapper": MapperInfo,
-      "params": validation.Optional(validation.Repeated(UserParam)),
-      "params_validator": validation.Optional(r".+"),
-  }
+class MapreduceInfo:
+  def __init__(self, name, mapper, params=None, params_validator=None):
+    self.name = name
+    self.mapper = mapper
+    self.params = params
+    self.params_validator = params_validator
 
 
-class MapReduceYaml(validation.Validated):
-  """Root class for mapreduce.yaml.
+class MapReduceYaml:
+  """Parsed representation of mapreduce.yaml."""
 
-  File format:
-
-  mapreduce:
-  - name: <mapreduce_name>
-    mapper:
-      - input_reader: google.appengine.ext.mapreduce.DatastoreInputReader
-      - handler: path_to_my.MapperFunction
-      - params:
-        - name: foo
-          default: bar
-        - name: blah
-          default: stuff
-      - params_validator: path_to_my.ValidatorFunction
-
-  Where
-    mapreduce_name: The name of the mapreduce. Used for UI purposes.
-    mapper_handler_spec: Full <module_name>.<function_name/class_name> of
-      mapper handler. See MapreduceSpec class documentation for full handler
-      specification.
-    input_reader: Full <module_name>.<function_name/class_name> of the
-      InputReader sub-class to use for the mapper job.
-    params: A list of optional parameter names and optional default values
-      that may be supplied or overridden by the user running the job.
-    params_validator is full <module_name>.<function_name/class_name> of
-      a callable to validate the mapper_params after they are input by the
-      user running the job.
-  """
-
-  ATTRIBUTES = {
-      "mapreduce": validation.Optional(validation.Repeated(MapreduceInfo))
-  }
+  def __init__(self, mapreduce=None):
+    self.mapreduce = mapreduce or []
 
   @staticmethod
   def to_dict(mapreduce_yaml):
-    """Converts a MapReduceYaml file into a JSON-encodable dictionary.
-
-    For use in user-visible UI and internal methods for interfacing with
-    user code (like param validation). as a list
-
-    Args:
-      mapreduce_yaml: The Pyton representation of the mapreduce.yaml document.
-
-    Returns:
-      A list of configuration dictionaries.
-    """
     all_configs = []
     for config in mapreduce_yaml.mapreduce:
       out = {
@@ -204,40 +152,57 @@ def _find_mapreduce_yaml(start, checked):
 
 
 def parse_mapreduce_yaml(contents):
-  """Parses mapreduce.yaml file contents.
-
-  Args:
-    contents: mapreduce.yaml file contents.
-
-  Returns:
-    MapReduceYaml object with all the data from original file.
-
-  Raises:
-    errors.BadYamlError: when contents is not a valid mapreduce.yaml file.
-  """
+  """Parses mapreduce.yaml file contents."""
   try:
-    builder = yaml_object.ObjectBuilder(MapReduceYaml)
-    handler = yaml_builder.BuilderHandler(builder)
-    listener = yaml_listener.EventListener(handler)
-    listener.Parse(contents)
-
-    mr_info = handler.GetResults()
-  except (ValueError, yaml_errors.EventError) as e:
+    docs = list(yaml.safe_load_all(contents))
+  except yaml.YAMLError as e:
     raise errors.BadYamlError(e)
 
-  if len(mr_info) < 1:
+  if not docs:
     raise errors.BadYamlError("No configs found in mapreduce.yaml")
-  if len(mr_info) > 1:
+  if len(docs) > 1:
     raise errors.MultipleDocumentsInMrYaml("Found %d YAML documents" %
-                                           len(mr_info))
+                                           len(docs))
 
-  jobs = mr_info[0]
-  job_names = {j.name for j in jobs.mapreduce}
-  if len(jobs.mapreduce) != len(job_names):
+  doc = docs[0]
+  if not doc or "mapreduce" not in doc:
+    raise errors.BadYamlError("No configs found in mapreduce.yaml")
+
+  mr_configs = []
+  for entry in doc["mapreduce"]:
+    if "name" not in entry or "mapper" not in entry:
+      raise errors.BadYamlError("Each mapreduce entry needs 'name' and 'mapper'")
+
+    mapper_dict = entry["mapper"]
+    mapper_params = None
+    if "params" in mapper_dict:
+      mapper_params = [UserParam(p["name"], p.get("default"), p.get("value"))
+                       for p in mapper_dict["params"]]
+
+    mapper = MapperInfo(
+        handler=mapper_dict["handler"],
+        input_reader=mapper_dict["input_reader"],
+        output_writer=mapper_dict.get("output_writer"),
+        params=mapper_params,
+        params_validator=mapper_dict.get("params_validator"))
+
+    entry_params = None
+    if "params" in entry:
+      entry_params = [UserParam(p["name"], p.get("default"), p.get("value"))
+                      for p in entry["params"]]
+
+    mr_configs.append(MapreduceInfo(
+        name=entry["name"],
+        mapper=mapper,
+        params=entry_params,
+        params_validator=entry.get("params_validator")))
+
+  job_names = {j.name for j in mr_configs}
+  if len(mr_configs) != len(job_names):
     raise errors.BadYamlError(
         "Overlapping mapreduce names; names must be unique")
 
-  return jobs
+  return MapReduceYaml(mapreduce=mr_configs)
 
 
 def get_mapreduce_yaml(parse=parse_mapreduce_yaml):
